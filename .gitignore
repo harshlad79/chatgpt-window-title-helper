@@ -1,0 +1,9 @@
+.dotnet-cli/
+artifacts/
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+*.log
+
