@@ -59,6 +59,7 @@ The following are deliberately deferred to a later version: move/resize event ga
 
 - Windows x64
 - Verified against Codex/ChatGPT desktop app version `26.908.40834`, released `2026-09-12`
+- UIA structure compatibility is currently limited to the Korean UI of this app version.
 - Building from source requires the .NET 8 SDK x64.
 - Published self-contained builds do not require a separate .NET runtime.
 

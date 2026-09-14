@@ -2,6 +2,7 @@ using System.Windows.Automation;
 using System.Runtime.InteropServices;
 using ChatGPTWindowTitleHelper.Diagnostics;
 using System.Collections.Concurrent;
+using ChatGPTWindowTitleHelper.Overlay;
 
 namespace ChatGPTWindowTitleHelper.Automation;
 
@@ -254,12 +255,22 @@ public sealed class UiaConversationTitleReader : IConversationTitleReader
         var buttons = header.FindAll(TreeScope.Descendants, Condition.TrueCondition).Cast<AutomationElement>()
             .Where(x => x.Current.ControlType == ControlType.Button).ToArray();
         var share = buttons.FirstOrDefault(x => string.Equals(x.Current.Name, "공유", StringComparison.OrdinalIgnoreCase) || string.Equals(x.Current.Name, "Share", StringComparison.OrdinalIgnoreCase));
-        var write = buttons.FirstOrDefault(x => string.IsNullOrWhiteSpace(x.Current.Name));
-        if (share is null || write is null || !TryGetBounds(share, out var sr) || !TryGetBounds(write, out var wr)) return false;
-        var overlayLeft = wr.Right + 8;
-        var overlayRight = sr.Left - 8;
-        if (overlayRight - overlayLeft < 80) return false;
-        bounds = new System.Drawing.Rectangle(overlayLeft, top, overlayRight - overlayLeft, height);
+        if (share is null || !TryGetBounds(share, out var shareBounds)) return false;
+
+        System.Drawing.Rectangle? writeBounds = null;
+        var write = buttons.FirstOrDefault(button =>
+            string.IsNullOrWhiteSpace(button.Current.Name)
+            && button.FindAll(TreeScope.Descendants, Condition.TrueCondition)
+                .Cast<AutomationElement>()
+                .Any(child => child.Current.ControlType == ControlType.Image));
+        if (write is not null && TryGetBounds(write, out var detectedWriteBounds))
+            writeBounds = detectedWriteBounds;
+
+        bounds = OverlayBoundsCalculator.Calculate(
+            new System.Drawing.Rectangle(left, top, width, height),
+            shareBounds,
+            writeBounds);
+        if (bounds.Width < 80) return false;
         return true;
     }
 

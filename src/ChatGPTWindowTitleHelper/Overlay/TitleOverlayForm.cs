@@ -4,7 +4,9 @@ namespace ChatGPTWindowTitleHelper.Overlay;
 
 internal sealed class TitleOverlayForm : Form
 {
-    private readonly Font captionFont = new(SystemFonts.CaptionFont, FontStyle.Bold);
+    private readonly Font captionFont = new(
+        SystemFonts.CaptionFont ?? SystemFonts.DefaultFont,
+        FontStyle.Bold);
     private readonly Label label = new ClickThroughLabel { AutoSize = false, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleCenter };
 
     public TitleOverlayForm()

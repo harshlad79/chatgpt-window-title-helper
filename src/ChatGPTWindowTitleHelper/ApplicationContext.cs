@@ -31,7 +31,8 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
     private readonly ConcurrentDictionary<nint, long> windowOperations = new();
     private readonly ConcurrentDictionary<nint, byte> movingWindows = new();
     private readonly ConcurrentDictionary<nint, long> windowGenerations = new();
-    private readonly ConcurrentDictionary<nint, byte> minimizedTitleRead = new();
+    private readonly ConcurrentDictionary<nint, byte> minimizedTitlePending = new();
+    private readonly ConcurrentDictionary<nint, byte> minimizedWindows = new();
     private readonly ConcurrentDictionary<nint, byte> noOverlayWindows = new();
     private readonly (EventWaitHandle Request, EventWaitHandle Ack, EventWaitHandle Done) shutdownSignals;
 
@@ -60,19 +61,8 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
         };
         menu.Items.Add(overlayItem);
 
-        var inspectorItem = new ToolStripMenuItem("Show Tray Inspector") { Checked = settings.ShowTrayInspector, CheckOnClick = true };
-        inspectorItem.Click += (_, _) =>
-        {
-            settings = settings with { ShowTrayInspector = inspectorItem.Checked };
-            if (!inspectorItem.Checked)
-            {
-                diagnosticPanel.Hide();
-            }
-            else
-                RefreshWindows();
-            SaveSettings();
-        };
-        menu.Items.Add(inspectorItem);
+        // Tray Inspector remains implemented for diagnostics, but is currently
+        // hidden from the user-facing menu until its display path is repaired.
         var altTabItem = new ToolStripMenuItem("Change Alt+Tab Title") { Checked = settings.ChangeAltTabTitle, CheckOnClick = true };
         altTabItem.Click += (_, _) => { settings = settings with { ChangeAltTabTitle = altTabItem.Checked }; if (!altTabItem.Checked) titleWriter.RestoreAll(); SaveSettings(); };
         menu.Items.Add(altTabItem);
@@ -136,13 +126,18 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
             {
                 // A minimized window may still expose its current conversation
                 // title, but its geometry and SectionHeader are not reliable.
-                // Read the title for Alt+Tab, while keeping the overlay hidden.
-                if (!minimizedTitleRead.TryAdd(hwnd, 0))
+                // Keep the last successful title while retrying a pending read.
+                // This also covers a window that was already minimized at startup.
+                if (minimizedWindows.TryAdd(hwnd, 0))
+                    minimizedTitlePending[hwnd] = 0;
+                if (!minimizedTitlePending.ContainsKey(hwnd))
                 {
-                    DiagnosticLog.Info($"uia-skip id={sequence} hwnd=0x{hwnd.ToInt64():X} reason=minimized-title-cached");
+                    DiagnosticLog.Info($"uia-skip id={sequence} hwnd=0x{hwnd.ToInt64():X} reason=minimized-title-known");
                     return;
                 }
                 var minimizedResult = tracker.TryUpdateTitle(hwnd);
+                if (minimizedResult != TitleUpdateResult.ReadFailed)
+                    minimizedTitlePending.TryRemove(hwnd, out _);
                 var minimizedWindow = tracker.Windows.FirstOrDefault(x => x.Handle == hwnd);
                 if (minimizedWindow is not null)
                 {
@@ -153,16 +148,37 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
                 return;
             }
 
-            minimizedTitleRead.TryRemove(hwnd, out _);
+            minimizedWindows.TryRemove(hwnd, out _);
+            minimizedTitlePending.TryRemove(hwnd, out _);
 
             var before = tracker.Windows.FirstOrDefault(x => x.Handle == hwnd)?.CurrentTitle;
-            var result = tracker.TryUpdateTitle(hwnd);
-            var isNewChat = titleReader.IsNewChat(hwnd);
+            var result = tracker.TryReadTitle(hwnd, out var pendingTitle);
+            if (movingWindows.ContainsKey(hwnd) || windowGenerations.GetOrAdd(hwnd, 0) != generation)
+            {
+                DiagnosticLog.Info($"uia-discard id={sequence} hwnd=0x{hwnd.ToInt64():X} reason=window-changed-during-title-read");
+                return;
+            }
             var headerBounds = titleReader.TryReadSectionHeaderBounds(hwnd, out var hasVisibleTitleButton);
+            if (movingWindows.ContainsKey(hwnd) || windowGenerations.GetOrAdd(hwnd, 0) != generation)
+            {
+                DiagnosticLog.Info($"uia-discard id={sequence} hwnd=0x{hwnd.ToInt64():X} reason=window-changed-during-header-read");
+                return;
+            }
             if (titleReader.ShouldSuppressOverlay(hwnd)) noOverlayWindows[hwnd] = 0;
             else noOverlayWindows.TryRemove(hwnd, out _);
-            tracker.SetSectionHeaderBounds(hwnd, headerBounds);
-            if (headerBounds.HasValue)
+            System.Drawing.Rectangle? relativeHeaderBounds = null;
+            if (headerBounds is { } absoluteHeader && User32.GetWindowRect(hwnd, out var hwndRect))
+            {
+                relativeHeaderBounds = new System.Drawing.Rectangle(
+                    absoluteHeader.Left - hwndRect.Left,
+                    absoluteHeader.Top - hwndRect.Top,
+                    absoluteHeader.Width,
+                    absoluteHeader.Height);
+            }
+            if (result != TitleUpdateResult.ReadFailed)
+                result = tracker.ApplyTitle(hwnd, pendingTitle);
+            tracker.SetSectionHeaderBounds(hwnd, relativeHeaderBounds);
+            if (relativeHeaderBounds.HasValue)
                 tracker.SetHasVisibleTitleButton(hwnd, hasVisibleTitleButton);
             var window = tracker.Windows.FirstOrDefault(x => x.Handle == hwnd);
             if (window is null) return;
@@ -172,7 +188,7 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
                 return;
             }
             DiagnosticLog.Info($"uia-complete id={sequence} hwnd=0x{hwnd.ToInt64():X} result={result} titleChanged={!string.Equals(before, window.CurrentTitle, StringComparison.Ordinal)} title={Sanitize(window.CurrentTitle)}");
-            try { uiContext.Post(_ => ApplyWindowResult(window, sequence), null); }
+            try { uiContext.Post(_ => ApplyWindowResult(window, sequence, generation, relativeHeaderBounds), null); }
             catch (Exception ex) { DiagnosticLog.Error($"uia-dispatch-failed id={sequence} hwnd=0x{hwnd.ToInt64():X}", ex); }
         }
         catch (Exception ex) { DiagnosticLog.Error($"uia-failed id={sequence} hwnd=0x{hwnd.ToInt64():X}", ex); }
@@ -204,9 +220,18 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
         });
     }
 
-    private void ApplyWindowResult(TrackedWindow window, long sequence)
+    private void ApplyWindowResult(TrackedWindow window, long sequence, long? expectedGeneration = null, System.Drawing.Rectangle? freshRelativeHeader = null)
     {
         if (exiting || !tracker.Windows.Any(x => x.Handle == window.Handle)) return;
+        if (expectedGeneration.HasValue
+            && (movingWindows.ContainsKey(window.Handle)
+                || windowGenerations.GetOrAdd(window.Handle, 0) != expectedGeneration.Value))
+        {
+            DiagnosticLog.Info($"apply-discard id={sequence} hwnd=0x{window.Handle.ToInt64():X} reason=window-changed-before-ui-apply");
+            return;
+        }
+        if (freshRelativeHeader is { } relativeHeader)
+            overlays.UpdateLayout(window.Handle, relativeHeader);
         DiagnosticLog.Info($"apply-window id={sequence} hwnd=0x{window.Handle.ToInt64():X} state={window.TitleButtonState} title={Sanitize(window.CurrentTitle)}");
         if (noOverlayWindows.ContainsKey(window.Handle))
             overlays.HideTitle(window.Handle);
@@ -214,7 +239,7 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
             && !string.Equals(window.CurrentTitle, "ChatGPT", StringComparison.Ordinal)
             && window.TitleButtonState == TitleButtonState.Absent
             && !noOverlayWindows.ContainsKey(window.Handle))
-            overlays.SetTitle(window.Handle, window.CurrentTitle, window.SectionHeaderBounds);
+            overlays.SetTitle(window.Handle, window.CurrentTitle);
         else if (window.TitleButtonState == TitleButtonState.Present
             || string.Equals(window.CurrentTitle, "ChatGPT", StringComparison.OrdinalIgnoreCase))
             overlays.HideTitle(window.Handle);
@@ -240,7 +265,7 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
             if (settings.ShowConversationTitle
                 && !string.Equals(window.CurrentTitle, "ChatGPT", StringComparison.Ordinal)
                 && window.TitleButtonState == TitleButtonState.Absent)
-                overlays.SetTitle(window.Handle, window.CurrentTitle, window.SectionHeaderBounds);
+                overlays.SetTitle(window.Handle, window.CurrentTitle);
             else if (window.TitleButtonState == TitleButtonState.Present)
                 overlays.HideTitle(window.Handle);
             if (settings.ChangeAltTabTitle && titleTick % 2 == 0) titleWriter.Apply(window);

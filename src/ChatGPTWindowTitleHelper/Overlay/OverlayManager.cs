@@ -5,11 +5,17 @@ namespace ChatGPTWindowTitleHelper.Overlay;
 internal sealed class OverlayManager : IDisposable
 {
     private const int HeaderTitleInset = 0;
-    private const int HeaderActionsReserve = 150;
     private readonly Dictionary<nint, TitleOverlayForm> overlays = [];
     private readonly Dictionary<(nint Target, bool Maximized), (int OffsetX, int OffsetY, int Width)> headerLayouts = [];
 
-    public void SetTitle(nint target, string title, System.Drawing.Rectangle? header = null)
+    public void UpdateLayout(nint target, System.Drawing.Rectangle relativeHeader)
+    {
+        if (!IsTargetUsable(target)) return;
+        headerLayouts[(target, User32.IsZoomed(target))] =
+            (relativeHeader.Left, relativeHeader.Top, relativeHeader.Width);
+    }
+
+    public void SetTitle(nint target, string title)
     {
         if (!IsTargetUsable(target))
         {
@@ -25,9 +31,7 @@ internal sealed class OverlayManager : IDisposable
 
         if (!User32.GetWindowRect(target, out var rect)) return;
         var layoutKey = (target, User32.IsZoomed(target));
-        if (header is { } h)
-            headerLayouts[layoutKey] = (h.Left - rect.Left, h.Top - rect.Top, h.Width);
-        else if (!headerLayouts.ContainsKey(layoutKey))
+        if (!headerLayouts.ContainsKey(layoutKey))
             // Keep fallback coordinates relative to the target window. A
             // transient UIA failure must not move the overlay to a new
             // absolute location or erase the last known good header layout.
@@ -78,8 +82,8 @@ internal sealed class OverlayManager : IDisposable
     {
         var left = layout.HasValue ? rect.Left + layout.Value.OffsetX + HeaderTitleInset : rect.Left + HeaderTitleInset;
         var width = layout.HasValue
-            ? Math.Min(520, Math.Max(240, layout.Value.Width - HeaderTitleInset - HeaderActionsReserve))
-            : Math.Min(520, Math.Max(240, rect.Right - rect.Left - HeaderTitleInset - HeaderActionsReserve));
+            ? Math.Max(1, layout.Value.Width - HeaderTitleInset)
+            : Math.Max(240, rect.Right - rect.Left - HeaderTitleInset - 150);
         var x = left;
         var y = layout.HasValue ? rect.Top + layout.Value.OffsetY + 4 : rect.Top + 4;
         // Place the overlay immediately above the target in z-order. A

@@ -41,6 +41,21 @@ public sealed class WindowTracker(IChatGptWindowDiscovery discovery, IConversati
         return window.SetTitle(title) ? TitleUpdateResult.Changed : TitleUpdateResult.Unchanged;
     }
 
+    public TitleUpdateResult TryReadTitle(nint handle, out string title)
+    {
+        title = string.Empty;
+        if (!windows.ContainsKey(handle)) return TitleUpdateResult.NotTracked;
+        return titleReader.TryReadTitle(handle, out title)
+            ? TitleUpdateResult.Unchanged
+            : TitleUpdateResult.ReadFailed;
+    }
+
+    public TitleUpdateResult ApplyTitle(nint handle, string title)
+    {
+        if (!windows.TryGetValue(handle, out var window)) return TitleUpdateResult.NotTracked;
+        return window.SetTitle(title) ? TitleUpdateResult.Changed : TitleUpdateResult.Unchanged;
+    }
+
     public void SetSectionHeaderBounds(nint handle, System.Drawing.Rectangle? bounds)
     { if (windows.TryGetValue(handle, out var window)) window.SetSectionHeaderBounds(bounds); }
     public void SetHasVisibleTitleButton(nint handle, bool value)
