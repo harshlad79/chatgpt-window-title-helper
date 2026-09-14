@@ -29,6 +29,10 @@ internal static class User32
     [DllImport("user32.dll")]
     internal static extern bool IsIconic(nint hwnd);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool IsZoomed(nint hwnd);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern bool SetWindowText(nint hwnd, string text);
 
@@ -76,6 +80,8 @@ internal static class User32
     internal const int SW_HIDE = 0;
     internal const uint EVENT_OBJECT_NAMECHANGE = 0x800C;
     internal const uint EVENT_OBJECT_LOCATIONCHANGE = 0x800B;
+    internal const uint EVENT_SYSTEM_MOVESIZESTART = 0x000A;
+    internal const uint EVENT_SYSTEM_MOVESIZEEND = 0x000B;
     internal const uint WINEVENT_OUTOFCONTEXT = 0;
     internal const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
     internal const int OBJID_WINDOW = 0;

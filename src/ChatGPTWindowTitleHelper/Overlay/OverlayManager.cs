@@ -7,7 +7,7 @@ internal sealed class OverlayManager : IDisposable
     private const int HeaderTitleInset = 0;
     private const int HeaderActionsReserve = 150;
     private readonly Dictionary<nint, TitleOverlayForm> overlays = [];
-    private readonly Dictionary<nint, (int OffsetX, int OffsetY, int Width)> headerLayouts = [];
+    private readonly Dictionary<(nint Target, bool Maximized), (int OffsetX, int OffsetY, int Width)> headerLayouts = [];
 
     public void SetTitle(nint target, string title, System.Drawing.Rectangle? header = null)
     {
@@ -24,13 +24,14 @@ internal sealed class OverlayManager : IDisposable
         }
 
         if (!User32.GetWindowRect(target, out var rect)) return;
+        var layoutKey = (target, User32.IsZoomed(target));
         if (header is { } h)
-            headerLayouts[target] = (h.Left - rect.Left, h.Top - rect.Top, h.Width);
-        else if (!headerLayouts.ContainsKey(target))
+            headerLayouts[layoutKey] = (h.Left - rect.Left, h.Top - rect.Top, h.Width);
+        else if (!headerLayouts.ContainsKey(layoutKey))
             // Keep fallback coordinates relative to the target window. A
             // transient UIA failure must not move the overlay to a new
             // absolute location or erase the last known good header layout.
-            headerLayouts[target] = (0, 4, Math.Max(240, rect.Right - rect.Left - 320));
+            headerLayouts[layoutKey] = (0, 4, Math.Max(240, rect.Right - rect.Left - 320));
         if (!overlays.TryGetValue(target, out var overlay))
         {
             overlay = new TitleOverlayForm();
@@ -43,15 +44,20 @@ internal sealed class OverlayManager : IDisposable
 
         overlay.ShowNoActivate();
         overlay.SetTitle(title);
-        PositionOverlay(target, overlay, rect, headerLayouts.GetValueOrDefault(target));
+        PositionOverlay(target, overlay, rect, headerLayouts.GetValueOrDefault(layoutKey));
     }
 
     public void Reposition(nint target)
     {
-        if (!overlays.TryGetValue(target, out var overlay) || !IsTargetUsable(target) || User32.IsIconic(target))
+        if (!overlays.TryGetValue(target, out var overlay) || !IsTargetUsable(target))
             return;
+        if (User32.IsIconic(target))
+        {
+            User32.ShowWindow(overlay.Handle, User32.SW_HIDE);
+            return;
+        }
         if (User32.GetWindowRect(target, out var rect))
-            PositionOverlay(target, overlay, rect, headerLayouts.GetValueOrDefault(target));
+            PositionOverlay(target, overlay, rect, headerLayouts.GetValueOrDefault((target, User32.IsZoomed(target))));
     }
 
     public void RepositionAll()
@@ -61,6 +67,12 @@ internal sealed class OverlayManager : IDisposable
     }
 
     public void RemoveTitle(nint target) => Remove(target);
+
+    public void HideTitle(nint target)
+    {
+        if (overlays.TryGetValue(target, out var overlay) && overlay.IsHandleCreated)
+            User32.ShowWindow(overlay.Handle, User32.SW_HIDE);
+    }
 
     private static void PositionOverlay(nint target, TitleOverlayForm overlay, User32.RECT rect, (int OffsetX, int OffsetY, int Width)? layout)
     {
@@ -90,7 +102,7 @@ internal sealed class OverlayManager : IDisposable
         {
             overlays[handle].Close();
             overlays.Remove(handle);
-            headerLayouts.Remove(handle);
+            foreach (var key in headerLayouts.Keys.Where(x => x.Target == handle).ToArray()) headerLayouts.Remove(key);
         }
     }
 
@@ -100,7 +112,7 @@ internal sealed class OverlayManager : IDisposable
     private void Remove(nint target)
     {
         if (!overlays.Remove(target, out var overlay)) return;
-        headerLayouts.Remove(target);
+        foreach (var key in headerLayouts.Keys.Where(x => x.Target == target).ToArray()) headerLayouts.Remove(key);
         overlay.Close();
         overlay.Dispose();
     }

@@ -4,7 +4,8 @@ namespace ChatGPTWindowTitleHelper.Overlay;
 
 internal sealed class TitleOverlayForm : Form
 {
-    private readonly Label label = new ClickThroughLabel { AutoSize = false, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.Gainsboro, BackColor = Color.FromArgb(32, 32, 32) };
+    private readonly Font captionFont = new(SystemFonts.CaptionFont, FontStyle.Bold);
+    private readonly Label label = new ClickThroughLabel { AutoSize = false, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleCenter };
 
     public TitleOverlayForm()
     {
@@ -13,8 +14,13 @@ internal sealed class TitleOverlayForm : Form
         StartPosition = FormStartPosition.Manual;
         TopMost = false;
         ControlBox = false;
-        BackColor = Color.FromArgb(32, 32, 32);
-        label.Font = SystemFonts.CaptionFont;
+        // Use the Windows selection palette for a deliberately strong,
+        // readable contrast. These colors also follow high-contrast themes.
+        BackColor = SystemColors.Highlight;
+        ForeColor = SystemColors.HighlightText;
+        label.BackColor = SystemColors.Highlight;
+        label.ForeColor = SystemColors.HighlightText;
+        label.Font = captionFont;
         Controls.Add(label);
         label.Dock = DockStyle.Fill;
     }
@@ -22,7 +28,7 @@ internal sealed class TitleOverlayForm : Form
     public void SetTitle(string title)
     {
         label.Text = title;
-        label.Font = SystemFonts.CaptionFont;
+        label.Font = captionFont;
     }
 
     public void ShowNoActivate()
@@ -36,6 +42,12 @@ internal sealed class TitleOverlayForm : Form
 
     // Showing this helper window must never activate it or move keyboard focus.
     protected override bool ShowWithoutActivation => true;
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) captionFont.Dispose();
+        base.Dispose(disposing);
+    }
 
     protected override CreateParams CreateParams
     {

@@ -29,10 +29,21 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
     private bool exiting;
     private long refreshSequence;
     private readonly ConcurrentDictionary<nint, long> windowOperations = new();
+    private readonly ConcurrentDictionary<nint, byte> movingWindows = new();
+    private readonly ConcurrentDictionary<nint, long> windowGenerations = new();
+    private readonly ConcurrentDictionary<nint, byte> minimizedTitleRead = new();
+    private readonly ConcurrentDictionary<nint, byte> noOverlayWindows = new();
+    private readonly (EventWaitHandle Request, EventWaitHandle Ack, EventWaitHandle Done) shutdownSignals;
 
     public ApplicationContext()
     {
         DiagnosticLog.Info("startup");
+        shutdownSignals = SingleInstanceControl.CreateSignals();
+        ThreadPool.RegisterWaitForSingleObject(shutdownSignals.Request, (_, _) =>
+        {
+            shutdownSignals.Ack.Set();
+            try { uiContext.Post(_ => ExitThread(), null); } catch { }
+        }, null, Timeout.Infinite, false);
         titleReader = new UiaConversationTitleReader();
         tracker = new WindowTracker(new ChatGptWindowDiscovery(), titleReader);
         settingsStore = new SettingsStore(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ChatGPTWindowTitleHelper", "settings.json"));
@@ -73,7 +84,7 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
         overlayGeometryTimer = new System.Windows.Forms.Timer { Interval = 100 };
         dispatcher.CreateControl();
         uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
-        nameChangeMonitor = new WindowNameChangeMonitor(OnWindowNameChanged);
+        nameChangeMonitor = new WindowNameChangeMonitor(OnWindowNameChanged, OnMoveSizeChanged);
         refreshTimer.Tick += (_, _) => { titleTick++; RefreshWindows(); };
         overlayGeometryTimer.Tick += (_, _) =>
         {
@@ -106,34 +117,60 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
     {
         foreach (var window in windows)
         {
-            if (!windowOperations.TryAdd(window.Handle, sequence))
+            if (movingWindows.ContainsKey(window.Handle) || !windowOperations.TryAdd(window.Handle, sequence))
             {
-                DiagnosticLog.Info($"uia-skip hwnd=0x{window.Handle.ToInt64():X} reason=in-flight");
+                DiagnosticLog.Info($"uia-skip hwnd=0x{window.Handle.ToInt64():X} reason={(movingWindows.ContainsKey(window.Handle) ? "moving" : "in-flight")}");
                 continue;
             }
 
-            _ = Task.Run(() => RunWindowOperation(window.Handle, sequence));
+            var generation = windowGenerations.GetOrAdd(window.Handle, 0);
+            _ = Task.Run(() => RunWindowOperation(window.Handle, sequence, generation));
         }
     }
 
-    private void RunWindowOperation(nint hwnd, long sequence)
+    private void RunWindowOperation(nint hwnd, long sequence, long generation)
     {
         try
         {
             if (User32.IsIconic(hwnd))
             {
-                DiagnosticLog.Info($"uia-skip id={sequence} hwnd=0x{hwnd.ToInt64():X} reason=minimized");
+                // A minimized window may still expose its current conversation
+                // title, but its geometry and SectionHeader are not reliable.
+                // Read the title for Alt+Tab, while keeping the overlay hidden.
+                if (!minimizedTitleRead.TryAdd(hwnd, 0))
+                {
+                    DiagnosticLog.Info($"uia-skip id={sequence} hwnd=0x{hwnd.ToInt64():X} reason=minimized-title-cached");
+                    return;
+                }
+                var minimizedResult = tracker.TryUpdateTitle(hwnd);
+                var minimizedWindow = tracker.Windows.FirstOrDefault(x => x.Handle == hwnd);
+                if (minimizedWindow is not null)
+                {
+                    DiagnosticLog.Info($"uia-minimized id={sequence} hwnd=0x{hwnd.ToInt64():X} result={minimizedResult} title={Sanitize(minimizedWindow.CurrentTitle)}");
+                    try { uiContext.Post(_ => ApplyWindowResult(minimizedWindow, sequence), null); }
+                    catch (Exception ex) { DiagnosticLog.Error($"uia-dispatch-failed id={sequence} hwnd=0x{hwnd.ToInt64():X}", ex); }
+                }
                 return;
             }
 
+            minimizedTitleRead.TryRemove(hwnd, out _);
+
             var before = tracker.Windows.FirstOrDefault(x => x.Handle == hwnd)?.CurrentTitle;
             var result = tracker.TryUpdateTitle(hwnd);
+            var isNewChat = titleReader.IsNewChat(hwnd);
             var headerBounds = titleReader.TryReadSectionHeaderBounds(hwnd, out var hasVisibleTitleButton);
+            if (titleReader.ShouldSuppressOverlay(hwnd)) noOverlayWindows[hwnd] = 0;
+            else noOverlayWindows.TryRemove(hwnd, out _);
             tracker.SetSectionHeaderBounds(hwnd, headerBounds);
             if (headerBounds.HasValue)
                 tracker.SetHasVisibleTitleButton(hwnd, hasVisibleTitleButton);
             var window = tracker.Windows.FirstOrDefault(x => x.Handle == hwnd);
             if (window is null) return;
+            if (movingWindows.ContainsKey(hwnd) || windowGenerations.GetOrAdd(hwnd, 0) != generation)
+            {
+                DiagnosticLog.Info($"uia-discard id={sequence} hwnd=0x{hwnd.ToInt64():X} reason=window-changed");
+                return;
+            }
             DiagnosticLog.Info($"uia-complete id={sequence} hwnd=0x{hwnd.ToInt64():X} result={result} titleChanged={!string.Equals(before, window.CurrentTitle, StringComparison.Ordinal)} title={Sanitize(window.CurrentTitle)}");
             try { uiContext.Post(_ => ApplyWindowResult(window, sequence), null); }
             catch (Exception ex) { DiagnosticLog.Error($"uia-dispatch-failed id={sequence} hwnd=0x{hwnd.ToInt64():X}", ex); }
@@ -142,16 +179,45 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
         finally { windowOperations.TryRemove(hwnd, out _); }
     }
 
+    private void OnMoveSizeChanged(nint hwnd, bool started)
+    {
+        if (exiting) return;
+        if (started)
+        {
+            movingWindows[hwnd] = 0;
+            windowGenerations.AddOrUpdate(hwnd, 1, (_, value) => value + 1);
+            DiagnosticLog.Info($"movesize-start hwnd=0x{hwnd.ToInt64():X}");
+            return;
+        }
+
+        movingWindows.TryRemove(hwnd, out _);
+        var generation = windowGenerations.GetOrAdd(hwnd, 0);
+        DiagnosticLog.Info($"movesize-end hwnd=0x{hwnd.ToInt64():X} generation={generation}");
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(500).ConfigureAwait(false);
+            if (!exiting && !movingWindows.ContainsKey(hwnd))
+            {
+                try { uiContext.Post(_ => ScheduleWindowOperations(tracker.Windows.Where(x => x.Handle == hwnd).ToArray(), Interlocked.Increment(ref refreshSequence)), null); }
+                catch (Exception ex) { DiagnosticLog.Error($"movesize-refresh-dispatch-failed hwnd=0x{hwnd.ToInt64():X}", ex); }
+            }
+        });
+    }
+
     private void ApplyWindowResult(TrackedWindow window, long sequence)
     {
         if (exiting || !tracker.Windows.Any(x => x.Handle == window.Handle)) return;
         DiagnosticLog.Info($"apply-window id={sequence} hwnd=0x{window.Handle.ToInt64():X} state={window.TitleButtonState} title={Sanitize(window.CurrentTitle)}");
-        if (settings.ShowConversationTitle
+        if (noOverlayWindows.ContainsKey(window.Handle))
+            overlays.HideTitle(window.Handle);
+        else if (settings.ShowConversationTitle
             && !string.Equals(window.CurrentTitle, "ChatGPT", StringComparison.Ordinal)
-            && window.TitleButtonState == TitleButtonState.Absent)
+            && window.TitleButtonState == TitleButtonState.Absent
+            && !noOverlayWindows.ContainsKey(window.Handle))
             overlays.SetTitle(window.Handle, window.CurrentTitle, window.SectionHeaderBounds);
-        else if (window.TitleButtonState == TitleButtonState.Present || window.TitleButtonState == TitleButtonState.Unknown)
-            overlays.RemoveTitle(window.Handle);
+        else if (window.TitleButtonState == TitleButtonState.Present
+            || string.Equals(window.CurrentTitle, "ChatGPT", StringComparison.OrdinalIgnoreCase))
+            overlays.HideTitle(window.Handle);
         if (settings.ChangeAltTabTitle) titleWriter.Apply(window);
     }
 
@@ -175,8 +241,8 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
                 && !string.Equals(window.CurrentTitle, "ChatGPT", StringComparison.Ordinal)
                 && window.TitleButtonState == TitleButtonState.Absent)
                 overlays.SetTitle(window.Handle, window.CurrentTitle, window.SectionHeaderBounds);
-            else if (window.TitleButtonState == TitleButtonState.Present || window.TitleButtonState == TitleButtonState.Unknown)
-                overlays.RemoveTitle(window.Handle);
+            else if (window.TitleButtonState == TitleButtonState.Present)
+                overlays.HideTitle(window.Handle);
             if (settings.ChangeAltTabTitle && titleTick % 2 == 0) titleWriter.Apply(window);
         }
 
@@ -227,6 +293,10 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
         diagnosticPanel.Dispose();
         titleWriter.RestoreAll();
         nameChangeMonitor.Dispose();
+        shutdownSignals.Done.Set();
+        shutdownSignals.Request.Dispose();
+        shutdownSignals.Ack.Dispose();
+        shutdownSignals.Done.Dispose();
         dispatcher.Dispose();
         base.ExitThreadCore();
     }
