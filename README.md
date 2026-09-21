@@ -60,10 +60,22 @@ Both implementations depend on implementation details of the ChatGPT desktop app
 
 ```text
 .
+├── LICENSE
+├── NOTICE
 ├── windows/   # Original Windows implementation and documentation
 ├── macos/     # macOS Swift implementation
 └── README.md
 ```
+
+## License and attribution
+
+Copyright 2026 harshlad79.
+
+Licensed under the Apache License, Version 2.0. See [`LICENSE`](LICENSE) for the full license terms.
+
+The original project and attribution information are recorded in [`NOTICE`](NOTICE).
+
+Original project: https://github.com/harshlad79/chatgpt-window-title-helper
 
 ## Status
 
