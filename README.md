@@ -1,37 +1,70 @@
 # ChatGPT Window Title Helper
 
-Windows tray utility for showing the current ChatGPT conversation title on each ChatGPT window.
+Utilities for exposing ChatGPT conversation titles at the operating-system window level.
 
-## Compatibility
+This repository contains separate implementations for Windows and macOS.
 
-- Platform: Windows x64
-- Verified with Codex/ChatGPT desktop app version `26.908.40834` (released 2026-09-12)
-- Compatibility is currently limited to the Korean UI of that desktop-app version because SectionHeader and action detection rely on its Korean UIA structure and labels.
-- The app identifies windows by native HWND and supports multiple ChatGPT windows.
-- Published releases are self-contained .NET 8 x64 single-file applications; end users do not need to install .NET separately.
-- Building from source requires the .NET 8 SDK x64.
+## Windows
 
-## Usage
+The original Windows implementation is preserved under [`windows/`](windows/).
 
-Run the published `ChatGPTWindowTitleHelper.exe` from the local publish output. The tray menu provides:
+It is a Windows x64 tray utility that reads ChatGPT conversation titles through UI Automation and can show an overlay or change the native Alt+Tab/window title.
 
-- `Status`
-- `Show Conversation Title`
-- `Change Alt+Tab Title`
-- `Exit`
+See [`windows/README.md`](windows/README.md) for the original Windows documentation, build instructions, constraints, and compatibility notes.
 
-Settings are stored at `%LocalAppData%\\ChatGPTWindowTitleHelper\\settings.json`.
+## macOS
 
-The app discovers top-level `ChatGPT.exe` windows by HWND and reads each window's UI Automation conversation title. UIA work is dispatched independently per HWND; a second operation for the same HWND is skipped while the first is running, and each completed result is applied only to its own window. The optional in-window overlay is shown only when the SectionHeader does not already contain a button named with the conversation title. It uses the detected header/action bounds and avoids the right-side action area, including `Share`.
+The macOS implementation is under [`macos/`](macos/).
 
-The overlay follows the target window using the last successful HWND-relative geometry and does not activate or take focus. Conversation-title UIA refresh currently uses a 2-second polling cycle. UIA results collected during move/resize are discarded, and a fresh per-window read is scheduled after movement ends.
+Files:
 
-## Build
+- `ChatGPTTitleOverlay.swift` — menu-bar helper.
+- `build.sh` — builds and launches `~/Applications/ChatGPTTitleOverlay.app`.
 
-Requires .NET 8 SDK x64.
+Current features:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
+- Reads the conversation title from the ChatGPT desktop app Accessibility tree (`AXWebArea.AXTitle`).
+- Optional non-activating title overlay for the active ChatGPT window.
+- Optional Dock/native window-title synchronization.
+- Native-title synchronization enables the Electron main-process inspector with `SIGUSR1` when needed and uses Electron `BrowserWindow.setTitle()`.
+- Overlay and native-title synchronization can be enabled independently from the menu-bar item.
+
+### macOS requirements
+
+- macOS with the ChatGPT desktop app.
+- Swift command-line build tools (`xcrun swiftc`).
+- Accessibility permission for ChatGPT Title Overlay.
+- The current target ChatGPT bundle identifier is `com.openai.codex`.
+
+### Build
+
+```bash
+cd macos
+chmod +x build.sh
+./build.sh
 ```
 
-The output is a self-contained x64 single-file executable in the output directory selected by the publish command. Build artifacts are intentionally excluded from source control.
+The script creates:
+
+```text
+~/Applications/ChatGPTTitleOverlay.app
+```
+
+The current script uses ad-hoc code signing (`codesign --sign -`). This is suitable for local/source builds, but rebuilding can cause macOS Accessibility/TCC permission identity issues. A packaged public binary should use a stable Developer ID signature and notarization.
+
+### Compatibility note
+
+Both implementations depend on implementation details of the ChatGPT desktop app and may require updates when the app changes.
+
+## Repository layout
+
+```text
+.
+├── windows/   # Original Windows implementation and documentation
+├── macos/     # macOS Swift implementation
+└── README.md
+```
+
+## Status
+
+Source archive / maintenance mode. The code is kept public for reuse and future updates.
