@@ -5,8 +5,8 @@ Windows tray utility for showing the current ChatGPT conversation title on each 
 ## Compatibility
 
 - Platform: Windows x64
-- Verified with Codex/ChatGPT desktop app version `26.908.40834` (released 2026-09-12)
-- Compatibility is currently limited to the Korean UI of that desktop-app version because SectionHeader and action detection rely on its Korean UIA structure and labels.
+- Verified with Codex/ChatGPT desktop app versions `26.908.40834` (2026-09-12) and `26.1007.2314.0` (2026-10-12).
+- The 2026-10 app exposes conversation titles as `Document.Name` and a matching visible title `Button` in the document's header toolbar (rather than `SectionHeader`). The helper prioritizes this button and does not overlay the native title. Legacy Korean `SectionHeader` handling remains as fallback.
 - The app identifies windows by native HWND and supports multiple ChatGPT windows.
 - Published releases are self-contained .NET 8 x64 single-file applications; end users do not need to install .NET separately.
 - Building from source requires the .NET 8 SDK x64.
