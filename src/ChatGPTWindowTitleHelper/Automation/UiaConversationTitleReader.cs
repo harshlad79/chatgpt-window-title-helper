@@ -119,6 +119,39 @@ public sealed class UiaConversationTitleReader : IConversationTitleReader
         {
             var root = AutomationElement.FromHandle(hwnd);
             if (root is null) return null;
+
+            // ChatGPT 26.1007+ exposes the conversation as Document.Name and a
+            // matching, visible title Button in the content toolbar. Its header
+            // is no longer a UIA SectionHeader. Detect the native button before
+            // expensive legacy traversals so we never paint over it.
+            var currentDocument = root.FindFirst(
+                TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Document));
+            if (currentDocument is not null)
+            {
+                var documentTitle = currentDocument.Current.Name?.Trim();
+                if (!string.IsNullOrWhiteSpace(documentTitle)
+                    && TryGetBounds(currentDocument, out var documentBounds))
+                {
+                    var condition = new AndCondition(
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                        new PropertyCondition(AutomationElement.NameProperty, documentTitle));
+                    foreach (AutomationElement button in currentDocument.FindAll(
+                                 TreeScope.Descendants, condition))
+                    {
+                        if (TryGetBounds(button, out var buttonBounds)
+                            && ConversationTitleParser.IsVisibleHeaderTitleButton(
+                                documentTitle, button.Current.Name,
+                                documentBounds, buttonBounds, button.Current.IsOffscreen))
+                        {
+                            hasVisibleTitleButton = true;
+                            DiagnosticLog.Info($"uia-header hwnd=0x{hwnd.ToInt64():X} path=native-title-button bounds={buttonBounds}");
+                            return buttonBounds;
+                        }
+                    }
+                }
+            }
+
             var documents = GetElements(hwnd, root)
                 .Where(element => element.Current.ControlType == ControlType.Document)
                 .ToArray();
