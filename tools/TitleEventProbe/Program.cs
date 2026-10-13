@@ -23,6 +23,11 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "--snapshot")
+        {
+            PrintSnapshot();
+            return;
+        }
         int seconds = args.Length > 0 && int.TryParse(args[0], out var n)
             ? Math.Clamp(n, 20, 3600) : 600;
         string folder = Path.Combine(Environment.GetFolderPath(
@@ -42,7 +47,7 @@ internal static class Program
         {
             WinEventDelegate callback = (_, type, hwnd, objectId, childId, _, _) =>
             {
-                if (type == NameChange)
+                if (type == NameChange && hwnd != 0 && objectId != -9)
                     Log("win.name pid=" + pid + " hwnd=0x" + hwnd.ToInt64().ToString("X")
                         + " obj=" + objectId + " child=" + childId);
                 else if (type == Foreground)
@@ -83,6 +88,42 @@ internal static class Program
         Flush();
     }
 
+    // One-shot read after a title change; does not modify the running probe log.
+    // Compare RuntimeIds only for the same HWND while ChatGPT remains running.
+    private static void PrintSnapshot()
+    {
+        foreach (var (hwnd, pid) in FindChatGptWindows())
+        {
+            string id = "0x" + hwnd.ToInt64().ToString("X");
+            try
+            {
+                var root = AutomationElement.FromHandle(hwnd);
+                var doc = root?.FindFirst(TreeScope.Descendants,
+                    new PropertyCondition(AutomationElement.ControlTypeProperty,
+                        ControlType.Document));
+                Console.WriteLine("snapshot hwnd=" + id + " pid=" + pid
+                    + " name=" + Safe(doc?.Current.Name)
+                    + " documentRuntimeId=" + RuntimeId(doc));
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("snapshot hwnd=" + id
+                    + " error=" + e.GetType().Name);
+            }
+        }
+    }
+
+    private static string RuntimeId(AutomationElement? element)
+    {
+        if (element is null) return "none";
+        try
+        {
+            var id = element.GetRuntimeId();
+            return id is null ? "none" : string.Join(".", id);
+        }
+        catch (Exception e) { return "unavailable:" + e.GetType().Name; }
+    }
+
     private static void MonitorUia(List<(nint Hwnd, uint Pid)> windows, ManualResetEventSlim ready)
     {
         var cleanup = new List<Action>();
@@ -106,6 +147,7 @@ internal static class Program
                         doc, documentChanged));
 
                     bool foundButton = false;
+                    string buttonRuntimeId = "none";
                     if (!string.IsNullOrWhiteSpace(name))
                     {
                         var condition = new AndCondition(
@@ -121,6 +163,7 @@ internal static class Program
                             cleanup.Add(() => Automation.RemoveAutomationPropertyChangedEventHandler(
                                 button, buttonChanged));
                             foundButton = true;
+                            buttonRuntimeId = RuntimeId(button);
                         }
                     }
                     StructureChangedEventHandler structureChanged = (_, e) =>
@@ -129,7 +172,9 @@ internal static class Program
                     cleanup.Add(() => Automation.RemoveStructureChangedEventHandler(
                         root, structureChanged));
                     Log("uia.ready hwnd=" + id + " doc=" + Safe(name)
-                        + " titleButton=" + foundButton);
+                        + " documentRuntimeId=" + RuntimeId(doc)
+                        + " titleButton=" + foundButton
+                        + " buttonRuntimeId=" + buttonRuntimeId);
                 }
                 catch (Exception e)
                 {
