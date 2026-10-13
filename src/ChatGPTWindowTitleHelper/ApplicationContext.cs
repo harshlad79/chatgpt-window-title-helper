@@ -24,11 +24,15 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
     private readonly Control dispatcher = new() { Visible = false };
     private SynchronizationContext uiContext = null!;
     private readonly WindowNameChangeMonitor nameChangeMonitor;
+    private readonly AdaptiveTitleWorkQueue workQueue = new();
+    private readonly Thread uiaWorker;
+    private TitleButtonEventMonitor? buttonMonitor;
+    private nint lastForegroundWindow;
+    private readonly ConcurrentDictionary<nint, long> eventVersions = new();
     private AppSettings settings;
     private int titleTick;
     private bool exiting;
     private long refreshSequence;
-    private readonly ConcurrentDictionary<nint, long> windowOperations = new();
     private readonly ConcurrentDictionary<nint, byte> movingWindows = new();
     private readonly ConcurrentDictionary<nint, long> windowGenerations = new();
     private readonly ConcurrentDictionary<nint, byte> minimizedTitlePending = new();
@@ -74,7 +78,10 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
         overlayGeometryTimer = new System.Windows.Forms.Timer { Interval = 100 };
         dispatcher.CreateControl();
         uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
-        nameChangeMonitor = new WindowNameChangeMonitor(OnWindowNameChanged, OnMoveSizeChanged);
+        nameChangeMonitor = new WindowNameChangeMonitor(OnWindowNameChanged, OnMoveSizeChanged, OnForegroundChanged);
+        uiaWorker = new Thread(UiaWorkerLoop) { Name = "ChatGPT single UIA worker", IsBackground = true };
+        uiaWorker.SetApartmentState(ApartmentState.MTA);
+        uiaWorker.Start();
         refreshTimer.Tick += (_, _) => { titleTick++; RefreshWindows(); };
         overlayGeometryTimer.Tick += (_, _) =>
         {
@@ -105,23 +112,99 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
 
     private void ScheduleWindowOperations(IReadOnlyList<TrackedWindow> windows, long sequence)
     {
-        foreach (var window in windows)
+        if (exiting) return;
+        var handles = windows.Select(w => w.Handle).ToArray();
+        workQueue.RemoveMissing(handles);
+        // Cheap Win32-only safety net: ChatGPT can overwrite captions independently
+        // of UIA name events. This never traverses UIA.
+        if (settings.ChangeAltTabTitle)
+            foreach (var window in windows)
+                titleWriter.ReapplyIfReplaced(window);
+        foreach (var hwnd in handles)
         {
-            if (movingWindows.ContainsKey(window.Handle) || !windowOperations.TryAdd(window.Handle, sequence))
-            {
-                DiagnosticLog.Info($"uia-skip hwnd=0x{window.Handle.ToInt64():X} reason={(movingWindows.ContainsKey(window.Handle) ? "moving" : "in-flight")}");
-                continue;
-            }
-
-            var generation = windowGenerations.GetOrAdd(window.Handle, 0);
-            _ = Task.Run(() => RunWindowOperation(window.Handle, sequence, generation));
+            if (!workQueue.IsKnown(hwnd) && !movingWindows.ContainsKey(hwnd))
+                workQueue.Request(hwnd, AdaptiveTitleWorkQueue.Immediate);
         }
+        // Existing stable windows are polled one at a time, not all every tick.
+        workQueue.RequestOneDue(handles.Where(h => !movingWindows.ContainsKey(h)), DateTime.UtcNow);
+        var active = User32.GetForegroundWindow();
+        if (active != lastForegroundWindow)
+        {
+            lastForegroundWindow = active;
+            if (handles.Contains(active))
+                workQueue.Request(active, AdaptiveTitleWorkQueue.Active);
+        }
+    }
+
+    // One dedicated MTA thread owns both UIA RPC calls and UIA event subscriptions.
+    private void UiaWorkerLoop()
+    {
+        using var subscriptions = new TitleButtonEventMonitor(OnUiaTitleButtonChanged);
+        buttonMonitor = subscriptions;
+        while (true)
+        {
+            var hwnd = workQueue.Take();
+            if (hwnd == 0) break;
+            var sequence = Interlocked.Increment(ref refreshSequence);
+            var generation = windowGenerations.GetOrAdd(hwnd, 0);
+            try
+            {
+                subscriptions.RemoveMissing(tracker.Windows.Select(w => w.Handle));
+                DiagnosticLog.Info($"uia-worker-start id={sequence} hwnd=0x{hwnd.ToInt64():X}");
+                RunWindowOperation(hwnd, sequence, generation);
+                var title = tracker.Windows.FirstOrDefault(w => w.Handle == hwnd)?.CurrentTitle;
+                if (!exiting && title is not null)
+                    subscriptions.Ensure(hwnd, title);
+            }
+            catch (Exception ex) { DiagnosticLog.Error($"uia-worker-failed hwnd=0x{hwnd.ToInt64():X}", ex); }
+            finally
+            {
+                var title = tracker.Windows.FirstOrDefault(w => w.Handle == hwnd)?.CurrentTitle;
+                workQueue.Complete(hwnd, !string.IsNullOrWhiteSpace(title) && title != "ChatGPT", DateTime.UtcNow);
+            }
+        }
+    }
+
+    private void OnUiaTitleButtonChanged(nint hwnd, string title)
+    {
+        if (exiting) return;
+        eventVersions.AddOrUpdate(hwnd, 1, (_, n) => n + 1);
+        try
+        {
+            uiContext.Post(_ =>
+            {
+                if (exiting) return;
+                var window = tracker.Windows.FirstOrDefault(x => x.Handle == hwnd);
+                if (window is null) return;
+                var result = tracker.ApplyTitle(hwnd, title);
+                DiagnosticLog.Info($"uia-event-title hwnd=0x{hwnd.ToInt64():X} result={result} title={Sanitize(title)}");
+                ApplyWindowResult(window, Interlocked.Increment(ref refreshSequence));
+            }, null);
+        }
+        catch (InvalidOperationException) { }
+    }
+
+    private void OnForegroundChanged(nint hwnd)
+    {
+        if (exiting) return;
+        try
+        {
+            uiContext.Post(_ =>
+            {
+                if (exiting) return;
+                lastForegroundWindow = hwnd;
+                if (tracker.Windows.Any(w => w.Handle == hwnd))
+                    workQueue.Request(hwnd, AdaptiveTitleWorkQueue.Active);
+            }, null);
+        }
+        catch (InvalidOperationException) { }
     }
 
     private void RunWindowOperation(nint hwnd, long sequence, long generation)
     {
         try
         {
+            var eventVersion = eventVersions.GetOrAdd(hwnd, 0);
             if (User32.IsIconic(hwnd))
             {
                 // A minimized window may still expose its current conversation
@@ -158,7 +241,14 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
                 DiagnosticLog.Info($"uia-discard id={sequence} hwnd=0x{hwnd.ToInt64():X} reason=window-changed-during-title-read");
                 return;
             }
-            var headerBounds = titleReader.TryReadSectionHeaderBounds(hwnd, out var hasVisibleTitleButton);
+            // Header is needed once for overlay classification, not on each title read.
+            // UIA button events handle ordinary title changes without any traversal.
+            var refreshHeader = !buttonMonitor!.HasSubscription(hwnd)
+                || tracker.Windows.FirstOrDefault(x => x.Handle == hwnd)?.TitleButtonState == TitleButtonState.Unknown;
+            bool hasVisibleTitleButton = false;
+            var headerBounds = refreshHeader
+                ? titleReader.TryReadSectionHeaderBounds(hwnd, out hasVisibleTitleButton)
+                : null;
             if (movingWindows.ContainsKey(hwnd) || windowGenerations.GetOrAdd(hwnd, 0) != generation)
             {
                 DiagnosticLog.Info($"uia-discard id={sequence} hwnd=0x{hwnd.ToInt64():X} reason=window-changed-during-header-read");
@@ -175,10 +265,15 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
                     absoluteHeader.Width,
                     absoluteHeader.Height);
             }
-            if (result != TitleUpdateResult.ReadFailed)
+            if (result != TitleUpdateResult.ReadFailed && eventVersions.GetOrAdd(hwnd, 0) == eventVersion)
                 result = tracker.ApplyTitle(hwnd, pendingTitle);
+            else if (eventVersions.GetOrAdd(hwnd, 0) != eventVersion)
+            {
+                DiagnosticLog.Info($"uia-discard id={sequence} hwnd=0x{hwnd.ToInt64():X} reason=event-arrived-during-read");
+                return;
+            }
             tracker.SetSectionHeaderBounds(hwnd, relativeHeaderBounds);
-            if (relativeHeaderBounds.HasValue)
+            if (refreshHeader && relativeHeaderBounds.HasValue)
                 tracker.SetHasVisibleTitleButton(hwnd, hasVisibleTitleButton);
             var window = tracker.Windows.FirstOrDefault(x => x.Handle == hwnd);
             if (window is null) return;
@@ -192,7 +287,6 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
             catch (Exception ex) { DiagnosticLog.Error($"uia-dispatch-failed id={sequence} hwnd=0x{hwnd.ToInt64():X}", ex); }
         }
         catch (Exception ex) { DiagnosticLog.Error($"uia-failed id={sequence} hwnd=0x{hwnd.ToInt64():X}", ex); }
-        finally { windowOperations.TryRemove(hwnd, out _); }
     }
 
     private void OnMoveSizeChanged(nint hwnd, bool started)
@@ -214,7 +308,7 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
             await Task.Delay(500).ConfigureAwait(false);
             if (!exiting && !movingWindows.ContainsKey(hwnd))
             {
-                try { uiContext.Post(_ => ScheduleWindowOperations(tracker.Windows.Where(x => x.Handle == hwnd).ToArray(), Interlocked.Increment(ref refreshSequence)), null); }
+                try { workQueue.Request(hwnd, AdaptiveTitleWorkQueue.Immediate); }
                 catch (Exception ex) { DiagnosticLog.Error($"movesize-refresh-dispatch-failed hwnd=0x{hwnd.ToInt64():X}", ex); }
             }
         });
@@ -289,7 +383,6 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
                 }
             }, null);
         }
-        catch (ObjectDisposedException) { }
         catch (InvalidOperationException) { }
     }
 
@@ -309,6 +402,7 @@ internal sealed class ApplicationContext : System.Windows.Forms.ApplicationConte
         exiting = true;
         refreshTimer.Stop();
         refreshTimer.Dispose();
+        workQueue.Dispose();
         overlayGeometryTimer.Stop();
         overlayGeometryTimer.Dispose();
         trayIcon.Visible = false;

@@ -12,7 +12,11 @@ internal sealed class WindowTitleWriter
     public void Apply(TrackedWindow window)
     {
         if (string.Equals(window.CurrentTitle, "ChatGPT", StringComparison.Ordinal))
+        {
+            if (applied.Remove(window.Handle) && originals.TryGetValue(window.Handle, out var original))
+                User32.SetWindowText(window.Handle, original);
             return;
+        }
 
         if (!originals.ContainsKey(window.Handle))
             originals[window.Handle] = ReadTitle(window.Handle);

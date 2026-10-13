@@ -78,6 +78,10 @@ internal static class User32
     internal static readonly nint HWND_TOP = new(0);
     internal const uint GW_HWNDPREV = 3;
     internal const int SW_HIDE = 0;
+    [DllImport("user32.dll")]
+    internal static extern nint GetForegroundWindow();
+
+    internal const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     internal const uint EVENT_OBJECT_NAMECHANGE = 0x800C;
     internal const uint EVENT_OBJECT_LOCATIONCHANGE = 0x800B;
     internal const uint EVENT_SYSTEM_MOVESIZESTART = 0x000A;

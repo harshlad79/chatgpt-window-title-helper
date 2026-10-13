@@ -23,9 +23,24 @@ Run the published `ChatGPTWindowTitleHelper.exe` from the local publish output. 
 
 Settings are stored at `%LocalAppData%\\ChatGPTWindowTitleHelper\\settings.json`.
 
-The app discovers top-level `ChatGPT.exe` windows by HWND and reads each window's UI Automation conversation title. UIA work is dispatched independently per HWND; a second operation for the same HWND is skipped while the first is running, and each completed result is applied only to its own window. The optional in-window overlay is suppressed when either the current ChatGPT native header title button or the legacy SectionHeader title button is present. It uses the detected header/action bounds and avoids the right-side action area, including `Share`.
+The app discovers top-level ChatGPT.exe windows by HWND. On first discovery it
+reads the conversation UIA Document.Name, locates the native header title
+Button, and subscribes to that Button's NameProperty changes. Live Windows
+experiments confirmed that the Button event fires on conversation renames,
+whereas the Document NameProperty event did not.
 
-The overlay follows the target window using the last successful HWND-relative geometry and does not activate or take focus. Conversation-title UIA refresh currently uses a 2-second polling cycle. UIA results collected during move/resize are discarded, and a fresh per-window read is scheduled after movement ends.
+All UIA reads and event subscriptions run on one dedicated MTA worker with a
+priority-promotable, HWND-deduplicated queue. New and active windows are
+prioritized. Stable windows receive a staggered 20-second fallback check:
+only one overdue window enters the queue per 2-second discovery tick.
+Failed or untitled windows use 2-to-30-second backoff. A native header is
+classified once and is not retraversed on ordinary title checks.
+
+The WinEvent name-change hook ignores child accessibility events. Foreground
+changes prioritize the selected ChatGPT window. Native title buttons suppress
+the duplicate title overlay. Moving/resizing retains last known geometry.
+
+This implementation targets Windows; macOS requires a separate implementation.
 
 ## Build
 
