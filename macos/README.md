@@ -23,3 +23,12 @@ Next implementation gate: identify reliable macOS title change notifications
 and supported native title update path; then implement serial prioritized AX
 polling with one overdue window per discovery tick. Do not silently substitute
 legacy Electron code for the Windows implementation.
+
+To prepare the separately permissioned, read-only native app:
+  ./macos/package-probe.sh
+This creates ~/Applications/ChatGPTTitleProbe.app but does NOT open it.
+macOS System Settings > Privacy & Security > Accessibility: add and allow
+ChatGPTTitleProbe.app. Opening the app after permission starts a 15-minute AX
+observation. Its diagnostic log is in ~/Library/Logs/ChatGPTTitleHelper/title-ax-probe-current.log.
+Do not upload or commit this log: it may contain private conversation titles. If access is denied, the probe exits without changing
+ChatGPT. Repacking with ad hoc signing may reset permission.
