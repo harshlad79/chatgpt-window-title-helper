@@ -104,3 +104,26 @@ path. Never run the legacy Electron inspector signal in diagnosis.
 
 Official Electron accessibility guidance:
 https://www.electronjs.org/docs/latest/tutorial/accessibility
+
+## v6: Length-independent title event subscriptions
+
+The live rename comparison identified the prior title as AXWebArea.Title
+(47 Unicode characters) and the new title as AXButton.Title (42 Unicode
+characters), but title length is **not a valid selection rule**. Even a
+one-character conversation title must work.
+
+The v6 probe therefore subscribes to AXTitleChanged / AXValueChanged on
+all reachable AXWebArea, AXButton, AXHeading, AXStaticText, AXTextField,
+and AXTextArea roles without a minimum or maximum text length. It does
+not subscribe generic AXGroup elements. Each 12-second scan reconciles
+tracked AXObserver notifications against currently reachable elements,
+removing stale subscriptions. Existing first-run diagnostics include hashed
+titles only, not conversation strings.
+
+Observed on macos-main: v6 launched with trusted=true and the existing
+TheCompany certificate retained accessibility approval. Initial scan
+found three AXWebAreas including the previously renamed 42-character
+title, with 44 active subscriptions (down from the v5 saturation of 400).
+Subscriptions were accepted; delivery of a title-change-specific event
+still requires another controlled rename. Do not claim event success
+until observed.

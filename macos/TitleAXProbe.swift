@@ -55,14 +55,19 @@ private let callback: AXObserverCallback = { _, element, note, _ in
 private final class Probe {
     private let appElement: AXUIElement
     private let observer: AXObserver
-    private var notified: Set<String> = []
+    private struct Subscription {
+        let element: AXUIElement
+        let notification: String
+    }
+    private var active: [String: Subscription] = [:]
+    private var desired: Set<String> = []
     private var previous: [String: String] = [:]
     private var previousTitleCandidates: Set<String> = []
     private var scans = 0
     private let maxNodes = 1000
     private let maxPerWindow = 420
     private let maxSubscriptions = 400
-    private var subscriptionCount = 0
+    private var subscriptionCount: Int { active.count }
 
     init(app: AXUIElement, observer: AXObserver) {
         appElement = app
@@ -70,18 +75,43 @@ private final class Probe {
     }
 
     private func subscribe(_ e: AXUIElement, _ notification: String, _ context: String) {
-        guard subscriptionCount < maxSubscriptions else { return }
         let token = key(e) + ":" + notification
-        guard notified.insert(token).inserted else { return }
+        desired.insert(token)
+        if active[token] != nil { return }
+        guard active.count < maxSubscriptions else {
+            if context == "title-candidate" {
+                log("subscription-cap reached role=title-candidate")
+            }
+            return
+        }
         let status = AXObserverAddNotification(observer, e, notification as CFString, nil)
         if status == .success {
-            subscriptionCount += 1
-        } else {
-            notified.remove(token)
-            // Unsupported notification (-25205) can occur on ordinary controls.
-            if scans == 0 && context == "window" {
-                log("subscribe-fail note=\(notification) status=\(status.rawValue)")
+            active[token] = Subscription(element: e, notification: notification)
+            if context == "title-candidate" {
+                log("title-subscription element=\(key(e)) note=\(notification) status=0")
             }
+        } else if context == "title-candidate" {
+            // Some AX elements do not support each of these event types.
+            log("title-subscription element=\(key(e)) note=\(notification) status=\(status.rawValue)")
+        }
+    }
+
+    private func pruneSubscriptions() {
+        var removed = 0
+        var failures = 0
+        for token in active.keys.filter({ !desired.contains($0) }) {
+            guard let old = active[token] else { continue }
+            let status = AXObserverRemoveNotification(
+                observer, old.element, old.notification as CFString)
+            if status == .success || status == .notificationNotRegistered {
+                active.removeValue(forKey: token)
+                removed += 1
+            } else {
+                failures += 1
+            }
+        }
+        if removed > 0 || failures > 0 {
+            log("subscription-prune removed=\(removed) failures=\(failures) remaining=\(subscriptionCount)")
         }
     }
 
@@ -95,6 +125,7 @@ private final class Probe {
     func scan() {
         let initial = scans == 0
         scans += 1
+        desired.removeAll(keepingCapacity: true)
         subscribeApp()
         guard let windows = read(appElement, kAXWindowsAttribute) as? [AXUIElement] else {
             log("scan=\(scans) status=unavailable-windows")
@@ -137,9 +168,12 @@ private final class Probe {
                 let value = (valueObject as? String) ?? ""
                 let hash = key(e)
                 roles[role, default: 0] += 1
-                if ["AXHeading", "AXStaticText", "AXButton"].contains(role) {
+                if ["AXWebArea", "AXHeading", "AXStaticText", "AXButton",
+                    "AXTextField", "AXTextArea"].contains(role) {
                     if !title.isEmpty { titleCandidates.insert("\(role):\(label(title))") }
-                    if !value.isEmpty { titleCandidates.insert("\(role):\(label(value))") }
+                    if !value.isEmpty && role != "AXTextArea" {
+                        titleCandidates.insert("\(role):\(label(value))")
+                    }
                 }
                 let state = role + "/" + subtype + "/" + label(title) + "/" + label(value) + "/" + label(desc) + "/" + identifier
                 if let old = previous[hash], old != state {
@@ -164,15 +198,18 @@ private final class Probe {
                     }
                 }
                 if current.depth <= 11 {
-                    let canSubscribe = !title.isEmpty || !value.isEmpty || !desc.isEmpty ||
-                        ["AXButton", "AXStaticText", "AXTextField", "AXTextArea",
-                         "AXWebArea", "AXGroup", "AXWindow"].contains(role)
-                    if canSubscribe && subscriptionCount < maxSubscriptions {
-                        subscribe(e, kAXTitleChangedNotification, "node")
-                        subscribe(e, kAXValueChangedNotification, "node")
-                        if ["AXWindow", "AXWebArea", "AXGroup"].contains(role) {
-                            subscribe(e, kAXLayoutChangedNotification, "node")
-                            subscribe(e, kAXSelectedChildrenChangedNotification, "node")
+                    // Subscribe all potentially title-bearing roles, regardless
+                    // of text length (including one-character conversation titles).
+                    // Avoid generic AXGroups, which previously exhausted the cap.
+                    let isTitleCandidate = [
+                        "AXWebArea", "AXButton", "AXHeading", "AXStaticText",
+                        "AXTextField", "AXTextArea"
+                    ].contains(role)
+                    if isTitleCandidate {
+                        subscribe(e, kAXTitleChangedNotification, "title-candidate")
+                        subscribe(e, kAXValueChangedNotification, "title-candidate")
+                        if role == "AXWebArea" {
+                            subscribe(e, kAXLayoutChangedNotification, "webarea")
                         }
                     }
                     // Compare conventional and alternative AX subtree attributes.
@@ -203,6 +240,7 @@ private final class Probe {
             }
         }
         previousTitleCandidates = titleCandidates
+        pruneSubscriptions()
         log("scan-done count=\(scans) nodes=\(allNodes) diffs=\(allChanges) titleCandidates=\(titleCandidates.count) subscriptions=\(subscriptionCount)")
     }
 }
@@ -210,7 +248,7 @@ private final class Probe {
 private func run() {
     let seconds = CommandLine.arguments.count > 1
         ? min(900, max(0, Int(CommandLine.arguments[1]) ?? 0)) : 900
-    log("probe-version=5 trusted=\(AXIsProcessTrusted()) seconds=\(seconds)")
+    log("probe-version=6 trusted=\(AXIsProcessTrusted()) seconds=\(seconds)")
     guard AXIsProcessTrusted() else { log("blocked: accessibility permission"); return }
     guard let app = NSWorkspace.shared.runningApplications.first(where: {
         $0.bundleIdentifier == bundleID
