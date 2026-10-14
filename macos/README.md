@@ -31,7 +31,7 @@ macOS System Settings > Privacy & Security > Accessibility: add and allow
 ChatGPTTitleProbe.app. Opening the app after permission starts a 15-minute AX
 observation. Its diagnostic log is in ~/Library/Logs/ChatGPTTitleHelper/title-ax-probe-current.log.
 Do not upload or commit this log: it may contain private conversation titles. If access is denied, the probe exits without changing
-ChatGPT. Repacking with ad hoc signing may reset permission.
+ChatGPT. Packaging uses the existing 2036 TheCompany certificate, not ad-hoc signing. The initial change from ad-hoc may require one reauthorization; verify TCC after subsequent updates.
 
 ## October 15 — v2 AX tree probe
 
@@ -50,3 +50,26 @@ further live investigation. Do not re-sign again during the next run.
 The packaging script only replaces an explicitly selected/already existing
 app bundle; it no longer creates a separate ~/Applications folder.
 Use APP_PATH for a nonstandard location. No changes to the legacy overlay.
+
+## Persistent code signing (2026-10-15)
+
+The canonical cross-project rule is thecompany-core/docs/operations/macos-app-signing-identity.md.
+The tested local signing procedure is documented at
+thecompany-browser/docs/operations/macos-local-code-signing.md.
+The existing TheCompany login Keychain code-signing identity (public SHA-1
+EBC7B73928C50D22D965AFE909AB5CBD519FB851, expires 2036) is reused.
+Do not choose TheCompany Local Signing Test 2026, create a new certificate,
+or sign ChatGPTTitleProbe ad-hoc. Its Bundle ID stays local.chatgpt.titleprobe.
+
+The packaging script must find the existing installed app (or use explicit
+APP_PATH); it will not create a new Applications directory. It preserves the
+previous app under ignored artifacts/macos/backups, builds and signs a staged
+candidate once, verifies the code-signing requirement, and installs it.
+The certificate and its private key stay in the login Keychain; never commit
+private keys, binary bundles or secrets to GitHub.
+
+The transition from an ad-hoc signature to the stable certificate can require
+one macOS Accessibility reapproval. A stable DR across further builds is
+necessary but does not itself prove TCC authorization retention; check it on
+the Mac. Keychain may display a private-key approval dialog during codesign;
+the user must approve it rather than attempting to automate the dialog.
