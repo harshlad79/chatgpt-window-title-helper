@@ -49,7 +49,15 @@ private struct Entry {
     let parent: String
 }
 private let callback: AXObserverCallback = { _, element, note, _ in
-    log("event name=\(note) element=\(key(element))")
+    // Read only the event source's scalar attributes, not its subtree.
+    // This permits exact title fingerprint correlation, even for one character.
+    if note as String == (kAXTitleChangedNotification as String) {
+        let role = string(element, kAXRoleAttribute)
+        let title = string(element, kAXTitleAttribute)
+        log("event name=\(note) element=\(key(element)) role=\(role) title=\(label(title))")
+    } else {
+        log("event name=\(note) element=\(key(element))")
+    }
 }
 
 private final class Probe {
@@ -98,20 +106,24 @@ private final class Probe {
 
     private func pruneSubscriptions() {
         var removed = 0
-        var failures = 0
+        var invalidated: [Int32: Int] = [:]
         for token in active.keys.filter({ !desired.contains($0) }) {
-            guard let old = active[token] else { continue }
+            guard let old = active.removeValue(forKey: token) else { continue }
             let status = AXObserverRemoveNotification(
                 observer, old.element, old.notification as CFString)
             if status == .success || status == .notificationNotRegistered {
-                active.removeValue(forKey: token)
                 removed += 1
             } else {
-                failures += 1
+                // This usually indicates an AX element that has disappeared
+                // during navigation. Release our local reference regardless.
+                // A remote unsubscribe is not claimed on a failed operation.
+                invalidated[status.rawValue, default: 0] += 1
             }
         }
-        if removed > 0 || failures > 0 {
-            log("subscription-prune removed=\(removed) failures=\(failures) remaining=\(subscriptionCount)")
+        if removed > 0 || !invalidated.isEmpty {
+            let errors = invalidated.sorted { $0.key < $1.key }
+                .map { "\($0.key):\($0.value)" }.joined(separator: ",")
+            log("subscription-prune removed=\(removed) invalidated=\(errors) remaining=\(subscriptionCount)")
         }
     }
 
@@ -248,7 +260,7 @@ private final class Probe {
 private func run() {
     let seconds = CommandLine.arguments.count > 1
         ? min(900, max(0, Int(CommandLine.arguments[1]) ?? 0)) : 900
-    log("probe-version=6 trusted=\(AXIsProcessTrusted()) seconds=\(seconds)")
+    log("probe-version=7 trusted=\(AXIsProcessTrusted()) seconds=\(seconds)")
     guard AXIsProcessTrusted() else { log("blocked: accessibility permission"); return }
     guard let app = NSWorkspace.shared.runningApplications.first(where: {
         $0.bundleIdentifier == bundleID

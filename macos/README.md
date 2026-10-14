@@ -127,3 +127,30 @@ title, with 44 active subscriptions (down from the v5 saturation of 400).
 Subscriptions were accepted; delivery of a title-change-specific event
 still requires another controlled rename. Do not claim event success
 until observed.
+
+## October 15 — v7 source fingerprint and short-title verification readiness
+
+The v6 AX observer received AXTitleChanged notifications, but those alone
+were not proof of a conversation rename; the event source could be a
+non-title AXStaticText. Probe v7 records the AXTitleChanged event element's
+role and AXTitle length/SHA-256 fingerprint (never raw title text) to
+distinguish the exact conversation title from unrelated UI events. The
+event callback reads only scalar attributes, never walks the AX tree.
+
+The stale-notification cleanup previously retried failed AXObserver removal
+indefinitely; v7 always drops stale local subscriptions while separately
+reporting native removal failures, without claiming a successful native
+unsubscription on failure. Observed on macos-main: v7 signed with the
+existing 2036 TheCompany certificate, trusted=true without renewed
+consent, initial 166 subscriptions, next scan 120 subscriptions with
+50 stale subscriptions released.
+
+The exact user's prior 42-character conversation title was visible as
+AXWebArea.Title with the expected fingerprint in the first v7 scan.
+A controlled one-character title change has NOT yet been performed.
+On this Mac, System Events reported UI elements enabled=false; the
+node agent cannot safely automate the ChatGPT GUI with AppleScript.
+For the shortest test, ask the user to rename that specific conversation
+to one-character Korean title 가, wait for probe observation, and
+restore the title afterward. Inspect the v7 callback fingerprint and
+AXWebArea title rather than claiming every AXTitleChanged is a rename.
