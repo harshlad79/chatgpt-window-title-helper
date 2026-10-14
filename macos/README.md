@@ -12,10 +12,13 @@ Not yet safe to deploy on the current com.openai.codex application:
 - The Mac Dev node-agent returned AXIsProcessTrusted=false and -25211
   for AXWindows, so live UIA/AX element observation requires user approval.
 
-Safe research probe: TitleAXProbe.swift. Builds using build-probe.sh.
-It reads native/window and webarea titles, checks whether native AXTitle is
-settable WITHOUT modifying the window, and optionally observes AX title/value
-changes for up to 900 seconds. No SIGUSR1 or inspector use.
+AX diagnostic and narrowly restricted test controller:
+TitleAXProbe.swift, built with build-probe.sh.
+Default operation reads AX titles/events without mutation. Explicit
+allowlisted action modes can press the verified chat-title button, raise
+the matched window, and perform a guarded rename-and-restore transaction.
+See AX_CONTROL_RUNBOOK.md for the verified steps and security limits.
+No SIGUSR1 or Electron inspector use.
 The probe requires Accessibility permission to read the ChatGPT AX tree.
 Do not commit output logs containing private conversation titles.
 
@@ -24,9 +27,10 @@ and supported native title update path; then implement serial prioritized AX
 polling with one overdue window per discovery tick. Do not silently substitute
 legacy Electron code for the Windows implementation.
 
-To prepare the separately permissioned, read-only native app:
+To update the separately permissioned, certificate-signed native app:
   ./macos/package-probe.sh
-This creates ~/Applications/ChatGPTTitleProbe.app but does NOT open it.
+This only replaces an existing ChatGPTTitleProbe.app (or APP_PATH) after
+backing it up, and does NOT create a new ~/Applications directory or open it.
 macOS System Settings > Privacy & Security > Accessibility: add and allow
 ChatGPTTitleProbe.app. Opening the app after permission starts a 15-minute AX
 observation. Its diagnostic log is in ~/Library/Logs/ChatGPTTitleHelper/title-ax-probe-current.log.
@@ -154,3 +158,17 @@ For the shortest test, ask the user to rename that specific conversation
 to one-character Korean title 가, wait for probe observation, and
 restore the title afterward. Inspect the v7 callback fingerprint and
 AXWebArea title rather than claiming every AXTitleChanged is a rename.
+
+
+## October 15 — validated targeted AX GUI interaction
+
+ChatGPTTitleProbe now supports constrained AX action inspection, exact-title
+button activation, target-window focus, keyboard trials, and transactional
+conversation rename-and-restore without granting rights to osascript.
+One-character Korean and English title roundtrips committed and restored
+successfully. All results, exact safety gates, failed approaches, code signing,
+LaunchServices TCC attribution, rollback procedure and future GUI app
+extraction notes are recorded in AX_CONTROL_RUNBOOK.md.
+
+This does not establish writing a native macOS window title: that separate
+feature is still unverified.
