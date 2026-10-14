@@ -73,3 +73,34 @@ one macOS Accessibility reapproval. A stable DR across further builds is
 necessary but does not itself prove TCC authorization retention; check it on
 the Mac. Keychain may display a private-key approval dialog during codesign;
 the user must approve it rather than attempting to automate the dialog.
+
+## October 15 — live AX discovery after consent
+
+macos-main ChatGPT process 37140 (macOS 26.6.2, com.openai.codex),
+signed TitleProbe under stable TheCompany 2036 identity. Probe v2 successfully
+read three windows but only 12 AX nodes each. The earlier AXTitleChanged
+window-only subscriptions produced no events during the user's first rename.
+
+The v3-v5 probes also inspect AXFocusedUIElement and alternative AX child
+attributes (AXVisibleChildren, AXContents, AXChildrenInNavigationOrder),
+and report fingerprints only (role / length / truncated SHA-256).
+The original overlay enabled AXEnhancedUserInterface. On this Mac it returned
+-25208, while a follow-up read yielded true. The official Electron macOS
+AXManualAccessibility request returned -25205 (unsupported) on this build.
+Do not claim AXManualAccessibility was responsible for discovery.
+
+After the accessibility tree became available, the focused element yielded
+a large subtree including 20 AXHeading nodes. In v5, two other windows also
+showed AXWebArea; v5 logs baseline fingerprints for 17 distinct heading, static
+text and button candidates and deltas at 12-second intervals. A controlled
+user rename is still required to determine the **actual** conversation title
+element and whether AXTitleChanged / AXValueChanged is delivered. Do not
+infer event reliability from successful subscriptions.
+
+Each subsequent signed app update under the same certificate and stable
+Bundle ID kept AXIsProcessTrusted true without new consent (actual live
+observations). Keep using stable certificate signing and explicit app
+path. Never run the legacy Electron inspector signal in diagnosis.
+
+Official Electron accessibility guidance:
+https://www.electronjs.org/docs/latest/tutorial/accessibility

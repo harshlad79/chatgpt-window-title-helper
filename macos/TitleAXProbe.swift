@@ -57,6 +57,7 @@ private final class Probe {
     private let observer: AXObserver
     private var notified: Set<String> = []
     private var previous: [String: String] = [:]
+    private var previousTitleCandidates: Set<String> = []
     private var scans = 0
     private let maxNodes = 1000
     private let maxPerWindow = 420
@@ -102,6 +103,7 @@ private final class Probe {
         log("scan=\(scans) windows=\(windows.count) subscriptions=\(subscriptionCount)")
         var allNodes = 0
         var allChanges = 0
+        var titleCandidates: Set<String> = []
         for (windowIndex, window) in windows.enumerated() {
             if windowIndex >= 12 { break }
             let winHash = key(window)
@@ -109,6 +111,13 @@ private final class Probe {
             subscribe(window, kAXLayoutChangedNotification, "window")
             subscribe(window, kAXResizedNotification, "window")
             var queue = [Entry(element: window, depth: 0, parent: "-")]
+            if windowIndex == 0,
+               let value = read(appElement, kAXFocusedUIElementAttribute),
+               CFGetTypeID(value) == AXUIElementGetTypeID() {
+                let focused = unsafeBitCast(value, to: AXUIElement.self)
+                queue.append(Entry(element: focused, depth: 0, parent: "AXFocusedUIElement"))
+            }
+            var seen: Set<String> = []
             var offset = 0
             var roles: [String: Int] = [:]
             var accessibleLabels = 0
@@ -117,6 +126,8 @@ private final class Probe {
                 offset += 1
                 allNodes += 1
                 let e = current.element
+                let nodeHash = key(e)
+                if !seen.insert(nodeHash).inserted { continue }
                 let role = string(e, kAXRoleAttribute)
                 let subtype = string(e, kAXSubroleAttribute)
                 let title = string(e, kAXTitleAttribute)
@@ -126,6 +137,10 @@ private final class Probe {
                 let value = (valueObject as? String) ?? ""
                 let hash = key(e)
                 roles[role, default: 0] += 1
+                if ["AXHeading", "AXStaticText", "AXButton"].contains(role) {
+                    if !title.isEmpty { titleCandidates.insert("\(role):\(label(title))") }
+                    if !value.isEmpty { titleCandidates.insert("\(role):\(label(value))") }
+                }
                 let state = role + "/" + subtype + "/" + label(title) + "/" + label(value) + "/" + label(desc) + "/" + identifier
                 if let old = previous[hash], old != state {
                     allChanges += 1
@@ -138,8 +153,15 @@ private final class Probe {
                         log("node window=\(windowIndex) depth=\(current.depth) parent=\(current.parent) hash=\(hash) role=\(role) subrole=\(subtype) title=\(label(title)) value=\(label(value)) desc=\(label(desc)) ident=\(identifier.prefix(80))")
                     }
                 }
-                if initial && offset <= 20 {
+                if initial && offset <= 25 {
                     log("structure window=\(windowIndex) depth=\(current.depth) parent=\(current.parent) hash=\(hash) role=\(role) subrole=\(subtype)")
+                    if current.depth >= 4 || current.parent == "AXFocusedUIElement" {
+                        var names: CFArray?
+                        let status = AXUIElementCopyAttributeNames(e, &names)
+                        if status == .success, let attrs = names as? [String] {
+                            log("attrs window=\(windowIndex) role=\(role) depth=\(current.depth) names=\(attrs.sorted().joined(separator: ","))")
+                        }
+                    }
                 }
                 if current.depth <= 11 {
                     let canSubscribe = !title.isEmpty || !value.isEmpty || !desc.isEmpty ||
@@ -153,23 +175,42 @@ private final class Probe {
                             subscribe(e, kAXSelectedChildrenChangedNotification, "node")
                         }
                     }
-                    let children = (read(e, kAXChildrenAttribute) as? [AXUIElement]) ?? []
-                    for child in children.prefix(120) {
-                        if queue.count >= maxPerWindow { break }
-                        queue.append(Entry(element: child, depth: current.depth + 1, parent: hash))
+                    // Compare conventional and alternative AX subtree attributes.
+                    // macOS/Electron may expose a focused element or visible subtree
+                    // without listing it in AXChildren.
+                    for source in [kAXChildrenAttribute, kAXVisibleChildrenAttribute,
+                                   kAXContentsAttribute, "AXChildrenInNavigationOrder"] {
+                        let children = (read(e, source) as? [AXUIElement]) ?? []
+                        if initial && !children.isEmpty && source != kAXChildrenAttribute {
+                            log("alternate-children window=\(windowIndex) role=\(role) depth=\(current.depth) source=\(source) count=\(children.count)")
+                        }
+                        for child in children.prefix(120) {
+                            if queue.count >= maxPerWindow { break }
+                            queue.append(Entry(element: child, depth: current.depth + 1, parent: hash))
+                        }
                     }
                 }
             }
             log("window-summary index=\(windowIndex) hash=\(winHash) scanned=\(offset) labels=\(accessibleLabels) queued=\(queue.count) roles=\(roles.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ","))")
         }
-        log("scan-done count=\(scans) nodes=\(allNodes) diffs=\(allChanges) subscriptions=\(subscriptionCount)")
+        if initial {
+            log("candidate-baseline count=\(titleCandidates.count) fingerprints=\(titleCandidates.sorted().joined(separator: ","))")
+        } else {
+            let added = titleCandidates.subtracting(previousTitleCandidates)
+            let removed = previousTitleCandidates.subtracting(titleCandidates)
+            if !added.isEmpty || !removed.isEmpty {
+                log("candidate-delta scan=\(scans) added=\(added.sorted().joined(separator: ",")) removed=\(removed.sorted().joined(separator: ","))")
+            }
+        }
+        previousTitleCandidates = titleCandidates
+        log("scan-done count=\(scans) nodes=\(allNodes) diffs=\(allChanges) titleCandidates=\(titleCandidates.count) subscriptions=\(subscriptionCount)")
     }
 }
 
 private func run() {
     let seconds = CommandLine.arguments.count > 1
         ? min(900, max(0, Int(CommandLine.arguments[1]) ?? 0)) : 900
-    log("probe-version=2 trusted=\(AXIsProcessTrusted()) seconds=\(seconds)")
+    log("probe-version=5 trusted=\(AXIsProcessTrusted()) seconds=\(seconds)")
     guard AXIsProcessTrusted() else { log("blocked: accessibility permission"); return }
     guard let app = NSWorkspace.shared.runningApplications.first(where: {
         $0.bundleIdentifier == bundleID
@@ -177,6 +218,20 @@ private func run() {
     let pid = app.processIdentifier
     let root = AXUIElementCreateApplication(pid)
     AXUIElementSetMessagingTimeout(root, 0.6)
+    // The original working helper used this Chromium AX opt-in. This can
+    // enable accessibility metadata, but never edits conversation content.
+    let before = read(root, "AXEnhancedUserInterface") as? NSNumber
+    let enhanced = AXUIElementSetAttributeValue(
+        root, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+    let after = read(root, "AXEnhancedUserInterface") as? NSNumber
+    log("ax-enhanced-ui status=\(enhanced.rawValue) before=\(before?.boolValue.description ?? "unknown") after=\(after?.boolValue.description ?? "unknown")")
+    // Official Electron guidance for external macOS accessibility tools:
+    // set AXManualAccessibility on the application element.
+    let manual = AXUIElementSetAttributeValue(
+        root, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+    let manualAfter = read(root, "AXManualAccessibility") as? NSNumber
+    log("ax-manual-accessibility status=\(manual.rawValue) after=\(manualAfter?.boolValue.description ?? "unknown")")
+    Thread.sleep(forTimeInterval: 1.0)
     var observer: AXObserver?
     let status = AXObserverCreate(pid, callback, &observer)
     log("observer-create status=\(status.rawValue) pid=\(pid)")
