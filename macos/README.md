@@ -32,3 +32,21 @@ ChatGPTTitleProbe.app. Opening the app after permission starts a 15-minute AX
 observation. Its diagnostic log is in ~/Library/Logs/ChatGPTTitleHelper/title-ax-probe-current.log.
 Do not upload or commit this log: it may contain private conversation titles. If access is denied, the probe exits without changing
 ChatGPT. Repacking with ad hoc signing may reset permission.
+
+## October 15 — v2 AX tree probe
+
+Actual macOS ChatGPT accessibility: v1 observed three AXWindows with
+read-only AXTitle, and no AXWebArea. AXWindow title events did not fire on
+the observed rename. The v2 probe scans up to 1,000 internal nodes, logs
+roles/hashes/lengths rather than conversation text, subscribes to title,
+value, selected children, and layout changes on candidate elements, and
+rescans every 12 seconds to detect changes even without notifications.
+
+The v2 executable compiled and the preexisting app was re-signed once.
+This changed its ad-hoc signature identity, and the first run returned
+AXIsProcessTrusted=false. Needs Accessibility reauthorization before
+further live investigation. Do not re-sign again during the next run.
+
+The packaging script only replaces an explicitly selected/already existing
+app bundle; it no longer creates a separate ~/Applications folder.
+Use APP_PATH for a nonstandard location. No changes to the legacy overlay.

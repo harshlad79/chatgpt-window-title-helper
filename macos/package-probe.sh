@@ -3,8 +3,26 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 "$ROOT/macos/build-probe.sh"
-APP="$HOME/Applications/ChatGPTTitleProbe.app"
-mkdir -p "$APP/Contents/MacOS"
+# Never invent an application directory. Update only an existing app.
+APP_PATH="$(printenv APP_PATH 2>/dev/null || true)"
+if [ -n "$APP_PATH" ]; then
+    APP="$APP_PATH"
+else
+    APP=""
+    for candidate in "$HOME/Applications/ChatGPTTitleProbe.app" "$HOME/응용 프로그램/ChatGPTTitleProbe.app"; do
+        if [ -d "$candidate" ]; then
+            if [ -n "$APP" ]; then
+                echo "ERROR: Multiple installed probe apps; set APP_PATH explicitly" >&2
+                exit 3
+            fi
+            APP="$candidate"
+        fi
+    done
+fi
+if [ -z "$APP" ] || [ ! -d "$APP/Contents/MacOS" ]; then
+    echo "ERROR: Existing ChatGPTTitleProbe.app not found; set APP_PATH" >&2
+    exit 3
+fi
 cp "$ROOT/artifacts/macos/TitleAXProbe" "$APP/Contents/MacOS/ChatGPTTitleProbe"
 chmod +x "$APP/Contents/MacOS/ChatGPTTitleProbe"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
