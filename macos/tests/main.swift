@@ -1,0 +1,53 @@
+import Foundation
+
+private var passes = 0
+func expect(_ condition: @autoclosure () -> Bool, _ text: String) {
+    guard condition() else { fatalError("FAILED: \(text)") }
+    passes += 1
+}
+let now = Date(timeIntervalSince1970: 1000)
+
+// New windows are requested immediately, no redundant work on stable windows.
+var q = TitleWorkScheduler()
+q.reconcile(["a", "b"])
+expect(q.hasPending, "initial windows scheduled")
+q.request("a", priority: .active)
+q.request("b", priority: .immediate)
+q.request("a", priority: .immediate)
+expect(q.pop() == "a", "stable FIFO for immediate priority")
+expect(q.pop() == "b", "other immediate new window")
+expect(q.pop() == nil, "duplicate requests coalesced")
+
+q.complete("a", success: true, now: now)
+q.complete("b", success: true, now: now)
+q.reconcile(["a", "b"])
+expect(q.pop() == nil, "successful titles not polled on discovery")
+q.requestOneOverdue(["a", "b"], now: now.addingTimeInterval(19))
+expect(q.pop() == nil, "no work before 20s due")
+
+// Exactly one old window per tick; urgent event wins over due background.
+q.requestOneOverdue(["a", "b"], now: now.addingTimeInterval(21))
+q.request("b", priority: .immediate)
+expect(q.pop() == "b", "title notification wins over overdue tick")
+expect(q.pop() == "a", "one overdue window queued")
+expect(q.pop() == nil, "only one stale window per tick")
+
+// Failure backoff: a missing tree cannot trigger a hot loop.
+q.complete("a", success: false, now: now.addingTimeInterval(21))
+q.complete("b", success: true, now: now.addingTimeInterval(21))
+q.requestOneOverdue(["a", "b"], now: now.addingTimeInterval(22))
+expect(q.pop() == nil, "failure waits >= 2 seconds")
+q.requestOneOverdue(["a", "b"], now: now.addingTimeInterval(24))
+expect(q.pop() == "a", "failed title eventually retried")
+
+// Lost windows cannot remain in the pending queue.
+q.request("a", priority: .immediate)
+q.reconcile(["b", "c"])
+expect(q.pop() == "c", "closed window removed; new window gets immediate work")
+expect(q.pop() == nil, "no stale window pending")
+
+// Only one-character titles and empty title logic are handled at call sites:
+// the queue has no minimum length or title predicate.
+q.request("c", priority: .immediate)
+expect(q.pop() == "c", "window identity never filtered by title length")
+print("PASS TitleWorkScheduler \(passes) assertions")

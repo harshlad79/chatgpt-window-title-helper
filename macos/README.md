@@ -172,3 +172,17 @@ extraction notes are recorded in AX_CONTROL_RUNBOOK.md.
 
 This does not establish writing a native macOS window title: that separate
 feature is still unverified.
+
+
+## Mac event-driven title detection (Windows parity)
+
+The integrated but NOT YET DEPLOYED Mac TitleHelper is in
+ChatGPTTitleHelper.swift + MacAXTitleObserver.swift +
+TitleWorkScheduler.swift. It uses the successful TitleProbe
+AXWebArea/title-button element discovery and the same event-first,
+priority-queued, one-expired-window fallback model as Windows master.
+The working NativeTitleSync is byte-for-byte unchanged in the derived
+source, and the old legacy source and installed app remain untouched.
+For build/tests, run ./macos/tests/run.sh.
+For architecture, permission implications, and live deployment gate,
+see macos/EVENT_DRIVEN_TITLE_HELPER.md.
