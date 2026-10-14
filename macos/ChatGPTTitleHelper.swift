@@ -1795,7 +1795,7 @@ final class OverlayController:
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
             guard let self else { return }
             self.pendingEventTick = false
-            self.refresh()
+            self.refresh(allowBackgroundFallback: false)
         }
     }
 
@@ -1805,7 +1805,7 @@ final class OverlayController:
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) { [weak self] in
             guard let self else { return }
             self.pendingEventTick = false
-            self.refresh()
+            self.refresh(allowBackgroundFallback: false)
         }
     }
 
@@ -1837,7 +1837,7 @@ final class OverlayController:
     // Refresh
     // ========================================================
 
-    private func refresh() {
+    private func refresh(allowBackgroundFallback: Bool = true) {
         // Protect against re-entrancy from AppKit / AX runloop events.
         guard !processingRefresh else {
             retryRefresh = true
@@ -1900,7 +1900,10 @@ final class OverlayController:
         }
 
         guard let appAX = targetAX else { return }
-        let windows = collectConversationWindows(axApp: appAX)
+        let windows = collectConversationWindows(
+            axApp: appAX,
+            allowBackgroundFallback: allowBackgroundFallback
+        )
 
         updateOverlay(windows: windows)
 
@@ -1926,7 +1929,8 @@ final class OverlayController:
     // Read ONE eligible AX window each tick, with title events prioritized.
     // Only cheap AXWindows / AXMain attributes are read for other windows.
     private func collectConversationWindows(
-        axApp: AXUIElement
+        axApp: AXUIElement,
+        allowBackgroundFallback: Bool
     ) -> [ConversationWindow] {
         guard let windows = axGet(axApp, kAXWindowsAttribute)
             as? [AXUIElement] else {
@@ -1961,7 +1965,11 @@ final class OverlayController:
             }
         }
 
-        titleScheduler.requestOneOverdue(visibleIDs, now: Date())
+        // Windows parity: background due work is queued once per discovery
+        // timer tick, not during every event burst or backlog drain.
+        if allowBackgroundFallback {
+            titleScheduler.requestOneOverdue(visibleIDs, now: Date())
+        }
         if let selectedID = titleScheduler.pop(),
            let window = windowsByID[selectedID] {
             let fromEvent = pendingAXTitleEvents.remove(selectedID) != nil

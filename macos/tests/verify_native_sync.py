@@ -16,6 +16,8 @@ assert 'private let refreshInterval: TimeInterval = 0.5' in old
 assert 'private let refreshInterval: TimeInterval = 2.0' in new
 assert 'MacAXTitleObserver(pid: pid' in new
 assert 'requestOneOverdue(visibleIDs, now: Date())' in new
+assert 'if allowBackgroundFallback {' in new
+assert 'self.refresh(allowBackgroundFallback: false)' in new
 assert 'titleScheduler.pop()' in new
 assert 'NativeTitleSync()' in new
 assert 'nativeSync.sync(pid: pid, windows: windows)' in new

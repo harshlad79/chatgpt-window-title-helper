@@ -74,7 +74,8 @@ The repository's Windows master at
    added/removed/minimized windows, their IDs, and the focused window.
 4. Title work runs for at most ONE window per refresh. A title event
    is immediate, a newly focused window is active, and at most one
-   overdue cached window is background-priority.
+   overdue cached window is background-priority, requested ONLY by the
+   two-second discovery timer (not an event burst or backlog drain).
 5. The title element search is AX role-based, cycle-checked and capped
    at 1600 nodes. It tries AXChildren and falls back to visible/contents
    for inaccessible Chromium subtrees. One-character titles are valid.
