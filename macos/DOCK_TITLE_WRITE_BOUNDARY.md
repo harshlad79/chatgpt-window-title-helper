@@ -37,6 +37,11 @@ References:
 - Electron Dock: https://www.electronjs.org/docs/latest/tutorial/macos-dock
 - Historical CGSSetWindowTitle declaration: https://gitlab.com/gnachman/iterm2/blob/adhoc_3.1.20171013_214551/ThirdParty/CGSInternal/CGSWindow.h
 
+
+### Owner-connection-ID control (additional experiment)
+
+A second isolated disposable native Cocoa window (WindowID 46709) exposed its genuine owning SkyLight connection ID 950891 to the separate caller (connection 292067). The external caller passed either the **owner's actual connection ID** or its **own connection ID** to CGSSetWindowTitle. Both calls returned error 1000. Therefore substituting the owner connection number is not sufficient to bypass the cross-process failure; the WindowServer enforces more than the supplied numeric connection ID (or otherwise rejects the request). No ChatGPT window was targeted.
+
 ## Existing native write path and safe production stance
 
 Legacy NativeTitleSync uses Electron BrowserWindow.setTitle through Node main-process Inspector, normally on port 9229. The 2026-10-15 forensic macOS launchd logs conclusively showed ChatGPT twice exited due to SIGUSR1 **sent by ChatGPTTitleOverlay**. The current ChatGPT's Electron V1 fuse EnableNodeCliInspectArguments=0 disables both SIGUSR1 and --inspect. The class is preserved unmodified for reference; default compiled helper keeps all callers of NativeTitleSync.sync / restore unreachable.
