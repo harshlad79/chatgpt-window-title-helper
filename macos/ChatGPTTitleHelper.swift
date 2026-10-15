@@ -174,10 +174,12 @@ func findWebArea(_ root: AXUIElement) -> AXUIElement? {
     return nil
 }
 
-// One matching AXButton.Title inside the same conversation web area.
-// This is the macOS analogue of the Windows TitleButtonEventMonitor.
-func findConversationTitleButton(_ webArea: AXUIElement,
-                                 title: String) -> AXUIElement? {
+// Read-only observation can safely subscribe to multiple title buttons.
+// The current ChatGPT AX tree exposes two AXButtons with the conversation
+// title. Uniqueness is essential for *pressing* buttons, but would incorrectly
+// disable event observation. Keep the search bounded to a few exact matches.
+func findConversationTitleButtons(_ webArea: AXUIElement,
+                                  title: String) -> [AXUIElement] {
     var queue = [webArea]
     var seen: Set<String> = []
     var matches: [AXUIElement] = []
@@ -190,17 +192,19 @@ func findConversationTitleButton(_ webArea: AXUIElement,
         if axString(e, kAXRoleAttribute) == "AXButton" &&
             axString(e, kAXTitleAttribute) == title {
             matches.append(e)
-            if matches.count > 1 { return nil }
+            if matches.count >= 4 { break }
         }
-        let ordinary = axChildren(e)
-        let children = ordinary.isEmpty
-            ? ((axGet(e, kAXVisibleChildrenAttribute) as? [AXUIElement]) ?? [])
-            : ordinary
-        for child in children.prefix(150) where queue.count < 1600 {
-            queue.append(child)
+        // Try all known AX hierarchy paths. Chromium often omits a title
+        // button from conventional AXChildren while exposing it elsewhere.
+        for source in [kAXChildrenAttribute, kAXVisibleChildrenAttribute,
+                       kAXContentsAttribute, "AXChildrenInNavigationOrder"] {
+            let children = (axGet(e, source) as? [AXUIElement]) ?? []
+            for child in children.prefix(150) where queue.count < 1600 {
+                queue.append(child)
+            }
         }
     }
-    return matches.first
+    return matches
 }
 
 
@@ -1277,7 +1281,7 @@ final class OverlayController:
     private struct CachedConversation {
         let value: ConversationWindow
         let webArea: AXUIElement
-        let button: AXUIElement?
+        let buttons: [AXUIElement]
     }
     private var titleCache: [String: CachedConversation] = [:]
     private var pendingEventTick = false
@@ -2047,7 +2051,7 @@ final class OverlayController:
         for (id, cache) in titleCache {
             if visibleIDs.contains(id) {
                 titleObserver?.watchTitle(
-                    cache.webArea, button: cache.button, id: id
+                    cache.webArea, buttons: cache.buttons, id: id
                 )
             }
         }
@@ -2088,10 +2092,13 @@ final class OverlayController:
             width: size.width, height: size.height,
             isMain: axBool(window, kAXMainAttribute) ?? false
         )
+        let buttons = findConversationTitleButtons(webArea, title: title)
+        TitleHelperDiagnostics.shared.record(
+            "title-elements webArea=1 exactButtons=\(buttons.count)")
         return CachedConversation(
             value: v,
             webArea: webArea,
-            button: findConversationTitleButton(webArea, title: title)
+            buttons: buttons
         )
     }
 

@@ -18,6 +18,8 @@ assert 'requestOneOverdue(visibleIDs, now: Date())' in new
 assert 'if allowBackgroundFallback {' in new
 assert 'self.refresh(allowBackgroundFallback: false)' in new
 assert 'titleScheduler.pop()' in new
+assert 'findConversationTitleButtons' in new
+assert 'buttons: buttons' in new
 assert 'NativeTitleSync()' in new
 assert 'nativeSync.sync(pid: pid, windows: windows)' in new
 # Simulate Swift conditional compilation in the normal (no -D) build.

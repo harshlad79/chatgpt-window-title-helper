@@ -77,13 +77,19 @@ final class MacAXTitleObserver {
         }
     }
 
-    func watchTitle(_ webArea: AXUIElement?, button: AXUIElement?, id: String) {
-        for element in [webArea, button].compactMap({ $0 }) {
+    func watchTitle(_ webArea: AXUIElement?, buttons: [AXUIElement], id: String) {
+        // Read-only subscription on all exact matching elements, even if the
+        // title is a single character. Unlike AXPress, no unique button is
+        // required; two matching title controls are expected on ChatGPT.
+        for element in ([webArea].compactMap { $0 } + buttons.prefix(4)) {
             for notification in [
                 kAXTitleChangedNotification, kAXValueChangedNotification
             ] {
                 add(element, notification, id)
             }
+        }
+        if let webArea {
+            add(webArea, kAXLayoutChangedNotification, id)
         }
     }
 

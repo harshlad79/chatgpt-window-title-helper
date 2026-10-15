@@ -247,3 +247,78 @@ Owner-approved Mac runtime:
   writer is NOT YET enabled. Do not report Dock E2E as passed.
 - Prior to enabling Dock writing, validate a replacement transport
   that never signals ChatGPT and checks Inspector ownership.
+
+## October 15 follow-up: two exact title controls and Inspector fuse
+
+The owner-authorized guarded TitleProbe transaction targeted the unique
+original AXWebArea.Title (one exact matching window), but aborted before
+committing a title change with blocked=write-temporary-failed.
+The current ChatGPT AX tree contains TWO AXButton.Title elements whose
+titles both equal the named conversation title. The guarded Probe
+requires a UNIQUE title button before pressing it, so declined to edit.
+A subsequent read-only action census confirmed the unchanged original
+AXWebArea.Title and no active title-edit field. The 0600 recovery
+record, verified to hash to the same original title, was safely deleted.
+There is NO verified title-change event from this transaction.
+
+The integrated TitleHelper had incorrectly required unique matching
+AXButton.Title even for read-only subscriptions. It now permits bounded
+subscriptions to all matching title controls (maximum four) plus the
+AXWebArea, without clicking, typing or modifying conversations. Event
+subscriptions are fundamentally different from actions: ambiguity can
+be tolerated for observation but never for destructive/control actions.
+
+CRITICAL: The ChatGPT app binary was inspected in READ-ONLY mode,
+applying the official Electron Fuse Version 1 schema to the Electron
+sentinel dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX.
+- Found in Codex Framework binary (two framework alias paths).
+- Fuse version: 1
+- Wire length: 9
+- Fuse bytes: 010011001
+- Fuse index 3, EnableNodeCliInspectArguments / nodeCliInspect: 0,
+  disabled.
+- Electron documentation explains that this disables --inspect and
+  the SIGUSR1 route for the main process Inspector. The installed
+  ChatGPT 26.1007.71326 will not accept these Inspector options.
+  No signals or ChatGPT binary changes were made.
+
+Upstream:
+- https://www.electronjs.org/docs/latest/tutorial/fuses
+- https://github.com/electron/fuses/blob/main/src/config.ts
+- https://www.electronjs.org/docs/latest/api/command-line-switches/
+
+Do not flip fuse bytes or re-sign the official ChatGPT binary; this
+would modify a signed third-party application, can invalidate its
+integrity/security properties, and is not an acceptable production
+TitleHelper solution.
+
+The original NativeTitleSync class remains untouched, but its Inspector
+bootstrap cannot work with this ChatGPT build. Future native Dock title
+writing will require a separate safe, supported integration boundary
+outside of the disabled Node CLI Inspector mechanism. Until then, keep
+the writer compiled out and honestly report native Dock E2E as pending.
+
+## Signed multi-button observer deployment results
+
+After the follow-up changes were compiled and tested on MacMini2:
+- NativeTitleSync source equality: PASS.
+- 18 existing scheduler/fingerprint assertions: PASS.
+- Signed with the same stable TheCompany identity and same Bundle ID.
+- Original installed helper was the ONLY application terminated for replacement;
+  ChatGPT was not terminated or restarted.
+- Original helper backup:
+  artifacts/macos/backups/titleoverlay-before-event.yeJiCrck/
+- Safe helper restarted using LaunchServices. Runtime log confirms:
+  title-elements webArea=1 exactButtons=2.
+  ax-title-read ... ok=true durationMs=239 fingerprint=len42:shaee1876263c82.
+  ax-subscriptions active=17 desired=17.
+  Both ChatGPT and helper remained alive after startup.
+- No native title writer calls are enabled in this release, and Dock
+  window-list rename has NOT been demonstrated.
+- Initial guarded rename-and-restore probe refused to open the ambiguous
+  edit control, leaving original title unchanged. The tested probe's
+  owner-only recovery record was verified and removed. Do not repeat
+  an ambiguous title-edit attempt automatically.
+- A real chat rename through the UI is still needed to distinguish an
+  immediate AX notification from the 20-second fallback. The observer
+  is ready; no fabricated event E2E pass is claimed.
