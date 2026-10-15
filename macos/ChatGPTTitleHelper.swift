@@ -1337,7 +1337,8 @@ final class OverlayController:
     // ========================================================
 
     func start() {
-
+        TitleHelperDiagnostics.shared.record(
+            "helper-start pid=\(ProcessInfo.processInfo.processIdentifier)")
         loadPreferences()
         setupMenu()
 
@@ -1853,6 +1854,7 @@ final class OverlayController:
         }
 
         guard AXIsProcessTrusted() else {
+            TitleHelperDiagnostics.shared.record("ax-trusted=false")
             overlayPanel?.orderOut(nil)
             overlayStatusItem.title = "오버레이: 손쉬운 사용 권한 필요"
             requestAccessibilityPermission()
@@ -1860,6 +1862,7 @@ final class OverlayController:
         }
 
         guard let targetApp = currentChatGPTApp() else {
+            TitleHelperDiagnostics.shared.record("chatgpt-running=false")
             titleObserver?.stop()
             titleObserver = nil
             titleCache.removeAll()
@@ -1896,6 +1899,8 @@ final class OverlayController:
                     [weak self] windowID in
                     self?.receivedAXEvent(windowID: windowID)
                 }
+                TitleHelperDiagnostics.shared.record(
+                    "ax-observer-created=\(titleObserver != nil) pid=\(pid)")
             }
         }
 
@@ -1904,7 +1909,8 @@ final class OverlayController:
             axApp: appAX,
             allowBackgroundFallback: allowBackgroundFallback
         )
-
+        TitleHelperDiagnostics.shared.record(
+            "refresh-success knownWindows=\(windows.count) backgroundTick=\(allowBackgroundFallback) nativeEnabled=\(nativeTitleEnabled)")
         updateOverlay(windows: windows)
 
         // Preserve the legacy NativeTitleSync unchanged: it still updates
@@ -1918,6 +1924,25 @@ final class OverlayController:
                 nativeSync.sync(pid: pid, windows: windows) { [weak self] text in
                     DispatchQueue.main.async {
                         self?.nativeStatusItem.title = text
+                        // Preserve NativeTitleSync behavior, but never
+                        // mistake a pending inspector for an actual sync.
+                        // Do not persist conversation titles.
+                        let nativeState: String
+                        if text == "Dock: 제목 대상 없음" {
+                            nativeState = "no-title"
+                        } else if text == "Dock: inspector 시작 중" {
+                            nativeState = "inspector-pending"
+                        } else if text.hasPrefix("Dock: ") &&
+                                  text.contains("개 동기화") {
+                            nativeState = "sync-returned-count"
+                        } else if text.hasPrefix("Dock 오류: ") ||
+                                  text.hasPrefix("Dock 연결 오류: ") {
+                            nativeState = "error"
+                        } else {
+                            nativeState = "other"
+                        }
+                        TitleHelperDiagnostics.shared.record(
+                            "native-sync-result state=\(nativeState)")
                     }
                 }
             }

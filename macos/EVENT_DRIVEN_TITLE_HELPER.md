@@ -157,3 +157,42 @@ artifact. It does not run as part of build or tests. If the owner
 chooses to run a reviewed installer on their Mac, pause for any needed
 Keychain approval and Accessibility authorization. Never reset TCC
 or modify the working NativeTitleSync to force installation.
+
+## Live owner-authorized test: Accessibility approval, 2026-10-15 evening
+
+- The approved signed app (Bundle ID local.chatgpt.titleoverlay; TheCompany
+  certificate EBC7B73928C50D22D965AFE909AB5CBD519FB851) became
+  AXIsProcessTrusted=true in its existing process, without re-signing.
+- It registered 62 AX subscriptions against original ChatGPT PID 37140 and
+  successfully detected one titled conversation window.
+- The ChatGPT process then exited. A new process PID 66399 launched, showing
+  at most shallow native AXWindow groups and no AXWebArea while inactive.
+  The observer still received AXMoved events, but there were no title
+  elements to subscribe to. The ChatGPT process later exited too.
+- The *unchanged* legacy NativeTitleSync attempts to contact localhost
+  9229 and, if no inspector is present, sends SIGUSR1 to the ChatGPT PID.
+  Port 9229 was not listening in these checks. Exits happened while
+  this writer was enabled, but precise termination cause / signal is
+  NOT established. Do not claim SIGUSR1 was proved to kill ChatGPT.
+- To avoid repeating a possibly destructive action, the new TitleHelper
+  process was **stopped**. The installed code-signed bundle and ad-hoc
+  rollback backups were retained without other changes.
+- ChatGPT was launched independently in the background, without TitleHelper,
+  and survived >20 s. AX windows were still shallow when ChatGPT was
+  inactive. After explicitly activating ChatGPT once, signed TitleProbe
+  detected one AXWebArea, but its title was the generic "ChatGPT"
+  (length 7), not a named conversation.
+- Actual AX conversation-title change notifications and Dock window-list
+  name update were therefore NOT validated. User needs to open an actual
+  named conversation and confirm a non-generic title, before further E2E
+  testing. Do not automatically rename the conversation.
+- Runtime instrumentation is kept in TitleHelperDiagnostics.swift and
+  derived source; no raw conversation bodies/titles in diagnostic file.
+  The diagnostic callback now differentiates "inspector-pending",
+  "no-title" and "sync-returned-count" rather than calling every
+  "Dock: ..." message successful.
+
+**Before relaunching the installed native writer**, examine the
+inspector-start path's safety on ChatGPT 26.1007.71326. Do not
+automatically replay the previous SIGUSR1 path while its compatibility
+is unresolved; the old class remains verbatim, per owner direction.

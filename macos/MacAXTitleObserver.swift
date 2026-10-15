@@ -22,6 +22,8 @@ final class MacAXTitleObserver {
             .takeUnretainedValue()
         let token = "\(CFHash(element)):\(note)"
         guard let watch = selfRef.watching[token] else { return }
+        TitleHelperDiagnostics.shared.record(
+            "ax-event type=\(note) targeted=\(watch.windowID != nil)")
         selfRef.onChanged(watch.windowID)
     }
 
@@ -41,13 +43,17 @@ final class MacAXTitleObserver {
         let token = "\(CFHash(element)):\(note)"
         desired.insert(token)
         if watching[token] != nil { return }
-        if AXObserverAddNotification(
+        let result = AXObserverAddNotification(
             observer, element, note as CFString,
             Unmanaged.passUnretained(self).toOpaque()
-        ) == .success {
+        )
+        if result == .success {
             watching[token] = Watch(
                 element: element, notification: note, windowID: window
             )
+        } else {
+            TitleHelperDiagnostics.shared.record(
+                "ax-subscribe-failure note=\(note) code=\(result.rawValue)")
         }
     }
 
@@ -82,6 +88,8 @@ final class MacAXTitleObserver {
     }
 
     func finishDiscovery() {
+        TitleHelperDiagnostics.shared.record(
+            "ax-subscriptions active=\(watching.count) desired=\(desired.count)")
         // Stale remote accessibility elements may refuse unsubscription.
         // Always discard local references; never hold defunct AX nodes forever.
         for token in watching.keys.filter({ !desired.contains($0) }) {
