@@ -21,7 +21,8 @@ final class MacAXTitleObserver {
         guard let pointer else { return }
         let selfRef = Unmanaged<MacAXTitleObserver>.fromOpaque(pointer)
             .takeUnretainedValue()
-        let token = <redacted>        guard let watch = selfRef.watching[token] else { return }
+        let token = "\(CFHash(element)):\(note)"
+        guard let watch = selfRef.watching[token] else { return }
         TitleHelperDiagnostics.shared.record(
             "ax-event type=\(note) targeted=\(watch.windowID != nil)")
         selfRef.onChanged(watch.windowID, watch.isTitleElement)
@@ -42,7 +43,8 @@ final class MacAXTitleObserver {
 
     private func add(_ element: AXUIElement, _ note: String,
                      _ window: String?, titleElement: Bool = false) {
-        let token = <redacted>        desired.insert(token)
+        let token = "\(CFHash(element)):\(note)"
+        desired.insert(token)
         if watching[token] != nil { return }
         let result = AXObserverAddNotification(
             observer, element, note as CFString,
