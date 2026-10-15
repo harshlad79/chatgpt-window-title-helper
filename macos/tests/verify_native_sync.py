@@ -63,3 +63,8 @@ assert 'Dock: 안전 중지 (Inspector 미검증)' in new
 # including actual signal calls, must remain IDENTICAL.
 assert extract(old).count('SIGUSR1') == extract(new).count('SIGUSR1')
 print("PASS unchanged NativeTitleSync and event-driven wiring")
+
+assert 'dockSidecar.start()' in new
+assert 'dockSidecar.update(sidecarEntries)' in new
+assert 'dockSidecar.stop()' in new
+assert 'NativeTitleSync()' in new

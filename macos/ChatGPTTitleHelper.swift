@@ -1272,6 +1272,10 @@ final class OverlayController:
     private var overlayPanel:
         TitleOverlayPanel?
 
+    private let dockSidecar = DockMenuSidecar()
+    private var sidecarWindows: [String: AXUIElement] = [:]
+    private var sidecarWindowOrder: [String] = []
+
     private var timer: Timer?
 
     // TitleProbe-derived event subscriptions + one-window priority queue.
@@ -1347,6 +1351,16 @@ final class OverlayController:
         loadPreferences()
         setupMenu()
 
+        // Poll one Dock AX item only; never alter ChatGPT or Dock menu labels.
+        dockSidecar.onSelect = { [weak self] entry in
+            guard let self, let app = self.currentChatGPTApp(),
+                  app.processIdentifier == self.targetPID else { return }
+            _ = app.activate()
+            _ = AXUIElementPerformAction(
+                entry.axWindow, kAXRaiseAction as CFString)
+            TitleHelperDiagnostics.shared.record("dock-sidecar-window-selected")
+        }
+        dockSidecar.start()
         requestAccessibilityPermission()
 
         timer =
@@ -1747,6 +1761,7 @@ final class OverlayController:
     @objc
     private func quitApp() {
 
+        dockSidecar.stop()
         overlayPanel?.orderOut(nil)
 
         #if !TITLEHELPER_NATIVE_WRITER_VERIFIED
@@ -1911,6 +1926,9 @@ final class OverlayController:
             titleObserver?.stop()
             titleObserver = nil
             titleCache.removeAll()
+            sidecarWindows.removeAll()
+            sidecarWindowOrder.removeAll()
+            dockSidecar.update([])
             pendingAXTitleEvents.removeAll()
             titleScheduler = TitleWorkScheduler()
             titleRetryPlan = TitleRevisionRetryPlan()
@@ -1929,6 +1947,9 @@ final class OverlayController:
             titleObserver?.stop()
             titleObserver = nil
             titleCache.removeAll()
+            sidecarWindows.removeAll()
+            sidecarWindowOrder.removeAll()
+            dockSidecar.update([])
             pendingAXTitleEvents.removeAll()
             titleScheduler = TitleWorkScheduler()
             titleRetryPlan = TitleRevisionRetryPlan()
@@ -1960,6 +1981,15 @@ final class OverlayController:
         TitleHelperDiagnostics.shared.record(
             "refresh-success knownWindows=\(windows.count) backgroundTick=\(allowBackgroundFallback) nativeEnabled=\(nativeTitleEnabled)")
         updateOverlay(windows: windows)
+        // Independent selectable titles; never guess native Dock item order.
+        let sidecarEntries: [DockMenuSidecar.Entry] =
+            sidecarWindowOrder.compactMap { id in
+                guard let ax = sidecarWindows[id],
+                      let cached = titleCache[id] else { return nil }
+                return DockMenuSidecar.Entry(
+                    id: id, title: cached.value.title, axWindow: ax)
+            }
+        dockSidecar.update(sidecarEntries)
 
         // Preserve the legacy NativeTitleSync unchanged: it still updates
         // BrowserWindow.setTitle and restores saved native titles.
@@ -2015,6 +2045,11 @@ final class OverlayController:
             return titleCache.values.map { $0.value }
         }
         let ids = Set(windows.map { String(CFHash($0)) })
+        sidecarWindowOrder = windows.map { String(CFHash($0)) }
+        sidecarWindows = Dictionary(
+            uniqueKeysWithValues: windows.map {
+                (String(CFHash($0)), $0)
+            })
         titleCache = titleCache.filter { ids.contains($0.key) }
         pendingAXTitleEvents = pendingAXTitleEvents.intersection(ids)
         titleRetryPlan.retainOnly(ids)

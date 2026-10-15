@@ -6,6 +6,7 @@ cd "$ROOT"
 xcrun swiftc -O \
   macos/ChatGPTTitleHelper.swift \
   macos/MacAXTitleObserver.swift \
+  macos/DockMenuSidecar.swift \
   macos/TitleWorkScheduler.swift \
   macos/TitleRevisionRetryPlan.swift \
   macos/TitleHelperDiagnostics.swift \
