@@ -322,3 +322,35 @@ After the follow-up changes were compiled and tested on MacMini2:
 - A real chat rename through the UI is still needed to distinguish an
   immediate AX notification from the 20-second fallback. The observer
   is ready; no fabricated event E2E pass is claimed.
+
+## 2026-10-16 — Fast bounded retries after early AXValueChanged
+
+A real owner-initiated rename from the previous 42-character title to an
+18-character Korean/English title was observed. AXValueChanged arrived
+twice, but immediate AXWebArea.Title reads returned the previous value;
+the new title only appeared on the next 20-second fallback. That proves
+notifications may PRECEDE the actual committed title.
+
+The Mac helper now uses TitleRevisionRetryPlan, a main-thread-only
+per-window generation token without title text or AX object references.
+Only AXWebArea/title-button notifications can start bounded targeted
+follow-up reads, at 0.25, 0.6, 1.2, 2.2, 4.0 and 6.0 seconds.
+The first read still uses the ordinary 80ms event debounce. Once a
+changed title is actually read, pending generations are invalidated;
+duplicate events supersede prior generations and closed windows are
+cleared. No new global high-frequency polling is introduced.
+This is 6 finite checks per title event group, NOT a 6Hz timer.
+The 2s cheap discovery / 20s one-stale-window fallback remains active.
+
+Tests: original NativeTitleSync exact equality PASS; compile-time
+fences exclude all 3 sync/restore call sites; TitleWorkScheduler and
+TitleRevisionRetryPlan 26 assertions PASS; full Swift build PASS.
+A repeat human rename is still required to establish actual new-title
+reaction latency. No native Dock write path is enabled.
+
+Research: the installed ChatGPT includes a Chromium-style scripting.sdef
+with a writable 'given name' field on 'window', but a harmless read-only
+AppleEvent query to the running app ('count of windows') timed out with
+-1712 after 5 seconds. This bundled dictionary is NOT sufficient proof
+that the current app services the scripting command.
+The app binary and legacy NativeTitleSync remain untouched.

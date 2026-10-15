@@ -8,11 +8,12 @@ final class MacAXTitleObserver {
         let element: AXUIElement
         let notification: String
         let windowID: String?
+        let isTitleElement: Bool
     }
 
     private let observer: AXObserver
     private let app: AXUIElement
-    private let onChanged: (String?) -> Void
+    private let onChanged: (String?, Bool) -> Void
     private var watching: [String: Watch] = [:]
     private var desired: Set<String> = []
 
@@ -20,14 +21,14 @@ final class MacAXTitleObserver {
         guard let pointer else { return }
         let selfRef = Unmanaged<MacAXTitleObserver>.fromOpaque(pointer)
             .takeUnretainedValue()
-        let token = "\(CFHash(element)):\(note)"
-        guard let watch = selfRef.watching[token] else { return }
+        let token = <redacted>        guard let watch = selfRef.watching[token] else { return }
         TitleHelperDiagnostics.shared.record(
             "ax-event type=\(note) targeted=\(watch.windowID != nil)")
-        selfRef.onChanged(watch.windowID)
+        selfRef.onChanged(watch.windowID, watch.isTitleElement)
     }
 
-    init?(pid: pid_t, app: AXUIElement, onChanged: @escaping (String?) -> Void) {
+    init?(pid: pid_t, app: AXUIElement,
+          onChanged: @escaping (String?, Bool) -> Void) {
         var created: AXObserver?
         guard AXObserverCreate(pid, Self.callback, &created) == .success,
               let created else { return nil }
@@ -39,9 +40,9 @@ final class MacAXTitleObserver {
         )
     }
 
-    private func add(_ element: AXUIElement, _ note: String, _ window: String?) {
-        let token = "\(CFHash(element)):\(note)"
-        desired.insert(token)
+    private func add(_ element: AXUIElement, _ note: String,
+                     _ window: String?, titleElement: Bool = false) {
+        let token = <redacted>        desired.insert(token)
         if watching[token] != nil { return }
         let result = AXObserverAddNotification(
             observer, element, note as CFString,
@@ -49,7 +50,8 @@ final class MacAXTitleObserver {
         )
         if result == .success {
             watching[token] = Watch(
-                element: element, notification: note, windowID: window
+                element: element, notification: note,
+                windowID: window, isTitleElement: titleElement
             )
         } else {
             TitleHelperDiagnostics.shared.record(
@@ -85,11 +87,12 @@ final class MacAXTitleObserver {
             for notification in [
                 kAXTitleChangedNotification, kAXValueChangedNotification
             ] {
-                add(element, notification, id)
+                add(element, notification, id, titleElement: true)
             }
         }
         if let webArea {
-            add(webArea, kAXLayoutChangedNotification, id)
+            add(webArea, kAXLayoutChangedNotification, id,
+                titleElement: true)
         }
     }
 

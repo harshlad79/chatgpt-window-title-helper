@@ -7,6 +7,7 @@ xcrun swiftc -O \
   macos/ChatGPTTitleHelper.swift \
   macos/MacAXTitleObserver.swift \
   macos/TitleWorkScheduler.swift \
+  macos/TitleRevisionRetryPlan.swift \
   macos/TitleHelperDiagnostics.swift \
   macos/main.swift \
   -o artifacts/macos/ChatGPTTitleHelper \

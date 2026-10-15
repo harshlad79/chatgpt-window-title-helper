@@ -5,7 +5,7 @@ cd "$ROOT"
 python3 macos/tests/verify_native_sync.py
 out="$(mktemp "$ROOT/artifacts/macos/.scheduler-test.XXXXXXXX")"
 trap 'rm -f "$out"' EXIT
-xcrun swiftc macos/TitleWorkScheduler.swift macos/TitleHelperDiagnostics.swift macos/tests/main.swift -o "$out"
+xcrun swiftc macos/TitleWorkScheduler.swift macos/TitleRevisionRetryPlan.swift macos/TitleHelperDiagnostics.swift macos/tests/main.swift -o "$out"
 "$out"
 ./macos/build-title-helper.sh
 bash -n macos/build-title-helper.sh

@@ -1287,6 +1287,7 @@ final class OverlayController:
     private var pendingEventTick = false
     private var lastFocusedID: String?
     private var pendingAXTitleEvents: Set<String> = []
+    private var titleRetryPlan = TitleRevisionRetryPlan()
     private var processingRefresh = false
     private var retryRefresh = false
 
@@ -1807,10 +1808,31 @@ final class OverlayController:
     // Targeted event scheduling
     // ========================================================
 
-    private func receivedAXEvent(windowID: String?) {
+    private func receivedAXEvent(windowID: String?, titleRelated: Bool) {
         if let windowID {
             pendingAXTitleEvents.insert(windowID)
             titleScheduler.request(windowID, priority: .immediate)
+
+            // Chromium often sends AXValueChanged while the old web-area
+            // title is still visible. Observe just this window with bounded
+            // follow-up reads; no foreground focus, clicks, or fast polling.
+            if titleRelated, let ticket = titleRetryPlan.begin(
+                windowID, hasCachedTitle: titleCache[windowID] != nil
+            ) {
+                for delay in TitleRevisionRetryPlan.delays {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                        [weak self] in
+                        guard let self, self.titleRetryPlan.isActive(
+                            windowID, generation: ticket
+                        ) else { return }
+                        self.pendingAXTitleEvents.insert(windowID)
+                        self.titleScheduler.request(windowID, priority: .immediate)
+                        self.schedulePendingWork()
+                    }
+                }
+                TitleHelperDiagnostics.shared.record(
+                    "ax-title-retry-scheduled checks=\(TitleRevisionRetryPlan.delays.count)")
+            }
         }
         // Coalesce AXTitleChanged/AXValueChanged bursts; callback itself is
         // intentionally free of any AX remote reads or window traversal.
@@ -1891,6 +1913,7 @@ final class OverlayController:
             titleCache.removeAll()
             pendingAXTitleEvents.removeAll()
             titleScheduler = TitleWorkScheduler()
+            titleRetryPlan = TitleRevisionRetryPlan()
             targetPID = 0
             targetAX = nil
             lastFocusedID = nil
@@ -1908,6 +1931,7 @@ final class OverlayController:
             titleCache.removeAll()
             pendingAXTitleEvents.removeAll()
             titleScheduler = TitleWorkScheduler()
+            titleRetryPlan = TitleRevisionRetryPlan()
             lastFocusedID = nil
             targetPID = pid
             targetAX = AXUIElementCreateApplication(pid)
@@ -1919,8 +1943,9 @@ final class OverlayController:
                     appAX, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue
                 )
                 titleObserver = MacAXTitleObserver(pid: pid, app: appAX) {
-                    [weak self] windowID in
-                    self?.receivedAXEvent(windowID: windowID)
+                    [weak self] windowID, titleRelated in
+                    self?.receivedAXEvent(
+                        windowID: windowID, titleRelated: titleRelated)
                 }
                 TitleHelperDiagnostics.shared.record(
                     "ax-observer-created=\(titleObserver != nil) pid=\(pid)")
@@ -1992,6 +2017,7 @@ final class OverlayController:
         let ids = Set(windows.map { String(CFHash($0)) })
         titleCache = titleCache.filter { ids.contains($0.key) }
         pendingAXTitleEvents = pendingAXTitleEvents.intersection(ids)
+        titleRetryPlan.retainOnly(ids)
 
         titleObserver?.beginDiscovery()
         var windowsByID: [String: AXUIElement] = [:]
@@ -2038,6 +2064,7 @@ final class OverlayController:
                 let old = titleCache[selectedID]?.value.title
                 titleCache[selectedID] = result
                 if old != result.value.title {
+                    titleRetryPlan.complete(selectedID)
                     // An event can occur within the 1s legacy sync throttle.
                     // Force the unchanged synchronizer to receive this title.
                     lastNativeSync = .distantPast

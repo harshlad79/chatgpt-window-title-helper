@@ -62,4 +62,26 @@ expect(shortEnglish.hasPrefix("len1:sha"), "English one-character title")
 expect(shortKorean != shortEnglish, "distinct fingerprints")
 expect(TitleHelperDiagnostics.fingerprint("ChatGPT").hasPrefix("len7:sha"),
        "generic title retains length")
-print("PASS TitleWorkScheduler + title fingerprints \(passes) assertions")
+
+// Title changes can arrive before Chromium commits its AXWebArea.Title.
+var retries = TitleRevisionRetryPlan()
+expect(retries.begin("winA", hasCachedTitle: false) == nil,
+       "no retries without an original title to compare")
+let first = retries.begin("winA", hasCachedTitle: true)!
+expect(retries.isActive("winA", generation: first), "first ticket active")
+let second = retries.begin("winA", hasCachedTitle: true)!
+expect(!retries.isActive("winA", generation: first),
+       "superseded AX event cannot schedule stale reads")
+expect(retries.isActive("winA", generation: second), "latest ticket remains active")
+retries.complete("winA")
+expect(!retries.isActive("winA", generation: second),
+       "title update cancels pending follow-up reads")
+let third = retries.begin("winB", hasCachedTitle: true)!
+retries.retainOnly(["winA"])
+expect(!retries.isActive("winB", generation: third),
+       "closed window discards pending retries")
+expect(TitleRevisionRetryPlan.delays.count == 6,
+       "bounded retry plan must not run indefinitely")
+expect(TitleRevisionRetryPlan.delays.last! <= 6.0,
+       "last retry must happen within 6 seconds")
+print("PASS TitleWorkScheduler + AX title retries \(passes) assertions")
