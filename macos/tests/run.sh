@@ -2,6 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+mkdir -p "$ROOT/artifacts/macos"
 python3 macos/tests/verify_native_sync.py
 out="$(mktemp "$ROOT/artifacts/macos/.scheduler-test.XXXXXXXX")"
 trap 'rm -f "$out"' EXIT
