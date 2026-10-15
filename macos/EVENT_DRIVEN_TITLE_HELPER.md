@@ -354,3 +354,46 @@ AppleEvent query to the running app ('count of windows') timed out with
 -1712 after 5 seconds. This bundled dictionary is NOT sufficient proof
 that the current app services the scripting command.
 The app binary and legacy NativeTitleSync remain untouched.
+
+
+## Safe signed rollout — 2026-10-16, verified source 3a80693
+
+The 0.25–6 second bounded retry implementation was committed at 17ecb70.
+A **clean** checkout exposed an unintended tool-output masking regression in
+MacAXTitleObserver.swift in the GitHub commit: two exact source spans were
+accidentally replaced by <redacted> during an intermediate Dev MCP stdout
+transfer. The source was repaired using an unmodified Base64 blob and GitHub
+blob/tree/commit workflow at 3a80693. The clean-worktree test runner also
+now creates its artifacts directory (431459d).
+
+Verified from a separate, clean Git worktree at 3a806933e0b8cc083cd3af0f6b3a95eb86a7258d:
+- MacAXTitleObserver.swift byte-identical to the tested original source,
+  zero masked placeholder tokens.
+- Original NativeTitleSync class remains byte-for-byte preserved.
+- All 26 scheduler/title-retry tests PASS; full macOS Swift build PASS.
+- Existing signed TitleHelper application was stopped and replaced from
+  this exact clean checkout with a stable TheCompany code-signing identity.
+  ChatGPT PID 80584 was NOT restarted, signaled or edited.
+- New installed helper PID 70681 observed a valid AXWebArea title
+  len18:shacd4ee6ac07d9 and 15 active AX notification subscriptions.
+- >40-second runtime observation: both processes alive, no AX subscription
+  failures, no native-sync-result, no ChatGPT-process-loss.
+- Rollback:
+  chatgpt-window-title-helper-validation-17ecb70a0033f33bb23a3d17d29f62c13d15b7b6/
+  artifacts/macos/backups/titleoverlay-before-event.FFgNHHHO/
+- The fast retry schedule has NOT yet been verified with a *new* manual
+  title-change event after this rollout. The original Dock native title
+  writer remains compiled OUT; DO NOT claim Dock list caption changed.
+
+Independent owner-approved read-only app scripting investigation:
+The installed ChatGPT app contains Resources/scripting.sdef from a
+Chromium-style suite. Although it declares a writable "given name" window
+property, a read-only AppleScript "count of windows" command against the
+running ChatGPT timed out with -1712; no functioning scripting setter was
+established. No title-setting event was sent.
+
+Conclusion: this milestone improves AX title freshness, not external
+ownership of a native Dock menu caption. macOS Accessibility AXWindow.AXTitle
+is writable=false and isolated SkyLight CGSSetWindowTitle experiments show
+cross-process rejection even with the owner's numeric connection ID.
+Do not re-enable SIGUSR1 or modify the official ChatGPT signed app.
