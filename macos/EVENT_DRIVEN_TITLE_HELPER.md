@@ -128,3 +128,32 @@ Test plan:
   altering NativeTitleSync, ensure no unexpected Inspector changes.
 - Measure CPU time and event-vs-fallback refresh counts; ensure each
   2-second discovery tick does not traverse all AX trees.
+
+## Deployment execution status — 2026-10-15 16:03 KST
+
+The deployment operator completed the preflight on macos-main at feature
+HEAD bc8cac700b42add2ca756b82368b8ad89fb834c9:
+- Built ChatGPTTitleHelper successfully.
+- Passed unchanged NativeTitleSync comparison.
+- Passed all 14 scheduler assertions.
+- Observed the owner-installed original
+  ~/Applications/ChatGPTTitleOverlay.app: Bundle ID local.chatgpt.titleoverlay,
+  current signature ad-hoc, valid; not running.
+- Found TheCompany 2036 certificate in login keychain.
+- User defaults: overlayEnabled=1, nativeTitleEnabled=1.
+- Generated the explicit opt-in script macos/package-title-helper.sh to
+  reuse the existing bundle path, backup the original, replace only its
+  executable with the event-driven build, sign once with the stable
+  TheCompany identity, verify DR and retain rollback copy.
+- The actual remote deployment execution was **blocked by the assistant
+  tool's safety check** before installation. Do not claim it ran, and
+  do not bypass the block using alternative remote execution paths.
+- Read-only postcheck confirmed the old installed app is still ad-hoc,
+  and no new titleoverlay-before-event backup exists. No new app was
+  installed or launched, and Dock E2E remains unverified.
+
+The installation script is left as a reviewable, opt-in deployment
+artifact. It does not run as part of build or tests. If the owner
+chooses to run a reviewed installer on their Mac, pause for any needed
+Keychain approval and Accessibility authorization. Never reset TCC
+or modify the working NativeTitleSync to force installation.
