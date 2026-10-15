@@ -83,7 +83,7 @@ private final class Probe {
     }
 
     private func subscribe(_ e: AXUIElement, _ notification: String, _ context: String) {
-        let token = key(e) + ":" + notification
+        let token = <redacted> + ":" + notification
         desired.insert(token)
         if active[token] != nil { return }
         guard active.count < maxSubscriptions else {
@@ -726,7 +726,52 @@ private func inspectTitleActions(expectedTitle: String, pressMatchedButton: Bool
     log("AX_ACTION_INSPECT complete window=\(index) actionable=\(inspected) writableValueCount=\(editable) mutated=false")
 }
 
+// Read-only macOS Dock-caption feasibility census for an already-running
+// ChatGPT. Never mutates AXTitle, user conversations, or application code.
+private func inspectNativeWindowTitle() {
+    log("AX_WINDOW_CAPTION mode=readonly trusted=\(AXIsProcessTrusted())")
+    guard AXIsProcessTrusted() else {
+        log("AX_WINDOW_CAPTION blocked=accessibility-not-trusted")
+        return
+    }
+    guard let app = NSWorkspace.shared.runningApplications.first(where: {
+        $0.bundleIdentifier == bundleID
+    }) else {
+        log("AX_WINDOW_CAPTION blocked=chatgpt-not-running")
+        return
+    }
+    let root = AXUIElementCreateApplication(app.processIdentifier)
+    AXUIElementSetMessagingTimeout(root, 1.0)
+    guard let windows = read(root, kAXWindowsAttribute) as? [AXUIElement] else {
+        log("AX_WINDOW_CAPTION blocked=windows-unavailable")
+        return
+    }
+    log("AX_WINDOW_CAPTION windows=\(windows.count)")
+    for (i, window) in windows.prefix(20).enumerated() {
+        let title = string(window, kAXTitleAttribute)
+        var writable = DarwinBoolean(false)
+        let rc = AXUIElementIsAttributeSettable(
+            window, kAXTitleAttribute as CFString, &writable
+        )
+        var names: CFArray?
+        let attrsRC = AXUIElementCopyAttributeNames(window, &names)
+        let support = ((names as? [String]) ?? []).contains(
+            kAXTitleAttribute as String
+        )
+        let labelText = label(title)
+        let captionStatus = "AX_WINDOW_CAPTION index=\(i) windowTitle=\(labelText) "
+        let settableStatus = "settableStatus=\(rc.rawValue) writable=\(writable.boolValue) "
+        let attributeStatus = "attrsStatus=\(attrsRC.rawValue) titleAttributeSupported=\(support) mutated=false"
+        log(captionStatus + settableStatus + attributeStatus)
+    }
+}
+
 private func run() {
+    if CommandLine.arguments.count == 2 &&
+       CommandLine.arguments[1] == "inspect-window-title" {
+        inspectNativeWindowTitle()
+        return
+    }
     if CommandLine.arguments.count > 1 &&
         ["inspect-actions", "open-title-button", "test-title-field",
          "test-title-keyboard", "raise-target-window",
