@@ -196,3 +196,54 @@ or modify the working NativeTitleSync to force installation.
 inspector-start path's safety on ChatGPT 26.1007.71326. Do not
 automatically replay the previous SIGUSR1 path while its compatibility
 is unresolved; the old class remains verbatim, per owner direction.
+
+## Safeguarded passive AX rollout — 2026-10-15 (owner-approved)
+
+The root-cause investigation of earlier ChatGPT exits found macOS launchd:
+- 21:46:47 KST: PID 37140 exited due to SIGUSR1 sent by
+  ChatGPTTitleOverlay[60108].
+- 21:52:39 KST: PID 66399 exited due to SIGUSR1 sent by
+  ChatGPTTitleOverlay[60108].
+
+The legacy NativeTitleSync class remains byte-for-byte identical to the
+old known-working source, including its unsafe SIGUSR1 fallback. The
+current **default build** is a fail-closed passive-only development stage:
+- Every caller of nativeSync.sync and nativeSync.restore (refresh, menu,
+  shutdown) is compiled out without the TITLEHELPER_NATIVE_WRITER_VERIFIED
+  Swift conditional flag. The shipping build script never defines it.
+- The UI displays Dock: 안전 중지 (Inspector 미검증) rather than
+  claiming a successful Dock title update.
+- Do NOT define the flag until the native writer has a verified
+  no-signal Inspector transport. A simple preflight probe of 9229 is
+  insufficient because the inspector could disconnect after checking.
+- AXObserver and one-window priority queue continue to operate.
+  TitleHelperDiagnostics.fingerprint records only title length and 6-byte
+  SHA-256 prefix, never title text or conversation content.
+- Original installer rollback bundles are preserved under ignored artifacts.
+
+Validation:
+- NativeTitleSync verbatim equality test: PASS.
+- Structural Swift default-branch test: NO reachable sync/restore: PASS.
+- Scheduler + one-character Korean and English title fingerprints:
+  18 assertions PASS.
+- Swift full build PASS.
+
+Owner-approved Mac runtime:
+- One remote package request returned MCP failed after 60167 ms with
+  no worker exit code, but subsequent read-only reconciliation proved
+  the deployment HAD finished: updated signed executable and new backup.
+  Do not rerun installers blindly after a transport-level uncertainty.
+- The app was started via LaunchServices under the same long-lived
+  TheCompany cert and existing bundle ID. It launched with AX trust.
+- With ChatGPT initially inactive no AX windows were exposed.
+  Activating ChatGPT once (no conversation rename or content edits)
+  caused one conversation title to be read in 47ms:
+  ax-title-read source=discovery-or-due ok=true durationMs=47
+  fingerprint=len42:shaee1876263c82.
+  AX subscriptions active=12, ChatGPT and TitleHelper processes alive.
+- The runtime emitted zero native-sync-result records, by design.
+- A real title-change notification is NOT YET validated against a
+  user-initiated title change in this stage. The Dock native title
+  writer is NOT YET enabled. Do not report Dock E2E as passed.
+- Prior to enabling Dock writing, validate a replacement transport
+  that never signals ChatGPT and checks Inspector ownership.

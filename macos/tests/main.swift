@@ -51,3 +51,15 @@ expect(q.pop() == nil, "no stale window pending")
 q.request("c", priority: .immediate)
 expect(q.pop() == "c", "window identity never filtered by title length")
 print("PASS TitleWorkScheduler \(passes) assertions")
+
+
+// Actual one-character titles are accepted by the fingerprint diagnostic.
+// Fingerprints reveal length, not the original content.
+let shortKorean = TitleHelperDiagnostics.fingerprint("가")
+let shortEnglish = TitleHelperDiagnostics.fingerprint("A")
+expect(shortKorean.hasPrefix("len1:sha"), "Korean one-character title")
+expect(shortEnglish.hasPrefix("len1:sha"), "English one-character title")
+expect(shortKorean != shortEnglish, "distinct fingerprints")
+expect(TitleHelperDiagnostics.fingerprint("ChatGPT").hasPrefix("len7:sha"),
+       "generic title retains length")
+print("PASS TitleWorkScheduler + title fingerprints \(passes) assertions")

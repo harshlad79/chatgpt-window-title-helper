@@ -186,3 +186,14 @@ source, and the old legacy source and installed app remain untouched.
 For build/tests, run ./macos/tests/run.sh.
 For architecture, permission implications, and live deployment gate,
 see macos/EVENT_DRIVEN_TITLE_HELPER.md.
+
+### Safe passive AX stage (after SIGUSR1 termination)
+
+The default compiled helper uses the conditional Swift macro
+TITLEHELPER_NATIVE_WRITER_VERIFIED to fence every native sync/restore call,
+and never defines it. On 2026-10-15 launchd conclusively attributed two
+ChatGPT exits to SIGUSR1 sent by ChatGPTTitleOverlay. NativeTitleSync
+itself remains byte-for-byte unmodified, but cannot be called in this
+default build. The helper detects real AX titles without Inspector.
+Do not enable native writing until a separate no-signal implementation
+has been verified. Full details: macos/EVENT_DRIVEN_TITLE_HELPER.md.

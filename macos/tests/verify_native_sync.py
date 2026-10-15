@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Prove event-driven source retains the original NativeTitleSync verbatim."""
 from pathlib import Path
-import re
 
 root = Path(__file__).resolve().parents[2]
 old = (root / "macos/legacy/ChatGPTTitleOverlay.swift").read_text()
@@ -21,5 +20,41 @@ assert 'self.refresh(allowBackgroundFallback: false)' in new
 assert 'titleScheduler.pop()' in new
 assert 'NativeTitleSync()' in new
 assert 'nativeSync.sync(pid: pid, windows: windows)' in new
-assert old.count('SIGUSR1') == new.count('SIGUSR1')
+# Simulate Swift conditional compilation in the normal (no -D) build.
+# The legacy implementation is intentionally present but cannot be reached
+# from any active menu, quit, or refresh path in the safe release.
+def default_compiled_text(source):
+    enabled = [True]
+    output = []
+    for line in source.splitlines():
+        directive = line.strip()
+        if directive == "#if TITLEHELPER_NATIVE_WRITER_VERIFIED":
+            enabled.append(enabled[-1] and False)
+        elif directive == "#if !TITLEHELPER_NATIVE_WRITER_VERIFIED":
+            enabled.append(enabled[-1] and True)
+        elif directive == "#else":
+            assert len(enabled) > 1
+            parent = enabled[-2]
+            enabled[-1] = parent and not enabled[-1]
+        elif directive == "#endif":
+            assert len(enabled) > 1
+            enabled.pop()
+        elif enabled[-1]:
+            output.append(line)
+    assert len(enabled) == 1
+    return "\\n".join(output)
+
+active = default_compiled_text(new)
+assert "nativeSync.sync(" not in active
+assert "nativeSync.restore(" not in active
+assert "TITLEHELPER_NATIVE_WRITER_VERIFIED" not in (
+    root / "macos/build-title-helper.sh").read_text()
+assert new.count('#if TITLEHELPER_NATIVE_WRITER_VERIFIED') == 2
+assert new.count('#if !TITLEHELPER_NATIVE_WRITER_VERIFIED') == 1
+assert 'native-sync-blocked source=quit' in new
+assert 'native-sync-blocked source=menu' in new
+assert 'Dock: 안전 중지 (Inspector 미검증)' in new
+# New safety comments may refer to a signal; the original implementation,
+# including actual signal calls, must remain IDENTICAL.
+assert extract(old).count('SIGUSR1') == extract(new).count('SIGUSR1')
 print("PASS unchanged NativeTitleSync and event-driven wiring")

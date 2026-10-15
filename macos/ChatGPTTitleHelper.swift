@@ -1646,6 +1646,10 @@ final class OverlayController:
         }
 
 
+        // The verified production app never sends SIGUSR1.  The legacy
+        // NativeTitleSync is preserved as-is, but its calls are compile-time
+        // excluded until a separately audited safe Inspector transport exists.
+        #if TITLEHELPER_NATIVE_WRITER_VERIFIED
         if nativeTitleEnabled {
 
             nativeStatusItem.title =
@@ -1675,6 +1679,12 @@ final class OverlayController:
                 }
             }
         }
+        #else
+        nativeStatusItem.title =
+            "Dock: 안전 중지 (Inspector 미검증)"
+        TitleHelperDiagnostics.shared.record(
+            "native-sync-blocked source=menu enabled=\(nativeTitleEnabled)")
+        #endif
     }
 
 
@@ -1734,6 +1744,14 @@ final class OverlayController:
 
         overlayPanel?.orderOut(nil)
 
+        #if !TITLEHELPER_NATIVE_WRITER_VERIFIED
+        // Do not call NativeTitleSync.restore() when the Inspector transport
+        // is unverified: its fallback can signal/terminate ChatGPT.
+        TitleHelperDiagnostics.shared.record(
+            "native-sync-blocked source=quit")
+        NSApp.terminate(nil)
+        return
+        #else
         guard nativeTitleEnabled,
               let pid =
                 currentChatGPTPID()
@@ -1777,6 +1795,7 @@ final class OverlayController:
 
             NSApp.terminate(nil)
         }
+        #endif
     }
 
 
@@ -1917,6 +1936,7 @@ final class OverlayController:
         // BrowserWindow.setTitle and restores saved native titles.
         // The cached title list is event-driven; one stale title per tick is
         // refreshed as a 20-second fallback.
+        #if TITLEHELPER_NATIVE_WRITER_VERIFIED
         if nativeTitleEnabled {
             let now = Date()
             if now.timeIntervalSince(lastNativeSync) >= nativeSyncInterval {
@@ -1949,6 +1969,10 @@ final class OverlayController:
         } else {
             nativeStatusItem.title = "Dock: 꺼짐"
         }
+        #else
+        nativeStatusItem.title = nativeTitleEnabled
+            ? "Dock: 안전 중지 (Inspector 미검증)" : "Dock: 꺼짐"
+        #endif
     }
 
     // Read ONE eligible AX window each tick, with title events prioritized.
@@ -2002,10 +2026,10 @@ final class OverlayController:
             let result = readConversationWindow(window)
             // No conversation content is printed. These metrics distinguish
             // actual AX-event work from periodic one-window fallback.
-            NSLog("TitleHelper AX title-read source=%@ ok=%@ ms=%d",
-                fromEvent ? "event" : "discovery-or-due",
-                result != nil ? "true" : "false",
-                Int(Date().timeIntervalSince(started) * 1000))
+            TitleHelperDiagnostics.shared.record(
+                "ax-title-read source=\(fromEvent ? "event" : "discovery-or-due") " +
+                "ok=\(result != nil) durationMs=\(Int(Date().timeIntervalSince(started) * 1000)) " +
+                "fingerprint=\(result.map { TitleHelperDiagnostics.fingerprint($0.value.title) } ?? "-")")
             if let result {
                 let old = titleCache[selectedID]?.value.title
                 titleCache[selectedID] = result
