@@ -7,6 +7,8 @@ xcrun swiftc -O \
   macos/ChatGPTTitleHelper.swift \
   macos/MacAXTitleObserver.swift \
   macos/DockMenuSidecar.swift \
+  macos/DockRecentWindowRestorer.swift \
+  macos/WindowSessionHistoryStore.swift \
   macos/TitleWorkScheduler.swift \
   macos/TitleRevisionRetryPlan.swift \
   macos/TitleHelperDiagnostics.swift \

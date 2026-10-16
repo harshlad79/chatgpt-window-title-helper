@@ -1,0 +1,93 @@
+import Foundation
+
+// Crash-tolerant local snapshots; never uses transient AX hashes as durable
+// identities. Exact-title matching remains explicitly best-effort.
+final class WindowSessionHistoryStore {
+    struct Snapshot: Codable {
+        var version: Int = 1
+        var appPID: Int32 = 0
+        var lastCompleteOpen: [String] = []
+        var previousSessionOpen: [String] = []
+        var recentTitles: [String] = []
+    }
+
+    private let file: URL
+    private(set) var snapshot: Snapshot
+
+    init(file: URL? = nil) {
+        let support = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/ChatGPTTitleOverlay")
+        self.file = file ?? support.appendingPathComponent("window-session-history.json")
+        if let data = try? Data(contentsOf: self.file),
+           let loaded = try? JSONDecoder().decode(Snapshot.self, from: data),
+           loaded.version == 1 {
+            self.snapshot = loaded
+        } else {
+            self.snapshot = Snapshot()
+        }
+    }
+
+    private func uniqueTitles(_ titles: [String]) -> [String] {
+        var seen = Set<String>()
+        return titles.filter {
+            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                $0.count <= 512 && seen.insert($0).inserted
+        }
+    }
+
+    // Only persist a complete title census. A partially refreshed AX cache,
+    // missing accessibility access or a temporary zero-window result MUST
+    // NOT erase the previous-session snapshot.
+    @discardableResult
+    func observe(pid: pid_t, titles: [String], windowCount: Int) -> Bool {
+        guard pid > 0, windowCount > 0, titles.count == windowCount,
+              titles.allSatisfy({
+                !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                    $0.count <= 512
+              }) else { return false }
+
+        let current = uniqueTitles(titles)
+        var next = snapshot
+        if next.appPID != Int32(pid) {
+            if !next.lastCompleteOpen.isEmpty {
+                next.previousSessionOpen = next.lastCompleteOpen
+            }
+            next.appPID = Int32(pid)
+        }
+        next.lastCompleteOpen = current
+        for title in current.reversed() {
+            next.recentTitles.removeAll { $0 == title }
+            next.recentTitles.insert(title, at: 0)
+        }
+        next.recentTitles = Array(next.recentTitles.prefix(250))
+        guard next.appPID != snapshot.appPID ||
+              next.lastCompleteOpen != snapshot.lastCompleteOpen ||
+              next.previousSessionOpen != snapshot.previousSessionOpen ||
+              next.recentTitles != snapshot.recentTitles else { return true }
+        let old = snapshot
+        snapshot = next
+        do {
+            try FileManager.default.createDirectory(
+                at: file.deletingLastPathComponent(),
+                withIntermediateDirectories: true)
+            let bytes = try JSONEncoder().encode(next)
+            try bytes.write(to: file, options: [.atomic])
+            return true
+        } catch {
+            snapshot = old
+            TitleHelperDiagnostics.shared.record(
+                "history-save-failed code=\((error as NSError).code)")
+            return false
+        }
+    }
+
+    func recoverable(excluding open: [String], limit: Int = 8) -> [String] {
+        let existing = Set(open)
+        let combined = snapshot.previousSessionOpen + snapshot.lastCompleteOpen +
+            snapshot.recentTitles
+        var seen = Set<String>()
+        return Array(combined.filter {
+            !existing.contains($0) && seen.insert($0).inserted
+        }.prefix(max(0, limit)))
+    }
+}

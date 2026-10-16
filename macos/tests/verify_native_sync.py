@@ -68,3 +68,8 @@ assert 'dockSidecar.start()' in new
 assert 'dockSidecar.update(sidecarEntries)' in new
 assert 'dockSidecar.stop()' in new
 assert 'NativeTitleSync()' in new
+
+assert 'WindowSessionHistoryStore()' in new
+assert 'DockRecentWindowRestorer()' in new
+assert 'sessionHistory.observe(' in new
+assert 'recentRestorer.restore(title: title)' in new

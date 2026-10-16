@@ -12,6 +12,7 @@ final class DockMenuSidecar: NSObject {
     }
 
     private var entries: [Entry] = []
+    private var recoverableTitles: [String] = []
     private var dockPID: pid_t = 0
     private var dockAX: AXUIElement?
     private var chatGPTDockItem: AXUIElement?
@@ -24,6 +25,7 @@ final class DockMenuSidecar: NSObject {
     private let maxRows = 10
 
     var onSelect: ((Entry) -> Void)?
+    var onRestore: ((String) -> Void)?
 
     func start() {
         guard timer == nil else { return }
@@ -40,12 +42,19 @@ final class DockMenuSidecar: NSObject {
         timer = nil
         hide()
         entries.removeAll()
+        recoverableTitles.removeAll()
     }
 
     func update(_ next: [Entry]) {
         // Retain AX window identity to ensure a sidecar row raises the actual
         // selected ChatGPT window, regardless of Dock's menu item order.
         entries = Array(next.prefix(maxRows))
+        if visible { tick() }
+    }
+
+    func updateHistory(_ titles: [String]) {
+        let open = Set(entries.map { $0.title })
+        recoverableTitles = Array(titles.filter { !open.contains($0) }.prefix(8))
         if visible { tick() }
     }
 
@@ -149,16 +158,19 @@ final class DockMenuSidecar: NSObject {
 
     private func tick() {
         guard AXIsProcessTrusted(), let menu = dockMenu(),
-              !entries.isEmpty else {
+              !(entries.isEmpty && recoverableTitles.isEmpty) else {
             hide()
             return
         }
-        let height: CGFloat = 42 + CGFloat(entries.count) * 34 + 8
+        let historyCount = recoverableTitles.count
+        let height: CGFloat = 42 + CGFloat(entries.count) * 34 + 8 +
+            (historyCount == 0 ? 0 : 30 + CGFloat(historyCount) * 34)
         guard let frame = panelFrame(menu: menu, height: height) else {
             hide()
             return
         }
-        let signature = entries.map { $0.id + ":" + $0.title }
+        let signature = (entries.map { $0.id + ":" + $0.title } +
+            recoverableTitles.map { "history:" + $0 })
             .joined(separator: "\u{1f}")
         if !visible || lastIdentity != signature {
             render(height: height)
@@ -169,7 +181,7 @@ final class DockMenuSidecar: NSObject {
             panel?.orderFrontRegardless()
             visible = true
             TitleHelperDiagnostics.shared.record(
-                "dock-sidecar-visible rows=\(entries.count)")
+                "dock-sidecar-visible rows=\(entries.count) history=\(recoverableTitles.count)")
         }
     }
 
@@ -225,7 +237,45 @@ final class DockMenuSidecar: NSObject {
                                   width: width - 20, height: 29)
             container.addSubview(button)
         }
+        if !recoverableTitles.isEmpty {
+            let top = height - 42 - CGFloat(entries.count) * 34
+            let separator = NSBox(frame: NSRect(x: 10, y: top - 6,
+                                                  width: width - 20, height: 1))
+            separator.boxType = .separator
+            container.addSubview(separator)
+
+            let section = NSTextField(labelWithString: "이전에 열었던 대화")
+            section.font = NSFont.boldSystemFont(ofSize: 11)
+            section.textColor = .secondaryLabelColor
+            section.frame = NSRect(x: 12, y: top - 26,
+                                   width: width - 24, height: 17)
+            container.addSubview(section)
+
+            for (idx, title) in recoverableTitles.enumerated() {
+                let button = DockConversationButton(
+                    title: "↗ " + title, target: self,
+                    action: #selector(restoreWindow(_:)))
+                button.windowID = title
+                button.bezelStyle = .rounded
+                button.alignment = .left
+                button.lineBreakMode = .byTruncatingMiddle
+                button.font = NSFont.systemFont(ofSize: 12)
+                button.toolTip = "새 창으로 복원: " + title
+                button.frame = NSRect(
+                    x: 10,
+                    y: top - 29 - CGFloat(idx + 1) * 34,
+                    width: width - 20, height: 29)
+                container.addSubview(button)
+            }
+        }
         p.contentView = container
+    }
+
+    @objc private func restoreWindow(_ sender: DockConversationButton) {
+        guard recoverableTitles.contains(sender.windowID) else { return }
+        let selected = sender.windowID
+        hide()
+        onRestore?(selected)
     }
 
     @objc private func selectWindow(_ sender: DockConversationButton) {

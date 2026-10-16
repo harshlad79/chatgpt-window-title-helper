@@ -1273,6 +1273,8 @@ final class OverlayController:
         TitleOverlayPanel?
 
     private let dockSidecar = DockMenuSidecar()
+    private let sessionHistory = WindowSessionHistoryStore()
+    private let recentRestorer = DockRecentWindowRestorer()
     private var sidecarWindows: [String: AXUIElement] = [:]
     private var sidecarWindowOrder: [String] = []
 
@@ -1359,6 +1361,22 @@ final class OverlayController:
             _ = AXUIElementPerformAction(
                 entry.axWindow, kAXRaiseAction as CFString)
             TitleHelperDiagnostics.shared.record("dock-sidecar-window-selected")
+        }
+        dockSidecar.onRestore = { [weak self] title in
+            guard let self else { return }
+            TitleHelperDiagnostics.shared.record(
+                "history-restore-request title=\(TitleHelperDiagnostics.fingerprint(title))")
+            self.recentRestorer.restore(title: title) { [weak self] ok, reason in
+                TitleHelperDiagnostics.shared.record(
+                    "history-restore-result ok=\(ok) reason=\(reason)")
+                self?.refresh()
+                if !ok {
+                    let alert = NSAlert()
+                    alert.messageText = "대화 복원 실패"
+                    alert.informativeText = reason
+                    alert.runModal()
+                }
+            }
         }
         dockSidecar.start()
         requestAccessibilityPermission()
@@ -1990,6 +2008,16 @@ final class OverlayController:
                     id: id, title: cached.value.title, axWindow: ax)
             }
         dockSidecar.update(sidecarEntries)
+        // Save only a complete known title census, never transient missing
+        // AX windows. Across ChatGPT PID changes, retain last session state.
+        if sidecarEntries.count == sidecarWindowOrder.count {
+            _ = sessionHistory.observe(
+                pid: pid,
+                titles: sidecarEntries.map { $0.title },
+                windowCount: sidecarWindowOrder.count)
+        }
+        dockSidecar.updateHistory(sessionHistory.recoverable(
+            excluding: sidecarEntries.map { $0.title }))
 
         // Preserve the legacy NativeTitleSync unchanged: it still updates
         // BrowserWindow.setTitle and restores saved native titles.

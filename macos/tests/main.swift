@@ -84,4 +84,45 @@ expect(TitleRevisionRetryPlan.delays.count == 6,
        "bounded retry plan must not run indefinitely")
 expect(TitleRevisionRetryPlan.delays.last! <= 6.0,
        "last retry must happen within 6 seconds")
-print("PASS TitleWorkScheduler + AX title retries \(passes) assertions")
+
+// Disk persistence, crash/restart reconciliation, and incomplete AX scans.
+let testDirectory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("title-helper-history-\(UUID().uuidString)")
+try! FileManager.default.createDirectory(
+    at: testDirectory, withIntermediateDirectories: true)
+let file = testDirectory.appendingPathComponent("state.json")
+let history = WindowSessionHistoryStore(file: file)
+expect(history.snapshot.appPID == 0, "empty state starts without PID")
+expect(!history.observe(pid: 100, titles: [], windowCount: 0),
+       "zero window transient cannot erase prior session")
+expect(history.observe(pid: 100,
+                       titles: ["대화 A", "대화 B"], windowCount: 2),
+       "complete title census saved atomically")
+expect(history.snapshot.lastCompleteOpen == ["대화 A", "대화 B"],
+       "most recent complete window order is durable")
+expect(!history.observe(pid: 100, titles: ["대화 A"], windowCount: 2),
+       "incomplete AX cache cannot overwrite a two-window manifest")
+expect(history.snapshot.lastCompleteOpen.count == 2,
+       "incomplete refresh leaves saved complete state untouched")
+let restartedHelper = WindowSessionHistoryStore(file: file)
+expect(restartedHelper.snapshot.lastCompleteOpen.count == 2,
+       "separate helper restart reloads full state")
+expect(restartedHelper.observe(pid: 200, titles: ["대화 C"], windowCount: 1),
+       "ChatGPT PID change starts new session")
+expect(restartedHelper.snapshot.previousSessionOpen == ["대화 A", "대화 B"],
+       "prior ChatGPT window set survives a process crash")
+expect(restartedHelper.recoverable(excluding: ["대화 C"]) ==
+       ["대화 A", "대화 B"], "previous session appears first")
+expect(restartedHelper.recoverable(excluding: ["대화 A", "대화 C"]) ==
+       ["대화 B"], "already reopened entries disappear from recovery")
+expect(restartedHelper.observe(pid: 200, titles: ["대화 C", "대화 A"],
+                               windowCount: 2),
+       "reopened second window joins new session")
+expect(restartedHelper.snapshot.previousSessionOpen.count == 2,
+       "last session manifest not destroyed by restoring a window")
+let finalReload = WindowSessionHistoryStore(file: file)
+expect(finalReload.snapshot.appPID == 200, "atomic JSON reload current PID")
+expect(!finalReload.observe(pid: 200, titles: [""], windowCount: 1),
+       "untitled window cannot overwrite a valid manifest")
+try! FileManager.default.removeItem(at: testDirectory)
+print("PASS title history / session recovery \(passes) assertions")
