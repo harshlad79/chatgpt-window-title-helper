@@ -77,3 +77,5 @@ assert 'restoreQueue.start(' in new
 assert 'dockSidecar.onRestoreAll' in new
 assert 'restoreProgress.onCancel' in new
 assert 'sessionHistory.lastSessionTargets()' in new
+
+assert 'Its own AXMenu is sufficient evidence' in Path('macos/DockMenuSidecar.swift').read_text()

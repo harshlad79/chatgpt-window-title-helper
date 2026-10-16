@@ -123,12 +123,13 @@ final class DockMenuSidecar: NSObject {
         for candidate in children(icon) {
             guard string(candidate, kAXRoleAttribute) == "AXMenu",
                   let bounds = rectangle(candidate) else { continue }
-            // Only react to the actual ChatGPT application menu. Do not
-            // overlay when Dock is merely hovered or another menu is open.
+            // We have resolved the unique ChatGPT AXApplicationDockItem.
+            // Its own AXMenu is sufficient evidence, even with ZERO current
+            // ChatGPT windows (no generic "ChatGPT" menu item on startup).
+            // Do not rely on an existing window when offering crash recovery.
             let menuItems = children(candidate)
             guard menuItems.contains(where: {
-                string($0, kAXRoleAttribute) == "AXMenuItem" &&
-                string($0, kAXTitleAttribute) == "ChatGPT"
+                string($0, kAXRoleAttribute) == "AXMenuItem"
             }) else { continue }
             return bounds
         }

@@ -96,6 +96,10 @@ final class WindowSessionHistoryStore {
                 withIntermediateDirectories: true)
             let bytes = try JSONEncoder().encode(next)
             try bytes.write(to: file, options: [.atomic])
+            // Conversation titles belong to the local account, not other
+            // macOS users sharing this computer.
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o600], ofItemAtPath: file.path)
             return true
         } catch {
             snapshot = old

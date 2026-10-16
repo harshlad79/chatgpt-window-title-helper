@@ -151,6 +151,11 @@ expect(afterQuit.observe(pid: 411, titles: ["New"], windowCount: 1,
        "new PID sees preserved last complete window set")
 expect(afterQuit.snapshot.previousSessionOpen == ["A", "B"],
        "normal Quit last two windows become prior session")
+let fileAttributes = try! FileManager.default.attributesOfItem(
+    atPath: quitFile.path)
+let mode = (fileAttributes[.posixPermissions] as? NSNumber)?.intValue ?? -1
+expect(mode & 0o777 == 0o600,
+       "conversation-title history file must be accessible only by its owner")
 expect(afterQuit.lastSessionTargets() == ["A", "B"],
        "last session targets exclude historical unrelated chats")
 let steadyClose = WindowSessionHistoryStore(
