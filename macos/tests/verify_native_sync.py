@@ -79,3 +79,7 @@ assert 'restoreProgress.onCancel' in new
 assert 'sessionHistory.lastSessionTargets()' in new
 
 assert 'Its own AXMenu is sufficient evidence' in Path('macos/DockMenuSidecar.swift').read_text()
+
+assert 'lastAXWindowCensusSucceeded' in new
+assert 'dockSidecar.updateHistory([])' in new
+assert 'let complete = lastAXWindowCensusSucceeded &&' in new

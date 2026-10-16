@@ -27,6 +27,10 @@ final class WindowSessionHistoryStore {
            let loaded = try? JSONDecoder().decode(Snapshot.self, from: data),
            loaded.version == 1 {
             self.snapshot = loaded
+            // Migrate files written by the earlier 0644 implementation
+            // even when the JSON data itself has not changed.
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o600], ofItemAtPath: self.file.path)
         } else {
             self.snapshot = Snapshot()
         }

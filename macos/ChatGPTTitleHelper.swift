@@ -1280,6 +1280,7 @@ final class OverlayController:
     private var restoreRunID = 0
     private var sidecarWindows: [String: AXUIElement] = [:]
     private var sidecarWindowOrder: [String] = []
+    private var lastAXWindowCensusSucceeded = false
 
     private var timer: Timer?
 
@@ -1366,7 +1367,11 @@ final class OverlayController:
             TitleHelperDiagnostics.shared.record("dock-sidecar-window-selected")
         }
         dockSidecar.onRestore = { [weak self] title in
-            guard let self else { return }
+            guard let self,
+                  self.lastAXWindowCensusSucceeded,
+                  self.sidecarWindowOrder.allSatisfy({
+                      self.titleCache[$0] != nil
+                  }) else { return }
             TitleHelperDiagnostics.shared.record(
                 "history-restore-request title=\(TitleHelperDiagnostics.fingerprint(title))")
             self.recentRestorer.restore(title: title) { [weak self] ok, reason in
@@ -1409,7 +1414,11 @@ final class OverlayController:
         }
         dockSidecar.onRestoreAll = { [weak self] in
             guard let self, let app = self.currentChatGPTApp(),
-                  app.processIdentifier == self.targetPID else { return }
+                  app.processIdentifier == self.targetPID,
+                  self.lastAXWindowCensusSucceeded,
+                  self.sidecarWindowOrder.allSatisfy({
+                      self.titleCache[$0] != nil
+                  }) else { return }
             // Include only the *last window set*, never all old history.
             let currentlyOpen = self.sidecarWindowOrder.compactMap { id in
                 self.titleCache[id]?.value.title
@@ -1999,6 +2008,7 @@ final class OverlayController:
             titleCache.removeAll()
             sidecarWindows.removeAll()
             sidecarWindowOrder.removeAll()
+            lastAXWindowCensusSucceeded = false
             dockSidecar.update([])
             pendingAXTitleEvents.removeAll()
             titleScheduler = TitleWorkScheduler()
@@ -2020,6 +2030,7 @@ final class OverlayController:
             titleCache.removeAll()
             sidecarWindows.removeAll()
             sidecarWindowOrder.removeAll()
+            lastAXWindowCensusSucceeded = false
             dockSidecar.update([])
             pendingAXTitleEvents.removeAll()
             titleScheduler = TitleWorkScheduler()
@@ -2063,14 +2074,20 @@ final class OverlayController:
         dockSidecar.update(sidecarEntries)
         // Save only a complete known title census, never transient missing
         // AX windows. Across ChatGPT PID changes, retain last session state.
-        if sidecarEntries.count == sidecarWindowOrder.count {
+        let complete = lastAXWindowCensusSucceeded &&
+            sidecarEntries.count == sidecarWindowOrder.count
+        if complete {
             _ = sessionHistory.observe(
                 pid: pid,
                 titles: sidecarEntries.map { $0.title },
                 windowCount: sidecarWindowOrder.count)
+            dockSidecar.updateHistory(sessionHistory.recoverable(
+                excluding: sidecarEntries.map { $0.title }))
+        } else {
+            // A partial AX title cache during process startup is not a
+            // legitimate missing-window manifest. Avoid duplicate restore.
+            dockSidecar.updateHistory([])
         }
-        dockSidecar.updateHistory(sessionHistory.recoverable(
-            excluding: sidecarEntries.map { $0.title }))
 
         // Preserve the legacy NativeTitleSync unchanged: it still updates
         // BrowserWindow.setTitle and restores saved native titles.
@@ -2123,8 +2140,10 @@ final class OverlayController:
     ) -> [ConversationWindow] {
         guard let windows = axGet(axApp, kAXWindowsAttribute)
             as? [AXUIElement] else {
+            lastAXWindowCensusSucceeded = false
             return titleCache.values.map { $0.value }
         }
+        lastAXWindowCensusSucceeded = true
         let ids = Set(windows.map { String(CFHash($0)) })
         sidecarWindowOrder = windows.map { String(CFHash($0)) }
         sidecarWindows = Dictionary(

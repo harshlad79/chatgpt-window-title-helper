@@ -156,6 +156,17 @@ let fileAttributes = try! FileManager.default.attributesOfItem(
 let mode = (fileAttributes[.posixPermissions] as? NSNumber)?.intValue ?? -1
 expect(mode & 0o777 == 0o600,
        "conversation-title history file must be accessible only by its owner")
+// Earlier releases saved 0644; loading the same JSON must tighten mode.
+try! FileManager.default.setAttributes(
+    [.posixPermissions: 0o644], ofItemAtPath: quitFile.path)
+let migration = WindowSessionHistoryStore(file: quitFile)
+let migratedMode = (try! FileManager.default.attributesOfItem(
+    atPath: quitFile.path)[.posixPermissions] as! NSNumber).intValue
+expect(migratedMode & 0o777 == 0o600,
+       "existing history file migrated from 0644 to private mode")
+expect(migration.snapshot.previousSessionOpen == ["A", "B"] &&
+       migration.snapshot.lastCompleteOpen == ["New"],
+       "permissions migration never corrupts saved previous or active session")
 expect(afterQuit.lastSessionTargets() == ["A", "B"],
        "last session targets exclude historical unrelated chats")
 let steadyClose = WindowSessionHistoryStore(
