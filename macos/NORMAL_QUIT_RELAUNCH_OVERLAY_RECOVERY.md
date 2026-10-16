@@ -39,3 +39,12 @@ An attempt to automate the restored sidecar button from a separate signed Probe 
 Owner should open the ChatGPT Dock menu **manually**, see three saved prior windows at the bottom, and click `마지막 창 모두 복원 (3)`. The current callback then performs user-triggered foreground AX validation and guarded sequential new-native-window + Dock Recent reopens. Observe progress and preserve any failure log. Do not claim full end-to-end success until this actual click is observed. Avoid launching a second diagnostic app while keeping Dock menu open.
 
 All changes are on `feat/macos-adaptive-title-helper`, Draft PR #3 unmerged; Windows source untouched.
+
+
+## 2026-10-17 latest owner feedback — sidecar visible; bulk E2E pending
+
+After the corrective patch and live AX verification above, the owner explicitly reported **"보조패널은 이제 잘 보여."** (The sidecar panel is now displaying correctly.) This is **direct user-visible confirmation of the Dock sidecar recovery** following normal Quit and ChatGPT relaunch.
+
+**Do not mark whole-session restoration completed.** The owner has not reported clicking the lower `마지막 창 모두 복원` button and verifying separate windows/bodies. Previous automated AX attempts did not actually invoke that button. The next step is **one manual owner-triggered Restore All click** with the native Dock menu displayed, then inspect the progress panel and results without launching another Probe that dismisses the menu. The on-window title overlay is a separate UI dependent on a loaded chat AXWebArea.
+
+**Canonical new-chat handoff:** [docs/continuity/CURRENT.md](../docs/continuity/CURRENT.md), which consolidates the latest feature branch, PR Draft status, verified code/runtime, safety restrictions, known failure modes, and next test.
