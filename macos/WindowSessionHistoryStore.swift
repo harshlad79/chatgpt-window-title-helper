@@ -113,6 +113,14 @@ final class WindowSessionHistoryStore {
         }
     }
 
+    // If the ChatGPT process restarted while AX still lacks a complete
+    // title census, the saved previous process's window list is recoverable.
+    // Never treat unavailable AX data as a reason to hide that durable list.
+    func hasPendingRestart(pid: pid_t) -> Bool {
+        pid > 0 && snapshot.appPID > 0 && snapshot.appPID != Int32(pid) &&
+            !lastSessionTargets().isEmpty
+    }
+
     func lastSessionTargets() -> [String] {
         snapshot.previousSessionOpen.isEmpty
             ? snapshot.lastCompleteOpen : snapshot.previousSessionOpen

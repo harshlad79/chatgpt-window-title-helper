@@ -151,6 +151,12 @@ expect(afterQuit.observe(pid: 411, titles: ["New"], windowCount: 1,
        "new PID sees preserved last complete window set")
 expect(afterQuit.snapshot.previousSessionOpen == ["A", "B"],
        "normal Quit last two windows become prior session")
+expect(!normal.hasPendingRestart(pid: 410),
+       "same ChatGPT process must not display false missing windows")
+expect(normal.hasPendingRestart(pid: 411),
+       "restart without AX titles still displays saved previous windows")
+expect(afterQuit.hasPendingRestart(pid: 412),
+       "previous-session titles survive further PID changes")
 let fileAttributes = try! FileManager.default.attributesOfItem(
     atPath: quitFile.path)
 let mode = (fileAttributes[.posixPermissions] as? NSNumber)?.intValue ?? -1

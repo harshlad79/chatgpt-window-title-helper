@@ -83,3 +83,9 @@ assert 'Its own AXMenu is sufficient evidence' in Path('macos/DockMenuSidecar.sw
 assert 'lastAXWindowCensusSucceeded' in new
 assert 'dockSidecar.updateHistory([])' in new
 assert 'let complete = lastAXWindowCensusSucceeded &&' in new
+
+assert 'sessionHistory.hasPendingRestart(pid: pid)' in new
+assert 'history-restart-pending pid=' in new
+assert 'prepareForegroundRestore' in new
+assert 'freshOpenConversationTitles' in new
+assert 'history-restore-blocked reason=foreground-AX-incomplete' in new

@@ -1278,6 +1278,7 @@ final class OverlayController:
     private let restoreQueue = WindowSessionRestoreQueue()
     private let restoreProgress = RestoreProgressPanel()
     private var restoreRunID = 0
+    private var restorePreflightPending = false
     private var sidecarWindows: [String: AXUIElement] = [:]
     private var sidecarWindowOrder: [String] = []
     private var lastAXWindowCensusSucceeded = false
@@ -1367,22 +1368,22 @@ final class OverlayController:
             TitleHelperDiagnostics.shared.record("dock-sidecar-window-selected")
         }
         dockSidecar.onRestore = { [weak self] title in
-            guard let self,
-                  self.lastAXWindowCensusSucceeded,
-                  self.sidecarWindowOrder.allSatisfy({
-                      self.titleCache[$0] != nil
-                  }) else { return }
-            TitleHelperDiagnostics.shared.record(
-                "history-restore-request title=\(TitleHelperDiagnostics.fingerprint(title))")
-            self.recentRestorer.restore(title: title) { [weak self] ok, reason in
+            guard let self else { return }
+            self.prepareForegroundRestore { [weak self] open in
+                guard let self else { return }
+                guard !open.contains(title) else {
+                    TitleHelperDiagnostics.shared.record(
+                        "history-reopen-skipped already-open=true")
+                    self.refresh()
+                    return
+                }
                 TitleHelperDiagnostics.shared.record(
-                    "history-restore-result ok=\(ok) reason=\(reason)")
-                self?.refresh()
-                if !ok {
-                    let alert = NSAlert()
-                    alert.messageText = "대화 복원 실패"
-                    alert.informativeText = reason
-                    alert.runModal()
+                    "history-restore-request title=\(TitleHelperDiagnostics.fingerprint(title))")
+                self.recentRestorer.restore(title: title) { [weak self] ok, reason in
+                    TitleHelperDiagnostics.shared.record(
+                        "history-restore-result ok=\(ok) reason=\(reason)")
+                    self?.refresh()
+                    if !ok { self?.showRestoreError(reason) }
                 }
             }
         }
@@ -1413,30 +1414,28 @@ final class OverlayController:
                 "cancelled=\(progress.cancelled)")
         }
         dockSidecar.onRestoreAll = { [weak self] in
-            guard let self, let app = self.currentChatGPTApp(),
-                  app.processIdentifier == self.targetPID,
-                  self.lastAXWindowCensusSucceeded,
-                  self.sidecarWindowOrder.allSatisfy({
-                      self.titleCache[$0] != nil
-                  }) else { return }
-            // Include only the *last window set*, never all old history.
-            let currentlyOpen = self.sidecarWindowOrder.compactMap { id in
-                self.titleCache[id]?.value.title
-            }
-            let targets = self.sessionHistory.lastSessionTargets()
-            self.restoreRunID &+= 1
-            let started = self.restoreQueue.start(
-                titles: targets, alreadyOpen: currentlyOpen
-            ) { [weak self] title, callback in
-                guard let self else {
-                    callback(false, "TitleHelper 종료")
-                    return
+            guard let self else { return }
+            self.prepareForegroundRestore { [weak self] currentlyOpen in
+                guard let self else { return }
+                // The saved last session is authoritative. Never bulk open
+                // the unrelated lifetime history.
+                let targets = self.sessionHistory.lastSessionTargets()
+                self.restoreRunID &+= 1
+                let started = self.restoreQueue.start(
+                    titles: targets, alreadyOpen: currentlyOpen
+                ) { [weak self] title, callback in
+                    guard let self else {
+                        callback(false, "TitleHelper 종료")
+                        return
+                    }
+                    self.recentRestorer.restore(title: title, completed: callback)
                 }
-                // This path creates exactly one native new window per title.
-                self.recentRestorer.restore(title: title, completed: callback)
+                TitleHelperDiagnostics.shared.record(
+                    "history-bulk-request accepted=\(started) total=\(targets.count)")
+                if !started && !self.restoreQueue.isRunning {
+                    self.showRestoreError("복원할 누락된 창이 없습니다.")
+                }
             }
-            TitleHelperDiagnostics.shared.record(
-                "history-bulk-request accepted=\(started) total=\(targets.count)")
         }
         dockSidecar.start()
         requestAccessibilityPermission()
@@ -1899,6 +1898,85 @@ final class OverlayController:
     }
 
 
+    // A restarted app often exposes no AXWebArea while a generic initial
+    // ChatGPT window is loading. Validate on a fresh AX app handle *after*
+    // foreground activation, not on stale or incomplete event caches.
+    private func freshOpenConversationTitles(pid: pid_t) -> [String]? {
+        let root = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(root, 0.75)
+        var raw: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            root, kAXWindowsAttribute as CFString, &raw) == .success,
+              let windows = raw as? [AXUIElement], windows.count < 40 else {
+            return nil
+        }
+        var result: [String] = []
+        var unresolved = 0
+        for window in windows {
+            let id = String(CFHash(window))
+            if let known = titleCache[id]?.value.title {
+                result.append(known)
+                continue
+            }
+            if let area = findWebArea(window) {
+                let title = axString(area, kAXTitleAttribute)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !title.isEmpty && title != "ChatGPT" {
+                    result.append(title)
+                    continue
+                }
+            }
+            let native = axString(window, kAXTitleAttribute)
+            if !native.isEmpty && native != "ChatGPT" {
+                result.append(native)
+            } else if native == "ChatGPT" {
+                unresolved += 1
+            } else {
+                return nil
+            }
+        }
+        // At most one generic initial window is acceptable. If multiple
+        // unknown native windows exist, refuse rather than duplicate them.
+        guard unresolved <= 1 else { return nil }
+        return result
+    }
+
+    private func showRestoreError(_ reason: String) {
+        let alert = NSAlert()
+        alert.messageText = "대화 복원 불가"
+        alert.informativeText = reason
+        alert.runModal()
+    }
+
+    private func prepareForegroundRestore(
+        _ callback: @escaping ([String]) -> Void
+    ) {
+        guard !restorePreflightPending, !restoreQueue.isRunning,
+              let app = currentChatGPTApp(),
+              app.processIdentifier == targetPID else { return }
+        restorePreflightPending = true
+        let pid = app.processIdentifier
+        _ = app.activate()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) { [weak self] in
+            guard let self else { return }
+            self.restorePreflightPending = false
+            guard self.currentChatGPTPID() == pid else {
+                self.showRestoreError("ChatGPT 프로세스가 변경되었습니다.")
+                return
+            }
+            self.refresh()
+            guard let open = self.freshOpenConversationTitles(pid: pid) else {
+                TitleHelperDiagnostics.shared.record(
+                    "history-restore-blocked reason=foreground-AX-incomplete")
+                self.showRestoreError(
+                    "현재 ChatGPT 창 상태를 확인하지 못했습니다. " +
+                    "앱을 전면에 표시한 뒤 다시 시도해 주세요.")
+                return
+            }
+            callback(open)
+        }
+    }
+
     // ========================================================
     // Targeted event scheduling
     // ========================================================
@@ -2083,9 +2161,20 @@ final class OverlayController:
                 windowCount: sidecarWindowOrder.count)
             dockSidecar.updateHistory(sessionHistory.recoverable(
                 excluding: sidecarEntries.map { $0.title }))
+        } else if sessionHistory.hasPendingRestart(pid: pid) {
+            // A restarted ChatGPT process may expose ZERO AX windows until
+            // its renderer has initialized or is foreground. Last session
+            // titles are durable and must remain visible in the Dock panel.
+            // Do NOT create windows until a fresh foreground AX preflight
+            // confirms whether any conversations are already open.
+            dockSidecar.updateHistory(
+                sessionHistory.recoverable(excluding: []))
+            TitleHelperDiagnostics.shared.record(
+                "history-restart-pending pid=\(pid) " +
+                "saved=\(sessionHistory.snapshot.lastCompleteOpen.count)")
         } else {
-            // A partial AX title cache during process startup is not a
-            // legitimate missing-window manifest. Avoid duplicate restore.
+            // An incomplete AX read in an already tracked process should
+            // never be interpreted as newly missing conversations.
             dockSidecar.updateHistory([])
         }
 
