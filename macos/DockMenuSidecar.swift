@@ -26,6 +26,7 @@ final class DockMenuSidecar: NSObject {
 
     var onSelect: ((Entry) -> Void)?
     var onRestore: ((String) -> Void)?
+    var onRestoreAll: (() -> Void)?
 
     func start() {
         guard timer == nil else { return }
@@ -164,7 +165,7 @@ final class DockMenuSidecar: NSObject {
         }
         let historyCount = recoverableTitles.count
         let height: CGFloat = 42 + CGFloat(entries.count) * 34 + 8 +
-            (historyCount == 0 ? 0 : 30 + CGFloat(historyCount) * 34)
+            (historyCount == 0 ? 0 : 72 + CGFloat(historyCount) * 34)
         guard let frame = panelFrame(menu: menu, height: height) else {
             hide()
             return
@@ -267,8 +268,22 @@ final class DockMenuSidecar: NSObject {
                     width: width - 20, height: 29)
                 container.addSubview(button)
             }
+            let allButton = NSButton(
+                title: "마지막 창 모두 복원 (\(recoverableTitles.count))",
+                target: self, action: #selector(restoreAllWindows(_:)))
+            allButton.bezelStyle = .rounded
+            allButton.font = NSFont.boldSystemFont(ofSize: 12)
+            allButton.frame = NSRect(x: 10, y: 10,
+                                      width: width - 20, height: 30)
+            container.addSubview(allButton)
         }
         p.contentView = container
+    }
+
+    @objc private func restoreAllWindows(_ sender: NSButton) {
+        guard !recoverableTitles.isEmpty else { return }
+        hide()
+        onRestoreAll?()
     }
 
     @objc private func restoreWindow(_ sender: DockConversationButton) {

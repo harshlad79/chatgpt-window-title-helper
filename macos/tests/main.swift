@@ -126,3 +126,78 @@ expect(!finalReload.observe(pid: 200, titles: [""], windowCount: 1),
        "untitled window cannot overwrite a valid manifest")
 try! FileManager.default.removeItem(at: testDirectory)
 print("PASS title history / session recovery \(passes) assertions")
+
+
+// Normal Quit: native app may close windows one by one before terminating.
+// Preserve previous two-window set when first window disappears briefly.
+let quitDir = FileManager.default.temporaryDirectory
+    .appendingPathComponent("title-helper-normal-quit-\(UUID().uuidString)")
+let quitFile = quitDir.appendingPathComponent("windows.json")
+let normal = WindowSessionHistoryStore(file: quitFile)
+let base = Date(timeIntervalSince1970: 10_000)
+expect(normal.observe(pid: 410, titles: ["A", "B"], windowCount: 2,
+                      now: base), "stable normal-quit baseline")
+expect(normal.observe(pid: 410, titles: ["B"], windowCount: 1,
+                      now: base.addingTimeInterval(1)), "delay sequential quit shrink")
+expect(normal.snapshot.lastCompleteOpen == ["A", "B"],
+       "normal app shutdown cannot overwrite two-window set")
+expect(normal.observe(pid: 410, titles: ["B"], windowCount: 1,
+                      now: base.addingTimeInterval(5)), "still inside grace period")
+expect(normal.snapshot.lastCompleteOpen.count == 2,
+       "partial quit sequence remains protected")
+let afterQuit = WindowSessionHistoryStore(file: quitFile)
+expect(afterQuit.observe(pid: 411, titles: ["New"], windowCount: 1,
+                         now: base.addingTimeInterval(7)),
+       "new PID sees preserved last complete window set")
+expect(afterQuit.snapshot.previousSessionOpen == ["A", "B"],
+       "normal Quit last two windows become prior session")
+expect(afterQuit.lastSessionTargets() == ["A", "B"],
+       "last session targets exclude historical unrelated chats")
+let steadyClose = WindowSessionHistoryStore(
+    file: quitDir.appendingPathComponent("steady.json"))
+expect(steadyClose.observe(pid: 420, titles: ["X", "Y"], windowCount: 2,
+                           now: base), "stable-close starts with two")
+expect(steadyClose.observe(pid: 420, titles: ["Y"], windowCount: 1,
+                           now: base.addingTimeInterval(1)),
+       "intentional shrink initially held")
+expect(steadyClose.observe(pid: 420, titles: ["Y"], windowCount: 1,
+                           now: base.addingTimeInterval(14)),
+       "stable 13s intentional single window accepted")
+expect(steadyClose.snapshot.lastCompleteOpen == ["Y"],
+       "long-lived window close eventually saved")
+try! FileManager.default.removeItem(at: quitDir)
+
+// Bulk restore controller: stable order, already-open suppression, cancel after
+// the in-flight action, no automatic retry or repeated native menu activity.
+let queue = WindowSessionRestoreQueue()
+var seenActions:[String]=[]
+var reports:[WindowSessionRestoreQueue.Progress]=[]
+queue.onProgress = {reports.append($0)}
+let started=queue.start(
+    titles:["A","B","A","C"], alreadyOpen:["B"]) { title, done in
+    seenActions.append(title)
+    done(true,"restored")
+}
+expect(started, "bulk action accepted")
+expect(queue.isRunning, "queue stays active while waiting between items")
+expect(seenActions == ["A"], "queue starts one title only")
+expect(!queue.start(titles:["Z"],alreadyOpen:[],action:{_,_ in}),
+       "second restore cannot overlap")
+RunLoop.main.run(until: Date().addingTimeInterval(1.2))
+expect(seenActions == ["A","C"], "preserve session order, skip open/duplicates")
+expect(!queue.isRunning, "queue finishes after all unique missing titles")
+expect(reports.last?.finished == 2 && reports.last?.total == 2,
+       "bulk final counters correct")
+let cancelQueue=WindowSessionRestoreQueue()
+var pending: ((Bool,String) -> Void)?
+var startedTitles:[String]=[]
+expect(cancelQueue.start(titles:["A","B","C"],alreadyOpen:[]) { t, completion in
+    startedTitles.append(t)
+    pending=completion
+}, "new queue accepted")
+cancelQueue.cancel()
+pending?(true,"done")
+RunLoop.main.run(until: Date().addingTimeInterval(0.65))
+expect(startedTitles == ["A"], "cancel prevents all later native actions")
+expect(!cancelQueue.isRunning, "cancelled queue reaches terminal state")
+print("PASS native last-session + batch restore \(passes) assertions")

@@ -73,3 +73,7 @@ assert 'WindowSessionHistoryStore()' in new
 assert 'DockRecentWindowRestorer()' in new
 assert 'sessionHistory.observe(' in new
 assert 'recentRestorer.restore(title: title)' in new
+assert 'restoreQueue.start(' in new
+assert 'dockSidecar.onRestoreAll' in new
+assert 'restoreProgress.onCancel' in new
+assert 'sessionHistory.lastSessionTargets()' in new

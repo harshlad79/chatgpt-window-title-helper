@@ -1275,6 +1275,9 @@ final class OverlayController:
     private let dockSidecar = DockMenuSidecar()
     private let sessionHistory = WindowSessionHistoryStore()
     private let recentRestorer = DockRecentWindowRestorer()
+    private let restoreQueue = WindowSessionRestoreQueue()
+    private let restoreProgress = RestoreProgressPanel()
+    private var restoreRunID = 0
     private var sidecarWindows: [String: AXUIElement] = [:]
     private var sidecarWindowOrder: [String] = []
 
@@ -1377,6 +1380,54 @@ final class OverlayController:
                     alert.runModal()
                 }
             }
+        }
+        restoreProgress.onCancel = { [weak self] in
+            self?.restoreQueue.cancel()
+            TitleHelperDiagnostics.shared.record("history-bulk-cancel-requested")
+        }
+        restoreQueue.onProgress = { [weak self] progress in
+            self?.restoreProgress.show(progress)
+            TitleHelperDiagnostics.shared.record(
+                "history-bulk-progress finished=\(progress.finished) " +
+                "total=\(progress.total) failed=\(progress.failed) " +
+                "running=\(progress.running) cancelled=\(progress.cancelled)")
+        }
+        restoreQueue.onComplete = { [weak self] progress in
+            guard let self else { return }
+            self.refresh()
+            self.restoreRunID &+= 1
+            let runID = self.restoreRunID
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+                guard let self, self.restoreRunID == runID,
+                      !self.restoreQueue.isRunning else { return }
+                self.restoreProgress.hide()
+            }
+            TitleHelperDiagnostics.shared.record(
+                "history-bulk-finished completed=\(progress.finished) " +
+                "total=\(progress.total) failed=\(progress.failed) " +
+                "cancelled=\(progress.cancelled)")
+        }
+        dockSidecar.onRestoreAll = { [weak self] in
+            guard let self, let app = self.currentChatGPTApp(),
+                  app.processIdentifier == self.targetPID else { return }
+            // Include only the *last window set*, never all old history.
+            let currentlyOpen = self.sidecarWindowOrder.compactMap { id in
+                self.titleCache[id]?.value.title
+            }
+            let targets = self.sessionHistory.lastSessionTargets()
+            self.restoreRunID &+= 1
+            let started = self.restoreQueue.start(
+                titles: targets, alreadyOpen: currentlyOpen
+            ) { [weak self] title, callback in
+                guard let self else {
+                    callback(false, "TitleHelper 종료")
+                    return
+                }
+                // This path creates exactly one native new window per title.
+                self.recentRestorer.restore(title: title, completed: callback)
+            }
+            TitleHelperDiagnostics.shared.record(
+                "history-bulk-request accepted=\(started) total=\(targets.count)")
         }
         dockSidecar.start()
         requestAccessibilityPermission()
@@ -1779,6 +1830,8 @@ final class OverlayController:
     @objc
     private func quitApp() {
 
+        restoreQueue.cancel()
+        restoreProgress.hide()
         dockSidecar.stop()
         overlayPanel?.orderOut(nil)
 

@@ -9,6 +9,8 @@ xcrun swiftc -O \
   macos/DockMenuSidecar.swift \
   macos/DockRecentWindowRestorer.swift \
   macos/WindowSessionHistoryStore.swift \
+  macos/WindowSessionRestoreQueue.swift \
+  macos/RestoreProgressPanel.swift \
   macos/TitleWorkScheduler.swift \
   macos/TitleRevisionRetryPlan.swift \
   macos/TitleHelperDiagnostics.swift \

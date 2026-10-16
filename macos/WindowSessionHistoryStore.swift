@@ -13,6 +13,11 @@ final class WindowSessionHistoryStore {
 
     private let file: URL
     private(set) var snapshot: Snapshot
+    // ChatGPT normally closes windows one by one on Quit. Hold shrink
+    // candidates until the app has remained alive with a stable smaller set.
+    // If it quits during the grace period, the last full set is preserved.
+    private var pendingShrink: (pid: Int32, titles: [String], since: Date)?
+    private let settleInterval: TimeInterval = 12
 
     init(file: URL? = nil) {
         let support = FileManager.default.homeDirectoryForCurrentUser
@@ -39,7 +44,8 @@ final class WindowSessionHistoryStore {
     // missing accessibility access or a temporary zero-window result MUST
     // NOT erase the previous-session snapshot.
     @discardableResult
-    func observe(pid: pid_t, titles: [String], windowCount: Int) -> Bool {
+    func observe(pid: pid_t, titles: [String], windowCount: Int,
+                 now: Date = Date()) -> Bool {
         guard pid > 0, windowCount > 0, titles.count == windowCount,
               titles.allSatisfy({
                 !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
@@ -47,6 +53,24 @@ final class WindowSessionHistoryStore {
               }) else { return false }
 
         let current = uniqueTitles(titles)
+        // Never accidentally replace previously saved multiple windows by
+        // the subset exposed during sequential normal shutdown.
+        let sameProcess = snapshot.appPID == Int32(pid)
+        if sameProcess && current.count < snapshot.lastCompleteOpen.count {
+            if let pending = pendingShrink,
+               pending.pid == Int32(pid), pending.titles == current,
+               now.timeIntervalSince(pending.since) >= settleInterval {
+                pendingShrink = nil
+            } else {
+                if pendingShrink?.pid != Int32(pid) ||
+                   pendingShrink?.titles != current {
+                    pendingShrink = (Int32(pid), current, now)
+                }
+                return true
+            }
+        } else {
+            pendingShrink = nil
+        }
         var next = snapshot
         if next.appPID != Int32(pid) {
             if !next.lastCompleteOpen.isEmpty {
@@ -81,10 +105,14 @@ final class WindowSessionHistoryStore {
         }
     }
 
+    func lastSessionTargets() -> [String] {
+        snapshot.previousSessionOpen.isEmpty
+            ? snapshot.lastCompleteOpen : snapshot.previousSessionOpen
+    }
+
     func recoverable(excluding open: [String], limit: Int = 8) -> [String] {
         let existing = Set(open)
-        let combined = snapshot.previousSessionOpen + snapshot.lastCompleteOpen +
-            snapshot.recentTitles
+        let combined = lastSessionTargets()
         var seen = Set<String>()
         return Array(combined.filter {
             !existing.contains($0) && seen.insert($0).inserted
