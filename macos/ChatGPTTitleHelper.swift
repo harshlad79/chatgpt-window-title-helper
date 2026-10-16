@@ -1391,6 +1391,12 @@ final class OverlayController:
             self?.restoreQueue.cancel()
             TitleHelperDiagnostics.shared.record("history-bulk-cancel-requested")
         }
+        restoreQueue.onResult = { title, success, reason in
+            TitleHelperDiagnostics.shared.record(
+                "history-bulk-item ok=\(success) " +
+                "title=\(TitleHelperDiagnostics.fingerprint(title)) " +
+                "reason=\(reason)")
+        }
         restoreQueue.onProgress = { [weak self] progress in
             self?.restoreProgress.show(progress)
             TitleHelperDiagnostics.shared.record(
