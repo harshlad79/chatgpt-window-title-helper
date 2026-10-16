@@ -86,3 +86,13 @@ One earlier attempt to AXPress the sidecar Restore All button from a separately 
 - [Draft PR #3](https://github.com/harshlad79/chatgpt-window-title-helper/pull/3)
 
 **Handoff status:** SIDE PANEL VISIBLE (**confirmed**); RESTORE ALL FULL E2E (**unverified**). Next task is user-initiated live Restore All click, not a new architecture discussion.
+
+## 9. 2026-10-17 diagnostic rollout after owner Restore All failure
+
+Owner actually clicked Restore All. Mac event log 2026-10-16T19:51:54Z (2026-10-17 04:51:54 KST): request accepted with total=3, item progress failed 1/3, 2/3, 3/3, completed=3 failed=3 cancelled=false at 19:52:01Z. Two later individual attempts at 19:57:31Z / 19:57:43Z were blocked `foreground-AX-incomplete`. The queue had previously ignored each restore callback's reason, making exact per-item root cause impossible to recover from these logs.
+
+GitHub commits `18689696821337320575112cd8f616ac77c4ed48` and `ccfb8aa34a824778c5ac8658807456ed3e19bbce`: add `WindowSessionRestoreQueue.onResult(title, success, reason)` and sanitized `history-bulk-item ok=... title=<fingerprint> reason=...` diagnostics in `ChatGPTTitleHelper.swift`. No restore semantics intentionally changed, no Windows/NativeTitleSync edits, no merge. Exact detached MacMini2 source SHA `ccfb8aa` clean; Swift tests/build invoked and optimized executable generated at 2026-10-17 05:30:46 KST. Mac remote tests/build call returned `delivery_unknown` (~60 s), but subsequent read-only check confirmed the build process and generated executable. Do not claim captured test-assertion count from that timed-out invocation.
+
+Signed packaging attempted exactly once; Dev MCP again returned `DELIVERY_UNKNOWN` (~60 s). Read-only reconciliation verified installed signed bundle (`codesign --verify --deep --strict` success), new helper PID 234, original ChatGPT PID 70502 preserved, new executable timestamp 2026-10-17 05:32:19 KST, rollback backup `artifacts/macos/backups/titleoverlay-before-event.W8kiKRkS` in isolated worktree `/Users/harshlad/_Project/titlehelper-diagnostic-ccfb8aa34a824778c5ac8658807456ed3e19bbce`. History remains restart-pending with 3 saved titles. This verifies deployment, NOT full restore success.
+
+**Next:** Owner manually click Restore All again while Dock sidecar is shown, without a separate Probe. Immediately read sanitized `history-bulk-item` events to locate exact failure stage. If needed fix AX menu interactions, test on exact GitHub HEAD, sign and redeploy, then E2E verify separate windows and original window preservation. PR #3 remains Draft/unmerged. Do not quit ChatGPT or close owner windows.
