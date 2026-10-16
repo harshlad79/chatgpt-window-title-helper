@@ -61,7 +61,7 @@ One earlier attempt to AXPress the sidecar Restore All button from a separately 
 ## 6. Actual runtime / rollout references (snapshot; re-check if changed)
 
 - Worker: **MacMini2**, TheCompany Dev `macos-main`. ChatGPT app `/Applications/ChatGPT.app` and signed overlay `~/Applications/ChatGPTTitleOverlay.app`.
-- Original root checkout `~/ _Project/chatgpt-window-title-helper-macos` (remove the space in path) has previously held unrelated dirty local edits; **never reset or overwrite**. Use fresh isolated detached worktrees at exact canonical GitHub SHA.
+- Original root checkout `/Users/harshlad/_Project/chatgpt-window-title-helper-macos` has previously held unrelated dirty local edits; **never reset or overwrite**. Use fresh isolated detached worktrees at exact canonical GitHub SHA.
 - Latest rollout clean worktree documented: `/Users/harshlad/_Project/titlehelper-restart-verified-e7f0e5a5a65044e6ca32d7b01d6a65c5617810c0`.
 - Rollback backup: `.../artifacts/macos/backups/titleoverlay-before-event.9XIfHTsP` in that worktree; check on Mac.
 - Dev runtime control path: `thecompany_call_tool(operation="invoke", arguments={node_id:"macos-main",worker_tool:"run_command",backend:"python:subprocess",project:"chatgpt-window-title-helper",procedure_key:"macos-title-helper-live-readonly",tool_arguments:{program:"bash",args:["-lc","..."],timeout_seconds:20}})`. Read installed Dev skill `skills://plugins/dev-6ac812ad55408191a6adbccbda6b87c2/thecompany-core-next` and use `thecompany_status`, matching `get_latest_success` before substantive tool calls. GitHub connector owns repo, source, commits and PR. Use named signed deployment procedure `macos-package-title-helper-certificate-deployment` only after source verification.
