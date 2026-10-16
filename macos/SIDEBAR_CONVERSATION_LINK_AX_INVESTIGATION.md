@@ -24,3 +24,25 @@ The owner's hypothesis is plausible: a rendered conversation row may internally 
 No native thread URL was recovered from the tested AX state. Next required **manual UI state**: have the owner physically expand the left sidebar until multiple conversation entries are visibly listed. Inspect those exact visible rows, their AXURL/AXIdentifier/AXValue/AXDescription/AXActions, including other accessibility surfaces and navigation events. Avoid clicking a conversation until a reversible E2E probe is designed. Alternatively test the user-accessible built-in "Copy chat deep link" feature on a single window, then verify link routing into a new *native* ChatGPT window before implementing persisted session restoration.
 
 The restore design should persist conversation ID/URL, title, lastSeen and lastActive ordering; distinguish history vs. last-session window set, and support selected or all restoration. The practical runtime link and open-in-new-window behavior remain unverified.
+
+
+## 2026-10-16 ~19:52–20:00 KST — Owner physically expanded sidebar, deep AX scan
+
+With one ChatGPT window's left sidebar **actually expanded** (verified by AX toolbar button becoming the eight-character "사이드바 숨기기" rather than seven-character "사이드바 보기"), the prior shallow 18-level AX traversal missed much of the DOM-backed accessibility tree.
+
+The owner-approved **read-only** TitleAXProbe increased maximum depth to 40, bounded traversal to 4,800 nodes per window, and used all four hierarchy attributes (AXChildren, AXVisibleChildren, AXContents, AXChildrenInNavigationOrder), de-duplicating AX object identities. The expanded window exposed 2,452–2,458 reachable nodes, compared with 85 in the prior shallow scan:
+- AXButton: 83, AXRow: 12, AXCell: 24, AXList: 5, AXStaticText: 222, AXLink: 3.
+- Two **distinct AXButtons at depth 21**, labelled with the exact titles of the TWO known conversations. Their AX positions/sizes (720,354,317×83) and (720,520,317×82) are consistent with actual sidebar list rows. Parent chain starts AXGroup → AXList → AXGroup, confirming these are list-associated controls, not just the chat window's title toolbar button.
+- Each of those two sidebar entries offers `AXPress`, `AXShowMenu` and `AXScrollToVisible`. **None was executed** during this read-only test.
+- On both exact buttons, `AXURL` is advertised as a supported AX attribute but its value is **empty**. `AXDOMIdentifier` likewise advertised but empty; `AXIdentifier` unavailable; `AXDocument`, `AXValue`, `AXHelp` empty/unavailable. `AXDescription` matches the visible title. The first five parent AX elements did not expose AXURL, AXIdentifier or AXDOMIdentifier values either.
+- `ChromeAXNodeId` exists but is an accessibility node identity, not a verified durable conversation ID. Do not save it to restore sessions.
+- All URL-carrying `AXLink` elements across both windows lacked `/c/` or `/threads/`; in the longer chat-content window there were 35 unrelated links (including https URLs) and none was proved to be a conversation route.
+
+**Revised verified conclusion:** The user hypothesis was partly correct: conversation entries DO exist in the expanded sidebar's AX tree, represented as individually actionable **AXButtons**, not AXLinks. However their own AXURL and DOM ID fields are empty; their accessible ancestors likewise did not reveal a stable conversation ID or deep link. This AX-only path can find a previously seen title and offer a *click/navigation* operation while the entry remains in the sidebar, but is not yet a stable history-restore identifier (duplicate titles, sidebar pagination/virtualization, and opening in a **new** native window are unresolved).
+
+Next options to test as separate, explicitly scoped actions:
+1. Open one exact sidebar entry's AXShowMenu without selecting a conversation, inspect for a "Copy link" / "Open in new window" action, and close the menu normally.
+2. Independently use the user-facing native "Copy chat deep link" menu command for the current conversation, then check if that link opens in the desktop app and whether a NEW window can be created.
+3. Only once a durable identity and tested new-window route exist, implement persistent history + previous session manifest. Title-only persistence may be staged for display but must not be claimed as exact restoration.
+
+This follow-up changed no ChatGPT conversation, sidebar selection, original app binary, installed production TitleHelper or Dock menu. The probe source change was local scratch, not a production feature.
