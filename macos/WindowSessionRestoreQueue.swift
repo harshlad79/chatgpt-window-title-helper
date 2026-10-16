@@ -20,6 +20,7 @@ final class WindowSessionRestoreQueue {
     private var restoreAction: ((String, @escaping (Bool, String) -> Void) -> Void)?
     var onProgress: ((Progress) -> Void)?
     var onComplete: ((Progress) -> Void)?
+    var onResult: ((String, Bool, String) -> Void)?
 
     var isRunning: Bool { running }
 
@@ -71,8 +72,9 @@ final class WindowSessionRestoreQueue {
         }
         let title = planned[finished]
         publish(activeTitle: title)
-        restoreAction?(title) { [weak self] success, _ in
+        restoreAction?(title) { [weak self] success, reason in
             guard let self, self.running, token == self.generation else { return }
+            self.onResult?(title, success, reason)
             self.finished += 1
             if !success { self.failed += 1 }
             // Always yield: no back-to-back UI menu actions in a single callback.
