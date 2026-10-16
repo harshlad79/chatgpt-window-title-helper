@@ -37,3 +37,18 @@ This is experimental evidence, not proof that macOS Dock Recent retains the same
 No automatic bulk launch, no implicit duplicate resolution, no GUI injection, no process hooks, no TCC escalation. Preserve production NativeTitleSync source and compiled-out unsafe Inspector writer.
 
 Relevant earlier record: `macos/SIDEBAR_CONVERSATION_LINK_AX_INVESTIGATION.md`.
+
+
+## 2026-10-16 — Owner-confirmed end-to-end body rendering
+
+After the guarded AXPress of the **unique** screenshot-grounded Dock Recent item “터미널 tmux 연결 구조 파악”, the owner explicitly confirmed: **the selected conversation opened normally, including its content**. This resolves the previous uncertainty about end-user chat rendering in that specific test; the AXWebArea census was incomplete despite the visible application having loaded the conversation.
+
+Verified end-to-end for **opening one chosen conversation from Dock Recent**:
+- exact unique menu-title match among 77 recent items
+- AXPress succeeded
+- ChatGPT native AXWindow title matched the requested conversation
+- owner observed the correct conversation fully opened
+
+Still **not** verified: creating a *separate new native window* for each restored chat, opening multiple previous-session windows, whether Dock Recent persists across a crash, how long it retains entries, or safely resolving identically titled conversations. Do not declare whole-session restoration implemented. A crash-resistant history database and user-triggered restore UI are still design/implementation work.
+
+Implementation direction: keep a local atomic session manifest of known open window titles plus timestamp/order; use Dock Recent lookup on demand, only if there is exactly one matching title. Treat that as a guarded best-effort recovery route, not a globally unique identity or universal history. Evaluate the native “open in new window” path separately before supporting multiwindow restoration.
