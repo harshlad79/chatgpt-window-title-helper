@@ -139,25 +139,44 @@ final class DockRecentWindowRestorer {
                 completed(false, "새 창은 열렸지만 Recent 항목 실행 실패")
                 return
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+            // The app can report an empty/generic AXWebArea for several
+            // seconds after the native Dock action has already succeeded.
+            // Poll without blocking the main run loop; never create another
+            // window while a prior restore is awaiting verification.
+            let startedAt = ProcessInfo.processInfo.systemUptime
+            let expectedCount = original.count + 1
+            let newID = String(CFHash(created[0]))
+            func checkResult() {
                 let result = self.winList(root)
-                let newID = String(CFHash(created[0]))
-                let restored = result.first {
-                    String(CFHash($0)) == newID &&
-                        self.title($0) == title
+                let matched = result.contains {
+                    String(CFHash($0)) == newID && self.title($0) == title
                 }
                 let retained = original.allSatisfy { old in
                     let key = String(CFHash(old))
-                    return result.contains {
-                        String(CFHash($0)) == key
-                    }
+                    return result.contains { String(CFHash($0)) == key }
                 }
-                self.busy = false
-                let success = restored != nil &&
-                    retained && result.count == original.count + 1
-                completed(success, success ? "새 창으로 복원됨" :
-                    "대화 열기를 요청했지만 새 창 복원 확인 실패")
+                let elapsed = ProcessInfo.processInfo.systemUptime - startedAt
+                let decision = WindowRestoreVerificationPolicy.decide(
+                    elapsed: elapsed, expectedCount: expectedCount,
+                    actualCount: result.count, newWindowTitleMatched: matched,
+                    originalsRetained: retained)
+                switch decision {
+                case .pending:
+                    DispatchQueue.main.asyncAfter(
+                        deadline: .now() + WindowRestoreVerificationPolicy.pollSeconds
+                    ) { checkResult() }
+                case .success:
+                    self.busy = false
+                    completed(true, "새 창으로 복원됨")
+                case .failure:
+                    self.busy = false
+                    // No conversation titles or messages in diagnostic reasons.
+                    completed(false, "복원 확인 시간 초과 " +
+                        "windows=\(result.count)/\(expectedCount) " +
+                        "targetMatched=\(matched) originalsRetained=\(retained)")
+                }
             }
+            checkResult()
         }
     }
 }
