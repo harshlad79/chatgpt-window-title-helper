@@ -223,3 +223,31 @@ RunLoop.main.run(until: Date().addingTimeInterval(0.65))
 expect(startedTitles == ["A"], "cancel prevents all later native actions")
 expect(!cancelQueue.isRunning, "cancelled queue reaches terminal state")
 print("PASS native last-session + batch restore \(passes) assertions")
+
+
+// Late Chromium/AX title updates must not generate a false restore failure.
+expect(WindowRestoreVerificationPolicy.decide(
+    elapsed: 1.4, expectedCount: 3, actualCount: 3,
+    newWindowTitleMatched: false, originalsRetained: true) == .pending,
+    "1.4-second generic window remains pending, not failed")
+expect(WindowRestoreVerificationPolicy.decide(
+    elapsed: 8.0, expectedCount: 3, actualCount: 3,
+    newWindowTitleMatched: true, originalsRetained: true) == .success,
+    "late target title means success when originals are retained")
+expect(WindowRestoreVerificationPolicy.decide(
+    elapsed: 15.5, expectedCount: 3, actualCount: 3,
+    newWindowTitleMatched: false, originalsRetained: true) == .pending,
+    "wait for slow AX title up to timeout")
+expect(WindowRestoreVerificationPolicy.decide(
+    elapsed: 16.1, expectedCount: 3, actualCount: 3,
+    newWindowTitleMatched: false, originalsRetained: true) == .failure,
+    "unresolved title after deadline is failure")
+expect(WindowRestoreVerificationPolicy.decide(
+    elapsed: 8.0, expectedCount: 3, actualCount: 3,
+    newWindowTitleMatched: true, originalsRetained: false) == .pending,
+    "never claim success if an original window disappeared")
+expect(WindowRestoreVerificationPolicy.decide(
+    elapsed: 16.1, expectedCount: 3, actualCount: 4,
+    newWindowTitleMatched: true, originalsRetained: true) == .failure,
+    "unexpected extra windows do not silently pass")
+print("PASS asynchronous restore verification policy \(passes) assertions")
