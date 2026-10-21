@@ -118,24 +118,17 @@ final class WindowSessionHistoryStore {
     // Never treat unavailable AX data as a reason to hide that durable list.
     func hasPendingRestart(pid: pid_t) -> Bool {
         pid > 0 && snapshot.appPID > 0 && snapshot.appPID != Int32(pid) &&
-            !lastSessionTargets(pid: pid).isEmpty
+            !lastSessionTargets().isEmpty
     }
 
-    // Until a new process supplies its first complete AX census, the saved
-    // lastCompleteOpen still belongs to the immediately preceding process.
-    // previousSessionOpen is older and must not take precedence in that case.
-    func lastSessionTargets(pid: pid_t) -> [String] {
-        if pid > 0 && snapshot.appPID > 0 && snapshot.appPID != Int32(pid) {
-            return snapshot.lastCompleteOpen
-        }
-        return snapshot.previousSessionOpen.isEmpty
+    func lastSessionTargets() -> [String] {
+        snapshot.previousSessionOpen.isEmpty
             ? snapshot.lastCompleteOpen : snapshot.previousSessionOpen
     }
 
-    func recoverable(excluding open: [String], pid: pid_t,
-                     limit: Int = 8) -> [String] {
+    func recoverable(excluding open: [String], limit: Int = 8) -> [String] {
         let existing = Set(open)
-        let combined = lastSessionTargets(pid: pid)
+        let combined = lastSessionTargets()
         var seen = Set<String>()
         return Array(combined.filter {
             !existing.contains($0) && seen.insert($0).inserted
