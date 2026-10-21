@@ -84,3 +84,27 @@ final class WindowSessionRestoreQueue {
         }
     }
 }
+
+
+// The ChatGPT renderer updates the native AXWindow caption asynchronously.
+// A one-shot check at 1.4 seconds incorrectly classified restored conversations
+// as failures even though their titles appeared 5-10 seconds later.
+enum WindowRestoreVerificationDecision: Equatable {
+    case pending
+    case success
+    case failure
+}
+
+struct WindowRestoreVerificationPolicy {
+    static let timeoutSeconds: TimeInterval = 16.0
+    static let pollSeconds: TimeInterval = 0.7
+
+    static func decide(elapsed: TimeInterval, expectedCount: Int,
+                       actualCount: Int, newWindowTitleMatched: Bool,
+                       originalsRetained: Bool) -> WindowRestoreVerificationDecision {
+        if actualCount == expectedCount && newWindowTitleMatched && originalsRetained {
+            return .success
+        }
+        return elapsed >= timeoutSeconds ? .failure : .pending
+    }
+}
