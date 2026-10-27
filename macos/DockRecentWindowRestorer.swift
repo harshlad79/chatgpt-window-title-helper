@@ -142,9 +142,10 @@ final class DockRecentWindowRestorer {
                 else { return false }
                 return minimized.boolValue == originalMinimized[key]
             }
-            let success = after.count == original.count + 1 &&
-                created.count == 1 && originalsRetained &&
+            let newGeneric = created.count == 1 &&
                 self.title(created[0]) == "ChatGPT"
+            let success = after.count == original.count + 1 &&
+                created.count == 1 && originalsRetained && newGeneric
             self.busy = false
             // Restore the prior app focus, never close a window on failure.
             if let priorFrontmost,
@@ -153,7 +154,7 @@ final class DockRecentWindowRestorer {
             }
             completed(success, "before=\(original.count) after=\(after.count) " +
                 "created=\(created.count) originalsRetained=\(originalsRetained) " +
-                "newGeneric=\(created.count == 1 && self.title(created[0]) == \"ChatGPT\")")
+                "newGeneric=\(newGeneric)")
         }
     }
 
