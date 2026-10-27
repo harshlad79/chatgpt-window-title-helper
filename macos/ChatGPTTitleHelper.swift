@@ -1333,6 +1333,8 @@ final class OverlayController:
     // Counts only, emitted on changes; never logs conversation titles.
     private var lastAXCensusLogState: String?
     private var minimizedAXProbePID: pid_t = 0
+    // One bounded read-only identity census per visible conversation count.
+    private var lastVisibleIdentityProbeCount = 0
 
     private var timer: Timer?
 
@@ -2151,6 +2153,7 @@ final class OverlayController:
             lastAXWindowCensusSucceeded = false
             lastAXCensusLogState = nil
             minimizedAXProbePID = 0
+            lastVisibleIdentityProbeCount = 0
             dockSidecar.update([])
             pendingAXTitleEvents.removeAll()
             titleScheduler = TitleWorkScheduler()
@@ -2175,6 +2178,7 @@ final class OverlayController:
             lastAXWindowCensusSucceeded = false
             lastAXCensusLogState = nil
             minimizedAXProbePID = 0
+            lastVisibleIdentityProbeCount = 0
             dockSidecar.update([])
             pendingAXTitleEvents.removeAll()
             titleScheduler = TitleWorkScheduler()
@@ -2351,6 +2355,71 @@ final class OverlayController:
                     id: id, title: cached.value.title, axWindow: ax)
             }
         dockSidecar.update(sidecarEntries)
+        // Probe already-visible, cached conversation web areas only. This is
+        // aggregate-only and never changes owner windows or reads messages.
+        // A new count triggers at most one bounded background scan per PID.
+        if !sidecarEntries.isEmpty &&
+           lastVisibleIdentityProbeCount != sidecarEntries.count {
+            lastVisibleIdentityProbeCount = sidecarEntries.count
+            let samples: [(String, AXUIElement, AXUIElement)] =
+                sidecarEntries.prefix(8).compactMap { entry in
+                    guard axBool(entry.axWindow, kAXMinimizedAttribute) != true,
+                          let cached = titleCache[entry.id] else { return nil }
+                    return (cached.value.title, cached.webArea, entry.axWindow)
+                }
+            let saved = Set(sessionHistory.lastSessionTargets(pid: pid))
+            let previous = Set(sessionHistory.snapshot.previousSessionOpen)
+            let recent = Set(sessionHistory.snapshot.recentTitles)
+            DispatchQueue.global(qos: .utility).async {
+                var webURLs = Set<String>()
+                var webDocuments = Set<String>()
+                var webIdentifiers = Set<String>()
+                var webDOMIdentifiers = Set<String>()
+                var windowURLs = Set<String>()
+                var matchedSaved = 0
+                var matchedPrevious = 0
+                var matchedRecent = 0
+                var nativeTitleEqualsWeb = 0
+                var chatPath = 0
+                for (title, area, window) in samples {
+                    _ = AXUIElementSetMessagingTimeout(area, 0.2)
+                    _ = AXUIElementSetMessagingTimeout(window, 0.2)
+                    let webURL = axWindowMetadataText(area, "AXURL")
+                    let webDocument = axWindowMetadataText(area, "AXDocument")
+                    let webIdentifier = axWindowMetadataText(area, "AXIdentifier")
+                    let webDOMIdentifier = axWindowMetadataText(area, "AXDOMIdentifier")
+                    let windowURL = axWindowMetadataText(window, "AXURL")
+                    if !webURL.isEmpty { webURLs.insert(webURL) }
+                    if !webDocument.isEmpty { webDocuments.insert(webDocument) }
+                    if !webIdentifier.isEmpty { webIdentifiers.insert(webIdentifier) }
+                    if !webDOMIdentifier.isEmpty { webDOMIdentifiers.insert(webDOMIdentifier) }
+                    if !windowURL.isEmpty { windowURLs.insert(windowURL) }
+                    if saved.contains(title) { matchedSaved += 1 }
+                    if previous.contains(title) { matchedPrevious += 1 }
+                    if recent.contains(title) { matchedRecent += 1 }
+                    if axString(window, kAXTitleAttribute) == title {
+                        nativeTitleEqualsWeb += 1
+                    }
+                    if [webURL, webDocument].contains(where: { value in
+                        guard let url = URLComponents(string: value),
+                              let host = url.host?.lowercased(),
+                              host == "chatgpt.com" || host == "www.chatgpt.com"
+                        else { return false }
+                        return url.path.contains("/c/")
+                    }) { chatPath += 1 }
+                }
+                TitleHelperDiagnostics.shared.record(
+                    "ax-visible-identity pid=\\(pid) checked=\\(samples.count) " +
+                    "webURL=\\(webURLs.count) webDocument=\\(webDocuments.count) " +
+                    "webIdentifier=\\(webIdentifiers.count) " +
+                    "webDOMIdentifier=\\(webDOMIdentifiers.count) " +
+                    "windowURL=\\(windowURLs.count) chatPath=\\(chatPath) " +
+                    "nativeEqualsWeb=\\(nativeTitleEqualsWeb) " +
+                    "matchedSaved=\\(matchedSaved)/\\(saved.count) " +
+                    "matchedPrevious=\\(matchedPrevious)/\\(previous.count) " +
+                    "matchedRecent=\\(matchedRecent)/\\(recent.count)")
+            }
+        }
         // Save only a complete known title census, never transient missing
         // AX windows. Across ChatGPT PID changes, retain last session state.
         let complete = lastAXWindowCensusSucceeded &&
