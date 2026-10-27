@@ -176,3 +176,16 @@ assert 'after.count == original.count + 1' in restorer
 assert 'created.count == 1 && originalsRetained' in restorer
 assert 'priorFrontmost.activate()' in restorer
 assert 'probeBlankWindow(completed:' in restorer
+
+# Dock Recent restore must use the same focus/creation safety proven by
+# the live blank-window E2E; do not press the menu immediately after activate.
+restore = restorer.split('    func restore(title: String,', 1)[1]
+assert 'frontmostApplication?.processIdentifier' in restore
+assert 'let newWindowMenu = self.fileNewWindow(root)' in restore
+assert 'self.press(newWindowMenu)' in restore
+assert 'func waitForNewWindow()' in restore
+assert 'elapsed < 8.0' in restore
+assert 'originalsRetained' in restore
+assert 'originalMinimized' in restore
+assert restore.index('frontmostApplication?.processIdentifier') < restore.index('self.press(newWindowMenu)')
+assert restore.index('func waitForNewWindow()') < restore.index('self.dockRecentMatches(title)')
