@@ -226,13 +226,22 @@ private func axWindowMetadataText(_ window: AXUIElement, _ key: String) -> Strin
 // ALREADY VISIBLE conversation AXWebArea. No AXPress, AXValue or raw labels.
 private func boundedShareControlCensus(
     _ root: AXUIElement
-) -> (visited: Int, share: Int, copyLink: Int, limited: Bool) {
+) -> (visited: Int, share: Int, copyLink: Int,
+      shareEnabled: Int, sharePressable: Int, shareActionable: Int,
+      shareMenuRole: Int, copyLinkEnabled: Int, copyLinkPressable: Int,
+      limited: Bool) {
     let started = ProcessInfo.processInfo.systemUptime
     var queue = [root]
     var seen: Set<String> = []
     var index = 0
     var share = 0
     var copyLink = 0
+    var shareEnabled = 0
+    var sharePressable = 0
+    var shareActionable = 0
+    var shareMenuRole = 0
+    var copyLinkEnabled = 0
+    var copyLinkPressable = 0
     while index < queue.count && index < 96 &&
           ProcessInfo.processInfo.systemUptime - started < 2.0 {
         let element = queue[index]
@@ -249,13 +258,27 @@ private func boundedShareControlCensus(
                 axString(element, kAXDescriptionAttribute),
                 axString(element, kAXHelpAttribute)
             ].joined(separator: " ").localizedLowercase
-            if labels.contains("share") || labels.contains("공유") {
-                share += 1
-            }
-            if labels.contains("copy link") ||
-               labels.contains("링크 복사") ||
-               labels.contains("링크복사") {
-                copyLink += 1
+            let isShare = labels.contains("share") || labels.contains("공유")
+            let isCopyLink = labels.contains("copy link") ||
+                labels.contains("링크 복사") || labels.contains("링크복사")
+            if isShare || isCopyLink {
+                // Read-only AX action metadata: do NOT invoke AXPress.
+                var rawActions: CFArray?
+                let hasPress = AXUIElementCopyActionNames(element, &rawActions) == .success &&
+                    ((rawActions as? [String]) ?? []).contains(kAXPressAction as String)
+                let enabled = axBool(element, kAXEnabledAttribute) == true
+                if isShare {
+                    share += 1
+                    if enabled { shareEnabled += 1 }
+                    if hasPress { sharePressable += 1 }
+                    if enabled && hasPress { shareActionable += 1 }
+                    if role != "AXButton" { shareMenuRole += 1 }
+                }
+                if isCopyLink {
+                    copyLink += 1
+                    if enabled { copyLinkEnabled += 1 }
+                    if hasPress { copyLinkPressable += 1 }
+                }
             }
         }
         let ordinary = axChildren(element)
@@ -273,6 +296,8 @@ private func boundedShareControlCensus(
         }
     }
     return (seen.count, share, copyLink,
+            shareEnabled, sharePressable, shareActionable,
+            shareMenuRole, copyLinkEnabled, copyLinkPressable,
             index < queue.count || index >= 96)
 }
 
@@ -2427,6 +2452,12 @@ final class OverlayController:
             DispatchQueue.global(qos: .utility).async {
                 var shareCandidates = 0
                 var copyLinkCandidates = 0
+                var shareEnabled = 0
+                var sharePressable = 0
+                var shareActionable = 0
+                var shareMenuRole = 0
+                var copyLinkEnabled = 0
+                var copyLinkPressable = 0
                 var shareNodesVisited = 0
                 var shareScanLimited = 0
                 var webURLs = Set<String>()
@@ -2450,6 +2481,12 @@ final class OverlayController:
                     let controls = boundedShareControlCensus(area)
                     shareCandidates += controls.share
                     copyLinkCandidates += controls.copyLink
+                    shareEnabled += controls.shareEnabled
+                    sharePressable += controls.sharePressable
+                    shareActionable += controls.shareActionable
+                    shareMenuRole += controls.shareMenuRole
+                    copyLinkEnabled += controls.copyLinkEnabled
+                    copyLinkPressable += controls.copyLinkPressable
                     shareNodesVisited += controls.visited
                     if controls.limited { shareScanLimited += 1 }
                     _ = AXUIElementSetMessagingTimeout(area, 0.2)
@@ -2512,6 +2549,12 @@ final class OverlayController:
                     "ax-visible-identity pid=\(pid) checked=\(samples.count) " +
                     "shareCandidates=\(shareCandidates) " +
                     "copyLinkCandidates=\(copyLinkCandidates) " +
+                    "shareEnabled=\(shareEnabled) " +
+                    "sharePressable=\(sharePressable) " +
+                    "shareActionable=\(shareActionable) " +
+                    "shareMenuRole=\(shareMenuRole) " +
+                    "copyLinkEnabled=\(copyLinkEnabled) " +
+                    "copyLinkPressable=\(copyLinkPressable) " +
                     "shareNodesVisited=\(shareNodesVisited) " +
                     "shareScanLimited=\(shareScanLimited) " +
                     "webURL=\(webURLs.count) webURLPresent=\(webURLPresent) " +
