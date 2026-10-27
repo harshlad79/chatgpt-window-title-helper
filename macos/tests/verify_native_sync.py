@@ -89,6 +89,13 @@ assert 'nativeGeneric=' in new and 'nativeNamed=' in new
 assert 'nativeEmpty=' in new and 'standard=' in new and 'minimized=' in new
 assert 'matchedSaved=' in new and 'minimizedSaved=' in new
 assert 'matchedPrevious=' in new and 'matchedRecent=' in new
+# Minimized windows must be probed read-only, once per PID, off the UI loop.
+assert 'boundedMinimizedWebAreaTitle' in new
+assert 'minimizedAXProbePID' in new
+assert 'DispatchQueue.global(qos: .utility).async' in new
+assert 'ax-minimized-webarea pid=' in new
+assert 'index < 48' in new
+assert 'AXUIElementSetMessagingTimeout(element, 0.2)' in new
 assert 'Set(sessionHistory.snapshot.previousSessionOpen)' in new
 assert 'Set(sessionHistory.snapshot.recentTitles)' in new
 assert 'Set(sessionHistory.lastSessionTargets(pid: pid))' in new
