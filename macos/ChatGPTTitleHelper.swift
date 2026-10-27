@@ -1425,7 +1425,12 @@ final class OverlayController:
                 guard let self else { return }
                 // The saved last session is authoritative. Never bulk open
                 // the unrelated lifetime history.
-                let targets = self.sessionHistory.lastSessionTargets()
+                guard let currentPID = self.currentChatGPTPID(),
+                      currentPID == self.targetPID else {
+                    self.showRestoreError("ChatGPT 프로세스가 변경되었습니다.")
+                    return
+                }
+                let targets = self.sessionHistory.lastSessionTargets(pid: currentPID)
                 self.restoreRunID &+= 1
                 let started = self.restoreQueue.start(
                     titles: targets, alreadyOpen: currentlyOpen
@@ -2166,7 +2171,7 @@ final class OverlayController:
                 titles: sidecarEntries.map { $0.title },
                 windowCount: sidecarWindowOrder.count)
             dockSidecar.updateHistory(sessionHistory.recoverable(
-                excluding: sidecarEntries.map { $0.title }))
+                excluding: sidecarEntries.map { $0.title }, pid: pid))
         } else if sessionHistory.hasPendingRestart(pid: pid) {
             // A restarted ChatGPT process may expose ZERO AX windows until
             // its renderer has initialized or is foreground. Last session
@@ -2174,7 +2179,7 @@ final class OverlayController:
             // Do NOT create windows until a fresh foreground AX preflight
             // confirms whether any conversations are already open.
             dockSidecar.updateHistory(
-                sessionHistory.recoverable(excluding: []))
+                sessionHistory.recoverable(excluding: [], pid: pid))
             TitleHelperDiagnostics.shared.record(
                 "history-restart-pending pid=\(pid) " +
                 "saved=\(sessionHistory.snapshot.lastCompleteOpen.count)")
