@@ -1411,6 +1411,8 @@ final class OverlayController:
     private var lastAXWindowCensusSucceeded = false
     // Counts only, emitted on changes; never logs conversation titles.
     private var lastAXCensusLogState: String?
+    private var lastAXCensusShape: String?
+    private var lastAXCensusCheckedAt = Date.distantPast
     private var minimizedAXProbePID: pid_t = 0
     // One bounded read-only identity census per visible conversation count.
     private var lastVisibleIdentityProbeCount = 0
@@ -2231,6 +2233,8 @@ final class OverlayController:
             sidecarWindowOrder.removeAll()
             lastAXWindowCensusSucceeded = false
             lastAXCensusLogState = nil
+            lastAXCensusShape = nil
+            lastAXCensusCheckedAt = .distantPast
             minimizedAXProbePID = 0
             lastVisibleIdentityProbeCount = 0
             dockSidecar.update([])
@@ -2256,6 +2260,8 @@ final class OverlayController:
             sidecarWindowOrder.removeAll()
             lastAXWindowCensusSucceeded = false
             lastAXCensusLogState = nil
+            lastAXCensusShape = nil
+            lastAXCensusCheckedAt = .distantPast
             minimizedAXProbePID = 0
             lastVisibleIdentityProbeCount = 0
             dockSidecar.update([])
@@ -2292,7 +2298,15 @@ final class OverlayController:
         let censusState = lastAXWindowCensusSucceeded
             ? "available raw=\(sidecarWindowOrder.count) recognized=\(windows.count)"
             : "unavailable"
-        if censusState != lastAXCensusLogState {
+        // Refresh aggregate window identity periodically even if the number of
+        // recognized chats stays constant. Minimize/restore can change while
+        // raw/recognized counts do not, so count-only log gating goes stale.
+        let censusNow = Date()
+        let censusDue = censusState != lastAXCensusShape ||
+            censusNow.timeIntervalSince(lastAXCensusCheckedAt) >= 30
+        if censusDue {
+            lastAXCensusShape = censusState
+            lastAXCensusCheckedAt = censusNow
             if lastAXWindowCensusSucceeded {
                 var nativeGeneric = 0
                 var nativeNamed = 0
@@ -2329,18 +2343,23 @@ final class OverlayController:
                     if previousTargets.contains(nativeTitle) { matchedPrevious += 1 }
                     if recentTargets.contains(nativeTitle) { matchedRecent += 1 }
                 }
-                TitleHelperDiagnostics.shared.record(
-                    "ax-window-census \(censusState) " +
-                    "nativeGeneric=\(nativeGeneric) nativeNamed=\(nativeNamed) " +
-                    "nativeEmpty=\(nativeEmpty) standard=\(standard) minimized=\(minimized) " +
-                    "matchedSaved=\(matchedSaved)/\(savedTargets.count) " +
-                    "minimizedSaved=\(minimizedSaved) " +
-                    "matchedPrevious=\(matchedPrevious)/\(previousTargets.count) " +
-                    "matchedRecent=\(matchedRecent)/\(recentTargets.count)")
-            } else {
+                let censusDetail = [
+                    censusState,
+                    "nativeGeneric=\(nativeGeneric) nativeNamed=\(nativeNamed)",
+                    "nativeEmpty=\(nativeEmpty) standard=\(standard) minimized=\(minimized)",
+                    "matchedSaved=\(matchedSaved)/\(savedTargets.count)",
+                    "minimizedSaved=\(minimizedSaved)",
+                    "matchedPrevious=\(matchedPrevious)/\(previousTargets.count)",
+                    "matchedRecent=\(matchedRecent)/\(recentTargets.count)"
+                ].joined(separator: " ")
+                if censusDetail != lastAXCensusLogState {
+                    TitleHelperDiagnostics.shared.record(
+                        "ax-window-census \(censusDetail)")
+                    lastAXCensusLogState = censusDetail
+                }
+            } else if lastAXCensusLogState != "unavailable" {
                 TitleHelperDiagnostics.shared.record("ax-window-census unavailable")
-            }
-            lastAXCensusLogState = censusState
+                lastAXCensusLogState = "unavailable"
         }
         // One bounded background census per ChatGPT PID. The normal refresh
         // deliberately skips minimized AX trees; do not mistake that for no chats.
