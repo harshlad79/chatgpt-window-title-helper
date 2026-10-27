@@ -107,7 +107,7 @@ final class DockRecentWindowRestorer {
         let originalIDs = Set(original.map { String(CFHash($0)) })
         guard !original.isEmpty, original.count <= 12,
               originalIDs.count == original.count,
-              let newWindowMenu = fileNewWindow(root)
+              fileNewWindow(root) != nil
         else { completed(false, "preflight-window-or-menu-unsafe"); return }
 
         // Fail closed if any original window cannot report minimized state.
@@ -120,41 +120,69 @@ final class DockRecentWindowRestorer {
         }
         let priorFrontmost = NSWorkspace.shared.frontmostApplication
         busy = true
-        _ = app.activate()
-        guard press(newWindowMenu) else {
+        guard app.activate() else {
             busy = false
-            priorFrontmost?.activate()
-            completed(false, "new-window-AXPress-failed")
+            completed(false, "activation-request-rejected")
             return
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+
+        // The previous test pressed File > New Window immediately after
+        // activation and saw AXPress success but no new window. Wait for
+        // confirmed focus, then resolve the menu item again.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
             guard let self else { return }
-            let after = self.winList(root)
-            let created = after.filter {
-                !originalIDs.contains(String(CFHash($0)))
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier ==
+                    app.processIdentifier else {
+                self.busy = false
+                priorFrontmost?.activate()
+                completed(false, "focus-not-confirmed")
+                return
             }
-            let originalsRetained = original.allSatisfy { old in
-                let key = String(CFHash(old))
-                guard let live = after.first(where: {
-                    String(CFHash($0)) == key
-                }), let minimized = self.read(
-                    live, kAXMinimizedAttribute) as? NSNumber
-                else { return false }
-                return minimized.boolValue == originalMinimized[key]
+            guard let newWindowMenu = self.fileNewWindow(root),
+                  self.press(newWindowMenu) else {
+                self.busy = false
+                priorFrontmost?.activate()
+                completed(false, "focused-menu-or-AXPress-failed")
+                return
             }
-            let newGeneric = created.count == 1 &&
-                self.title(created[0]) == "ChatGPT"
-            let success = after.count == original.count + 1 &&
-                created.count == 1 && originalsRetained && newGeneric
-            self.busy = false
-            // Restore the prior app focus, never close a window on failure.
-            if let priorFrontmost,
-               priorFrontmost.processIdentifier != app.processIdentifier {
-                _ = priorFrontmost.activate()
+            let startedAt = ProcessInfo.processInfo.systemUptime
+            func poll() {
+                let after = self.winList(root)
+                let created = after.filter {
+                    !originalIDs.contains(String(CFHash($0)))
+                }
+                let elapsed = ProcessInfo.processInfo.systemUptime - startedAt
+                if after.count == original.count && created.isEmpty &&
+                    elapsed < 8.0 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        poll()
+                    }
+                    return
+                }
+                let originalsRetained = original.allSatisfy { old in
+                    let key = String(CFHash(old))
+                    guard let live = after.first(where: {
+                        String(CFHash($0)) == key
+                    }), let minimized = self.read(
+                        live, kAXMinimizedAttribute) as? NSNumber
+                    else { return false }
+                    return minimized.boolValue == originalMinimized[key]
+                }
+                let newGeneric = created.count == 1 &&
+                    self.title(created[0]) == "ChatGPT"
+                let success = after.count == original.count + 1 &&
+                    created.count == 1 && originalsRetained && newGeneric
+                self.busy = false
+                // Restore the prior app focus, never close any window.
+                if let priorFrontmost,
+                   priorFrontmost.processIdentifier != app.processIdentifier {
+                    _ = priorFrontmost.activate()
+                }
+                completed(success, "before=\(original.count) after=\(after.count) " +
+                    "created=\(created.count) originalsRetained=\(originalsRetained) " +
+                    "newGeneric=\(newGeneric) elapsed=\(Int(elapsed))s")
             }
-            completed(success, "before=\(original.count) after=\(after.count) " +
-                "created=\(created.count) originalsRetained=\(originalsRetained) " +
-                "newGeneric=\(newGeneric)")
+            poll()
         }
     }
 
