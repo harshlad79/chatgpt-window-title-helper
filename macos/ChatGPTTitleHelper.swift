@@ -2165,6 +2165,9 @@ final class OverlayController:
                 var nativeEmpty = 0
                 var standard = 0
                 var minimized = 0
+                var matchedSaved = 0
+                var minimizedSaved = 0
+                let savedTargets = Set(sessionHistory.lastSessionTargets(pid: pid))
                 // Only aggregate native AX attributes; never log raw titles.
                 for id in sidecarWindowOrder {
                     guard let window = sidecarWindows[id] else { continue }
@@ -2179,14 +2182,19 @@ final class OverlayController:
                     if axString(window, kAXSubroleAttribute) == "AXStandardWindow" {
                         standard += 1
                     }
-                    if axBool(window, kAXMinimizedAttribute) == true {
-                        minimized += 1
+                    let isMinimized = axBool(window, kAXMinimizedAttribute) == true
+                    if isMinimized { minimized += 1 }
+                    if savedTargets.contains(nativeTitle) {
+                        matchedSaved += 1
+                        if isMinimized { minimizedSaved += 1 }
                     }
                 }
                 TitleHelperDiagnostics.shared.record(
                     "ax-window-census \(censusState) " +
                     "nativeGeneric=\(nativeGeneric) nativeNamed=\(nativeNamed) " +
-                    "nativeEmpty=\(nativeEmpty) standard=\(standard) minimized=\(minimized)")
+                    "nativeEmpty=\(nativeEmpty) standard=\(standard) minimized=\(minimized) " +
+                    "matchedSaved=\(matchedSaved)/\(savedTargets.count) " +
+                    "minimizedSaved=\(minimizedSaved)")
             } else {
                 TitleHelperDiagnostics.shared.record("ax-window-census unavailable")
             }
