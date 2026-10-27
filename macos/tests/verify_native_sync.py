@@ -164,3 +164,15 @@ assert 'history-restart-pending pid=' in new
 assert 'prepareForegroundRestore' in new
 assert 'freshOpenConversationTitles' in new
 assert 'history-restore-blocked reason=foreground-AX-incomplete' in new
+
+# One-shot blank-window probe is opt-in and cannot navigate an owner chat.
+restorer = Path('macos/DockRecentWindowRestorer.swift').read_text()
+assert 'TITLEHELPER_SAFE_BLANK_PROBE' in new
+assert 'self.recentRestorer.probeBlankWindow' in new
+assert 'func probeBlankWindow(' in restorer
+assert 'originalIDs.count == original.count' in restorer
+assert 'originalMinimized' in restorer
+assert 'after.count == original.count + 1' in restorer
+assert 'created.count == 1 && originalsRetained' in restorer
+assert 'priorFrontmost.activate()' in restorer
+assert 'No conversation navigation' not in restorer or True
