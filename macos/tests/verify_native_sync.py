@@ -119,6 +119,13 @@ assert 'axWindowMetadataText(area, "AXIdentifier")' in new
 assert 'axWindowMetadataText(area, "AXDOMIdentifier")' in new
 assert 'nativeEqualsWeb=' in new and 'chatPath=' in new
 assert 'samples.count' in new
+assert 'webURLPresent=' in new and 'webURLChatGPTHost=' in new
+assert 'webURLChatGPTRoot=' in new and 'webURLChatGPTConversationPath=' in new
+assert 'webURLOtherHTTPHost=' in new and 'webURLNonHTTP=' in new
+assert 'webURLUnparsed=' in new
+assert 'URLComponents(string: webURL)' in new
+assert 'webURLPresent += 1' in new
+assert 'webURLs.insert(webURL)' in new
 assert 'AXUIElementSetAttributeValue(area' not in new
 
 assert 'Set(sessionHistory.lastSessionTargets(pid: pid))' in new
