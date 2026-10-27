@@ -2159,7 +2159,37 @@ final class OverlayController:
             ? "available raw=\(sidecarWindowOrder.count) recognized=\(windows.count)"
             : "unavailable"
         if censusState != lastAXCensusLogState {
-            TitleHelperDiagnostics.shared.record("ax-window-census \(censusState)")
+            if lastAXWindowCensusSucceeded {
+                var nativeGeneric = 0
+                var nativeNamed = 0
+                var nativeEmpty = 0
+                var standard = 0
+                var minimized = 0
+                // Only aggregate native AX attributes; never log raw titles.
+                for id in sidecarWindowOrder {
+                    guard let window = sidecarWindows[id] else { continue }
+                    let nativeTitle = axString(window, kAXTitleAttribute)
+                    if nativeTitle == "ChatGPT" {
+                        nativeGeneric += 1
+                    } else if nativeTitle.isEmpty {
+                        nativeEmpty += 1
+                    } else {
+                        nativeNamed += 1
+                    }
+                    if axString(window, kAXSubroleAttribute) == "AXStandardWindow" {
+                        standard += 1
+                    }
+                    if axBool(window, kAXMinimizedAttribute) == true {
+                        minimized += 1
+                    }
+                }
+                TitleHelperDiagnostics.shared.record(
+                    "ax-window-census \(censusState) " +
+                    "nativeGeneric=\(nativeGeneric) nativeNamed=\(nativeNamed) " +
+                    "nativeEmpty=\(nativeEmpty) standard=\(standard) minimized=\(minimized)")
+            } else {
+                TitleHelperDiagnostics.shared.record("ax-window-census unavailable")
+            }
             lastAXCensusLogState = censusState
         }
         TitleHelperDiagnostics.shared.record(
