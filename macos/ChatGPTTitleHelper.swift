@@ -222,6 +222,60 @@ private func axWindowMetadataText(_ window: AXUIElement, _ key: String) -> Strin
     return ""
 }
 
+// Read-only, bounded census of user-facing share/copy-link controls in an
+// ALREADY VISIBLE conversation AXWebArea. No AXPress, AXValue or raw labels.
+private func boundedShareControlCensus(
+    _ root: AXUIElement
+) -> (visited: Int, share: Int, copyLink: Int, limited: Bool) {
+    let started = ProcessInfo.processInfo.systemUptime
+    var queue = [root]
+    var seen: Set<String> = []
+    var index = 0
+    var share = 0
+    var copyLink = 0
+    while index < queue.count && index < 96 &&
+          ProcessInfo.processInfo.systemUptime - started < 2.0 {
+        let element = queue[index]
+        index += 1
+        let id = String(CFHash(element))
+        guard seen.insert(id).inserted else { continue }
+        _ = AXUIElementSetMessagingTimeout(element, 0.15)
+        let role = axString(element, kAXRoleAttribute)
+        if role == "AXButton" || role == "AXMenuButton" ||
+           role == "AXPopUpButton" {
+            // Inspect only button metadata, never conversation message text.
+            let labels = [
+                axString(element, kAXTitleAttribute),
+                axString(element, kAXDescriptionAttribute),
+                axString(element, kAXHelpAttribute)
+            ].joined(separator: " ").localizedLowercase
+            if labels.contains("share") || labels.contains("공유") {
+                share += 1
+            }
+            if labels.contains("copy link") ||
+               labels.contains("링크 복사") ||
+               labels.contains("링크복사") {
+                copyLink += 1
+            }
+        }
+        let ordinary = axChildren(element)
+        let children: [AXUIElement]
+        if !ordinary.isEmpty {
+            children = ordinary
+        } else {
+            children = (axGet(element, kAXVisibleChildrenAttribute)
+                as? [AXUIElement]) ??
+                ((axGet(element, kAXContentsAttribute)
+                    as? [AXUIElement]) ?? [])
+        }
+        for child in children.prefix(12) where queue.count < 96 {
+            queue.append(child)
+        }
+    }
+    return (seen.count, share, copyLink,
+            index < queue.count || index >= 96)
+}
+
 // Read-only observation can safely subscribe to multiple title buttons.
 // The current ChatGPT AX tree exposes two AXButtons with the conversation
 // title. Uniqueness is essential for *pressing* buttons, but would incorrectly
@@ -2371,6 +2425,10 @@ final class OverlayController:
             let previous = Set(sessionHistory.snapshot.previousSessionOpen)
             let recent = Set(sessionHistory.snapshot.recentTitles)
             DispatchQueue.global(qos: .utility).async {
+                var shareCandidates = 0
+                var copyLinkCandidates = 0
+                var shareNodesVisited = 0
+                var shareScanLimited = 0
                 var webURLs = Set<String>()
                 var webURLPresent = 0
                 var webURLChatGPTHost = 0
@@ -2389,6 +2447,11 @@ final class OverlayController:
                 var nativeTitleEqualsWeb = 0
                 var chatPath = 0
                 for (title, area, window) in samples {
+                    let controls = boundedShareControlCensus(area)
+                    shareCandidates += controls.share
+                    copyLinkCandidates += controls.copyLink
+                    shareNodesVisited += controls.visited
+                    if controls.limited { shareScanLimited += 1 }
                     _ = AXUIElementSetMessagingTimeout(area, 0.2)
                     _ = AXUIElementSetMessagingTimeout(window, 0.2)
                     let webURL = axWindowMetadataText(area, "AXURL")
@@ -2447,6 +2510,10 @@ final class OverlayController:
                 }
                 TitleHelperDiagnostics.shared.record(
                     "ax-visible-identity pid=\(pid) checked=\(samples.count) " +
+                    "shareCandidates=\(shareCandidates) " +
+                    "copyLinkCandidates=\(copyLinkCandidates) " +
+                    "shareNodesVisited=\(shareNodesVisited) " +
+                    "shareScanLimited=\(shareScanLimited) " +
                     "webURL=\(webURLs.count) webURLPresent=\(webURLPresent) " +
                     "webURLChatGPTHost=\(webURLChatGPTHost) " +
                     "webURLChatGPTRoot=\(webURLChatGPTRoot) " +
