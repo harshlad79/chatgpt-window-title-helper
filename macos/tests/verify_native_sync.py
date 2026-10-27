@@ -138,6 +138,12 @@ assert 'boundedShareControlCensus(area)' in new
 assert 'axString(element, kAXDescriptionAttribute)' in new
 assert 'axString(element, kAXHelpAttribute)' in new
 assert 'AXUIElementSetMessagingTimeout(element, 0.15)' in new
+assert 'AXUIElementCopyActionNames(element, &rawActions)' in new
+assert 'axBool(element, kAXEnabledAttribute) == true' in new
+assert 'shareEnabled=' in new and 'sharePressable=' in new
+assert 'shareActionable=' in new and 'shareMenuRole=' in new
+assert 'copyLinkEnabled=' in new and 'copyLinkPressable=' in new
+assert 'if enabled && hasPress { shareActionable += 1 }' in new
 assert 'AXUIElementPerformAction(element' not in new
 
 assert 'Set(sessionHistory.lastSessionTargets(pid: pid))' in new
