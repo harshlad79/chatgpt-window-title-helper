@@ -92,6 +92,71 @@ final class DockRecentWindowRestorer {
         return items[0]
     }
 
+    // Explicit one-shot, non-navigating diagnostic. Invoked only by the
+    // signed helper with TITLEHELPER_SAFE_BLANK_PROBE=1 at launch.
+    // Never closes, unminimizes, navigates or edits an existing conversation.
+    func probeBlankWindow(completed: @escaping (Bool, String) -> Void) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }) else { completed(false, "busy-or-no-AX-permission"); return }
+
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(root, 0.6)
+        let original = winList(root)
+        let originalIDs = Set(original.map { String(CFHash($0)) })
+        guard !original.isEmpty, original.count <= 12,
+              originalIDs.count == original.count,
+              let newWindowMenu = fileNewWindow(root)
+        else { completed(false, "preflight-window-or-menu-unsafe"); return }
+
+        // Fail closed if any original window cannot report minimized state.
+        var originalMinimized: [String: Bool] = [:]
+        for win in original {
+            guard str(win, kAXRoleAttribute) == "AXWindow",
+                  let minimized = read(win, kAXMinimizedAttribute) as? NSNumber
+            else { completed(false, "preflight-minimized-unavailable"); return }
+            originalMinimized[String(CFHash(win))] = minimized.boolValue
+        }
+        let priorFrontmost = NSWorkspace.shared.frontmostApplication
+        busy = true
+        _ = app.activate()
+        guard press(newWindowMenu) else {
+            busy = false
+            priorFrontmost?.activate()
+            completed(false, "new-window-AXPress-failed")
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            guard let self else { return }
+            let after = self.winList(root)
+            let created = after.filter {
+                !originalIDs.contains(String(CFHash($0)))
+            }
+            let originalsRetained = original.allSatisfy { old in
+                let key = String(CFHash(old))
+                guard let live = after.first(where: {
+                    String(CFHash($0)) == key
+                }), let minimized = self.read(
+                    live, kAXMinimizedAttribute) as? NSNumber
+                else { return false }
+                return minimized.boolValue == originalMinimized[key]
+            }
+            let success = after.count == original.count + 1 &&
+                created.count == 1 && originalsRetained &&
+                self.title(created[0]) == "ChatGPT"
+            self.busy = false
+            // Restore the prior app focus, never close a window on failure.
+            if let priorFrontmost,
+               priorFrontmost.processIdentifier != app.processIdentifier {
+                _ = priorFrontmost.activate()
+            }
+            completed(success, "before=\(original.count) after=\(after.count) " +
+                "created=\(created.count) originalsRetained=\(originalsRetained) " +
+                "newGeneric=\(created.count == 1 && self.title(created[0]) == \"ChatGPT\")")
+        }
+    }
+
     func restore(title: String, completed: @escaping (Bool, String) -> Void) {
         guard !busy else { completed(false, "복원 작업 진행 중"); return }
         guard !title.isEmpty, AXIsProcessTrusted(),
