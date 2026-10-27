@@ -2409,15 +2409,15 @@ final class OverlayController:
                     }) { chatPath += 1 }
                 }
                 TitleHelperDiagnostics.shared.record(
-                    "ax-visible-identity pid=\\(pid) checked=\\(samples.count) " +
-                    "webURL=\\(webURLs.count) webDocument=\\(webDocuments.count) " +
-                    "webIdentifier=\\(webIdentifiers.count) " +
-                    "webDOMIdentifier=\\(webDOMIdentifiers.count) " +
-                    "windowURL=\\(windowURLs.count) chatPath=\\(chatPath) " +
-                    "nativeEqualsWeb=\\(nativeTitleEqualsWeb) " +
-                    "matchedSaved=\\(matchedSaved)/\\(saved.count) " +
-                    "matchedPrevious=\\(matchedPrevious)/\\(previous.count) " +
-                    "matchedRecent=\\(matchedRecent)/\\(recent.count)")
+                    "ax-visible-identity pid=\(pid) checked=\(samples.count) " +
+                    "webURL=\(webURLs.count) webDocument=\(webDocuments.count) " +
+                    "webIdentifier=\(webIdentifiers.count) " +
+                    "webDOMIdentifier=\(webDOMIdentifiers.count) " +
+                    "windowURL=\(windowURLs.count) chatPath=\(chatPath) " +
+                    "nativeEqualsWeb=\(nativeTitleEqualsWeb) " +
+                    "matchedSaved=\(matchedSaved)/\(saved.count) " +
+                    "matchedPrevious=\(matchedPrevious)/\(previous.count) " +
+                    "matchedRecent=\(matchedRecent)/\(recent.count)")
             }
         }
         // Save only a complete known title census, never transient missing
