@@ -128,6 +128,18 @@ assert 'webURLPresent += 1' in new
 assert 'webURLs.insert(webURL)' in new
 assert 'AXUIElementSetAttributeValue(area' not in new
 
+# Share/copy-link discovery must remain read-only and bounded.
+assert 'boundedShareControlCensus' in new
+assert 'index < 96' in new
+assert 'ProcessInfo.processInfo.systemUptime - started < 2.0' in new
+assert 'shareCandidates=' in new and 'copyLinkCandidates=' in new
+assert 'shareNodesVisited=' in new and 'shareScanLimited=' in new
+assert 'boundedShareControlCensus(area)' in new
+assert 'axString(element, kAXDescriptionAttribute)' in new
+assert 'axString(element, kAXHelpAttribute)' in new
+assert 'AXUIElementSetMessagingTimeout(element, 0.15)' in new
+assert 'AXUIElementPerformAction(element' not in new
+
 assert 'Set(sessionHistory.lastSessionTargets(pid: pid))' in new
 assert 'lastAXCensusLogState = nil' in new
 assert 'dockSidecar.updateHistory([])' in new
