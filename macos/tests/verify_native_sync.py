@@ -98,6 +98,17 @@ assert 'index < 48' in new
 assert 'AXUIElementSetMessagingTimeout(element, 0.2)' in new
 assert 'Set(sessionHistory.snapshot.previousSessionOpen)' in new
 assert 'Set(sessionHistory.snapshot.recentTitles)' in new
+# Direct minimized-window metadata must be read-only, bounded and aggregate-only.
+assert 'axWindowMetadataText' in new
+assert 'axWindowMetadataText(window, "AXDocument")' in new
+assert 'axWindowMetadataText(window, "AXURL")' in new
+assert 'axWindowMetadataText(window, "AXIdentifier")' in new
+assert 'ax-minimized-metadata pid=' in new
+assert 'uniqueDocument=' in new and 'uniqueURL=' in new
+assert 'uniqueIdentifier=' in new
+assert 'for window in raw.prefix(8)' in new
+assert 'AXUIElementSetAttributeValue(window, "AXDocument"' not in new
+
 assert 'Set(sessionHistory.lastSessionTargets(pid: pid))' in new
 assert 'lastAXCensusLogState = nil' in new
 assert 'dockSidecar.updateHistory([])' in new
