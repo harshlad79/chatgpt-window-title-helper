@@ -109,6 +109,18 @@ assert 'uniqueIdentifier=' in new
 assert 'for window in raw.prefix(8)' in new
 assert 'AXUIElementSetAttributeValue(window, "AXDocument"' not in new
 
+# Already-visible web areas can expose identity without touching minimized owner windows.
+assert 'lastVisibleIdentityProbeCount' in new
+assert 'sidecarEntries.prefix(8).compactMap' in new
+assert 'ax-visible-identity pid=' in new
+assert 'axWindowMetadataText(area, "AXURL")' in new
+assert 'axWindowMetadataText(area, "AXDocument")' in new
+assert 'axWindowMetadataText(area, "AXIdentifier")' in new
+assert 'axWindowMetadataText(area, "AXDOMIdentifier")' in new
+assert 'nativeEqualsWeb=' in new and 'chatPath=' in new
+assert 'samples.count' in new
+assert 'AXUIElementSetAttributeValue(area' not in new
+
 assert 'Set(sessionHistory.lastSessionTargets(pid: pid))' in new
 assert 'lastAXCensusLogState = nil' in new
 assert 'dockSidecar.updateHistory([])' in new
