@@ -82,6 +82,10 @@ assert 'sessionHistory.recoverable(excluding: [], pid: pid)' in new
 assert 'Its own AXMenu is sufficient evidence' in Path('macos/DockMenuSidecar.swift').read_text()
 
 assert 'lastAXWindowCensusSucceeded' in new
+# A recognized-title count of zero must not masquerade as zero native windows.
+assert 'ax-window-census' in new
+assert 'available raw=' in new and 'recognized=' in new
+assert 'lastAXCensusLogState = nil' in new
 assert 'dockSidecar.updateHistory([])' in new
 assert 'let complete = lastAXWindowCensusSucceeded &&' in new
 
