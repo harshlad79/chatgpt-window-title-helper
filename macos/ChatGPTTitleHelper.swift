@@ -2360,6 +2360,7 @@ final class OverlayController:
             } else if lastAXCensusLogState != "unavailable" {
                 TitleHelperDiagnostics.shared.record("ax-window-census unavailable")
                 lastAXCensusLogState = "unavailable"
+            }
         }
         // One bounded background census per ChatGPT PID. The normal refresh
         // deliberately skips minimized AX trees; do not mistake that for no chats.
