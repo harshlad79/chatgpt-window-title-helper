@@ -111,9 +111,9 @@ expect(restartedHelper.observe(pid: 200, titles: ["대화 C"], windowCount: 1),
        "ChatGPT PID change starts new session")
 expect(restartedHelper.snapshot.previousSessionOpen == ["대화 A", "대화 B"],
        "prior ChatGPT window set survives a process crash")
-expect(restartedHelper.recoverable(excluding: ["대화 C"]) ==
+expect(restartedHelper.recoverable(excluding: ["대화 C"], pid: 200) ==
        ["대화 A", "대화 B"], "previous session appears first")
-expect(restartedHelper.recoverable(excluding: ["대화 A", "대화 C"]) ==
+expect(restartedHelper.recoverable(excluding: ["대화 A", "대화 C"], pid: 200) ==
        ["대화 B"], "already reopened entries disappear from recovery")
 expect(restartedHelper.observe(pid: 200, titles: ["대화 C", "대화 A"],
                                windowCount: 2),
@@ -157,6 +157,14 @@ expect(normal.hasPendingRestart(pid: 411),
        "restart without AX titles still displays saved previous windows")
 expect(afterQuit.hasPendingRestart(pid: 412),
        "previous-session titles survive further PID changes")
+expect(afterQuit.lastSessionTargets(pid: 412) == ["New"],
+       "next restart targets immediately preceding PID, not older session")
+expect(afterQuit.recoverable(excluding: [], pid: 412) == ["New"],
+       "pending restart sidecar shows latest session")
+expect(afterQuit.recoverable(excluding: ["New"], pid: 412).isEmpty,
+       "already-open latest conversation is not duplicated")
+expect(afterQuit.lastSessionTargets(pid: 411) == ["A", "B"],
+       "same PID retains prior-session recovery contract")
 let fileAttributes = try! FileManager.default.attributesOfItem(
     atPath: quitFile.path)
 let mode = (fileAttributes[.posixPermissions] as? NSNumber)?.intValue ?? -1
@@ -173,7 +181,7 @@ expect(migratedMode & 0o777 == 0o600,
 expect(migration.snapshot.previousSessionOpen == ["A", "B"] &&
        migration.snapshot.lastCompleteOpen == ["New"],
        "permissions migration never corrupts saved previous or active session")
-expect(afterQuit.lastSessionTargets() == ["A", "B"],
+expect(afterQuit.lastSessionTargets(pid: 411) == ["A", "B"],
        "last session targets exclude historical unrelated chats")
 let steadyClose = WindowSessionHistoryStore(
     file: quitDir.appendingPathComponent("steady.json"))
