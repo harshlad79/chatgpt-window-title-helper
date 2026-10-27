@@ -87,6 +87,8 @@ assert 'ax-window-census' in new
 assert 'available raw=' in new and 'recognized=' in new
 assert 'nativeGeneric=' in new and 'nativeNamed=' in new
 assert 'nativeEmpty=' in new and 'standard=' in new and 'minimized=' in new
+assert 'matchedSaved=' in new and 'minimizedSaved=' in new
+assert 'Set(sessionHistory.lastSessionTargets(pid: pid))' in new
 assert 'lastAXCensusLogState = nil' in new
 assert 'dockSidecar.updateHistory([])' in new
 assert 'let complete = lastAXWindowCensusSucceeded &&' in new
