@@ -197,80 +197,129 @@ final class DockRecentWindowRestorer {
             completed(false, "Recent에 없거나 같은 제목이 여러 개임")
             return
         }
-        // Do not act on the preflight item after closing/reopening menus.
         let root = AXUIElementCreateApplication(app.processIdentifier)
         AXUIElementSetMessagingTimeout(root, 0.6)
         let original = winList(root)
         let originalIDs = Set(original.map { String(CFHash($0)) })
-        guard let newWindowMenu = fileNewWindow(root) else {
-            completed(false, "파일 > 새 창 메뉴를 찾지 못함")
+        guard !original.isEmpty, original.count <= 12,
+              originalIDs.count == original.count,
+              fileNewWindow(root) != nil else {
+            completed(false, "복원 전 창/파일 메뉴 식별 실패")
             return
         }
+        // Never navigate a new window if an existing window disappeared or
+        // changed its minimized state during the creation preflight.
+        var originalMinimized: [String: Bool] = [:]
+        for win in original {
+            guard str(win, kAXRoleAttribute) == "AXWindow",
+                  let minimized = read(win, kAXMinimizedAttribute) as? NSNumber
+            else { completed(false, "기존 창 상태 식별 실패"); return }
+            originalMinimized[String(CFHash(win))] = minimized.boolValue
+        }
+
         busy = true
-        // Activating ChatGPT allows its native menu to replace Dock's menu.
-        _ = app.activate()
-        guard press(newWindowMenu) else {
+        guard app.activate() else {
             busy = false
-            completed(false, "새 창 메뉴 실행 실패")
+            completed(false, "ChatGPT 활성화 실패")
             return
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+        // The live blank-window probe proved immediate AXPress after activate
+        // can return success without creating a window. Wait for focus and
+        // resolve a fresh menu item; press exactly once.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
             guard let self else { return }
-            let after = self.winList(root)
-            let created = after.filter {
-                !originalIDs.contains(String(CFHash($0)))
-            }
-            guard after.count == original.count + 1, created.count == 1,
-                  self.title(created[0]) == "ChatGPT" else {
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier ==
+                    app.processIdentifier else {
                 self.busy = false
-                completed(false, "새 빈 창 생성 확인 실패; 기존 창 유지")
+                completed(false, "ChatGPT 포커스 확인 실패")
                 return
             }
-            // The Dock menu must be read again: prior AX handles can be stale.
-            guard let choices = self.dockRecentMatches(title),
-                  choices.count == 1, self.press(choices[0]) else {
+            guard let newWindowMenu = self.fileNewWindow(root),
+                  self.press(newWindowMenu) else {
                 self.busy = false
-                completed(false, "새 창은 열렸지만 Recent 항목 실행 실패")
+                completed(false, "새 창 메뉴 실행 실패")
                 return
             }
-            // The app can report an empty/generic AXWebArea for several
-            // seconds after the native Dock action has already succeeded.
-            // Poll without blocking the main run loop; never create another
-            // window while a prior restore is awaiting verification.
-            let startedAt = ProcessInfo.processInfo.systemUptime
-            let expectedCount = original.count + 1
-            let newID = String(CFHash(created[0]))
-            func checkResult() {
-                let result = self.winList(root)
-                let matched = result.contains {
-                    String(CFHash($0)) == newID && self.title($0) == title
+
+            let createdAt = ProcessInfo.processInfo.systemUptime
+            func waitForNewWindow() {
+                let after = self.winList(root)
+                let created = after.filter {
+                    !originalIDs.contains(String(CFHash($0)))
                 }
-                let retained = original.allSatisfy { old in
+                let elapsed = ProcessInfo.processInfo.systemUptime - createdAt
+                if after.count == original.count && created.isEmpty &&
+                    elapsed < 8.0 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        waitForNewWindow()
+                    }
+                    return
+                }
+                let originalsRetained = original.allSatisfy { old in
                     let key = String(CFHash(old))
-                    return result.contains { String(CFHash($0)) == key }
+                    guard let live = after.first(where: {
+                        String(CFHash($0)) == key
+                    }), let minimized = self.read(
+                        live, kAXMinimizedAttribute) as? NSNumber
+                    else { return false }
+                    return minimized.boolValue == originalMinimized[key]
                 }
-                let elapsed = ProcessInfo.processInfo.systemUptime - startedAt
-                let decision = WindowRestoreVerificationPolicy.decide(
-                    elapsed: elapsed, expectedCount: expectedCount,
-                    actualCount: result.count, newWindowTitleMatched: matched,
-                    originalsRetained: retained)
-                switch decision {
-                case .pending:
-                    DispatchQueue.main.asyncAfter(
-                        deadline: .now() + WindowRestoreVerificationPolicy.pollSeconds
-                    ) { checkResult() }
-                case .success:
+                guard after.count == original.count + 1,
+                      created.count == 1, originalsRetained,
+                      self.title(created[0]) == "ChatGPT" else {
                     self.busy = false
-                    completed(true, "새 창으로 복원됨")
-                case .failure:
-                    self.busy = false
-                    // No conversation titles or messages in diagnostic reasons.
-                    completed(false, "복원 확인 시간 초과 " +
-                        "windows=\(result.count)/\(expectedCount) " +
-                        "targetMatched=\(matched) originalsRetained=\(retained)")
+                    completed(false, "새 빈 창/기존 창 보존 확인 실패")
+                    return
                 }
+
+                // Re-read the Dock menu: preflight handles may be stale.
+                guard let choices = self.dockRecentMatches(title),
+                      choices.count == 1, self.press(choices[0]) else {
+                    self.busy = false
+                    completed(false, "새 창은 열렸지만 Recent 항목 실행 실패")
+                    return
+                }
+                // Loading a native conversation title can take many seconds.
+                let startedAt = ProcessInfo.processInfo.systemUptime
+                let expectedCount = original.count + 1
+                let newID = String(CFHash(created[0]))
+                func checkResult() {
+                    let result = self.winList(root)
+                    let matched = result.contains {
+                        String(CFHash($0)) == newID && self.title($0) == title
+                    }
+                    let retained = original.allSatisfy { old in
+                        let key = String(CFHash(old))
+                        guard let live = result.first(where: {
+                            String(CFHash($0)) == key
+                        }), let minimized = self.read(
+                            live, kAXMinimizedAttribute) as? NSNumber
+                        else { return false }
+                        return minimized.boolValue == originalMinimized[key]
+                    }
+                    let elapsed = ProcessInfo.processInfo.systemUptime - startedAt
+                    let decision = WindowRestoreVerificationPolicy.decide(
+                        elapsed: elapsed, expectedCount: expectedCount,
+                        actualCount: result.count, newWindowTitleMatched: matched,
+                        originalsRetained: retained)
+                    switch decision {
+                    case .pending:
+                        DispatchQueue.main.asyncAfter(
+                            deadline: .now() + WindowRestoreVerificationPolicy.pollSeconds
+                        ) { checkResult() }
+                    case .success:
+                        self.busy = false
+                        completed(true, "새 창으로 복원됨")
+                    case .failure:
+                        self.busy = false
+                        completed(false, "복원 확인 시간 초과 " +
+                            "windows=\(result.count)/\(expectedCount) " +
+                            "targetMatched=\(matched) originalsRetained=\(retained)")
+                    }
+                }
+                checkResult()
             }
-            checkResult()
+            waitForNewWindow()
         }
     }
 }
