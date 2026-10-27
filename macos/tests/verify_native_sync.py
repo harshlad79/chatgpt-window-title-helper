@@ -175,4 +175,4 @@ assert 'originalMinimized' in restorer
 assert 'after.count == original.count + 1' in restorer
 assert 'created.count == 1 && originalsRetained' in restorer
 assert 'priorFrontmost.activate()' in restorer
-assert 'No conversation navigation' not in restorer or True
+assert 'probeBlankWindow(completed:' in restorer
