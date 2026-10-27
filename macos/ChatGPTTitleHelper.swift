@@ -1282,6 +1282,8 @@ final class OverlayController:
     private var sidecarWindows: [String: AXUIElement] = [:]
     private var sidecarWindowOrder: [String] = []
     private var lastAXWindowCensusSucceeded = false
+    // Counts only, emitted on changes; never logs conversation titles.
+    private var lastAXCensusLogState: String?
 
     private var timer: Timer?
 
@@ -2149,6 +2151,15 @@ final class OverlayController:
             axApp: appAX,
             allowBackgroundFallback: allowBackgroundFallback
         )
+        // Distinguish raw native AX windows from loaded conversation titles.
+        // A generic ChatGPT starter window is still a real window.
+        let censusState = lastAXWindowCensusSucceeded
+            ? "available raw=\(sidecarWindowOrder.count) recognized=\(windows.count)"
+            : "unavailable"
+        if censusState != lastAXCensusLogState {
+            TitleHelperDiagnostics.shared.record("ax-window-census \(censusState)")
+            lastAXCensusLogState = censusState
+        }
         TitleHelperDiagnostics.shared.record(
             "refresh-success knownWindows=\(windows.count) backgroundTick=\(allowBackgroundFallback) nativeEnabled=\(nativeTitleEnabled)")
         updateOverlay(windows: windows)
