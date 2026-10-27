@@ -229,6 +229,7 @@ private func boundedShareControlCensus(
 ) -> (visited: Int, share: Int, copyLink: Int,
       shareEnabled: Int, sharePressable: Int, shareActionable: Int,
       shareMenuRole: Int, copyLinkEnabled: Int, copyLinkPressable: Int,
+      openOnChatGPTControls: Int, openOnChatGPTConversationURLs: Int,
       limited: Bool) {
     let started = ProcessInfo.processInfo.systemUptime
     var queue = [root]
@@ -242,6 +243,8 @@ private func boundedShareControlCensus(
     var shareMenuRole = 0
     var copyLinkEnabled = 0
     var copyLinkPressable = 0
+    var openOnChatGPTControls = 0
+    var openOnChatGPTConversationURLs = 0
     while index < queue.count && index < 96 &&
           ProcessInfo.processInfo.systemUptime - started < 2.0 {
         let element = queue[index]
@@ -250,6 +253,27 @@ private func boundedShareControlCensus(
         guard seen.insert(id).inserted else { continue }
         _ = AXUIElementSetMessagingTimeout(element, 0.15)
         let role = axString(element, kAXRoleAttribute)
+        // The installed ChatGPT app offers a non-public-share navigation
+        // item "Open on chatgpt.com" for a known conversation ID. Inspect
+        // only link/menu metadata; never press it or log the URL/ID.
+        if role == "AXLink" || role == "AXMenuItem" {
+            let label = [
+                axString(element, kAXTitleAttribute),
+                axString(element, kAXDescriptionAttribute),
+                axString(element, kAXHelpAttribute)
+            ].joined(separator: " ").localizedLowercase
+            if label.contains("open on chatgpt.com") ||
+               label.contains("chatgpt.com에서 열기") {
+                openOnChatGPTControls += 1
+                let value = axWindowMetadataText(element, "AXURL")
+                if let parsed = URLComponents(string: value),
+                   parsed.scheme?.lowercased() == "https",
+                   parsed.host?.lowercased() == "chatgpt.com",
+                   parsed.path.hasPrefix("/c/") {
+                    openOnChatGPTConversationURLs += 1
+                }
+            }
+        }
         if role == "AXButton" || role == "AXMenuButton" ||
            role == "AXPopUpButton" {
             // Inspect only button metadata, never conversation message text.
@@ -298,6 +322,7 @@ private func boundedShareControlCensus(
     return (seen.count, share, copyLink,
             shareEnabled, sharePressable, shareActionable,
             shareMenuRole, copyLinkEnabled, copyLinkPressable,
+            openOnChatGPTControls, openOnChatGPTConversationURLs,
             index < queue.count || index >= 96)
 }
 
@@ -2478,6 +2503,8 @@ final class OverlayController:
                 var shareMenuRole = 0
                 var copyLinkEnabled = 0
                 var copyLinkPressable = 0
+                var openOnChatGPTControls = 0
+                var openOnChatGPTConversationURLs = 0
                 var shareNodesVisited = 0
                 var shareScanLimited = 0
                 var webURLs = Set<String>()
@@ -2507,6 +2534,8 @@ final class OverlayController:
                     shareMenuRole += controls.shareMenuRole
                     copyLinkEnabled += controls.copyLinkEnabled
                     copyLinkPressable += controls.copyLinkPressable
+                    openOnChatGPTControls += controls.openOnChatGPTControls
+                    openOnChatGPTConversationURLs += controls.openOnChatGPTConversationURLs
                     shareNodesVisited += controls.visited
                     if controls.limited { shareScanLimited += 1 }
                     _ = AXUIElementSetMessagingTimeout(area, 0.2)
@@ -2575,6 +2604,8 @@ final class OverlayController:
                     "shareMenuRole=\(shareMenuRole) " +
                     "copyLinkEnabled=\(copyLinkEnabled) " +
                     "copyLinkPressable=\(copyLinkPressable) " +
+                    "openOnChatGPTControls=\(openOnChatGPTControls) " +
+                    "openOnChatGPTConversationURLs=\(openOnChatGPTConversationURLs) " +
                     "shareNodesVisited=\(shareNodesVisited) " +
                     "shareScanLimited=\(shareScanLimited) " +
                     "webURL=\(webURLs.count) webURLPresent=\(webURLPresent) " +
