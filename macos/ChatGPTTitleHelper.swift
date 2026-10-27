@@ -2372,6 +2372,13 @@ final class OverlayController:
             let recent = Set(sessionHistory.snapshot.recentTitles)
             DispatchQueue.global(qos: .utility).async {
                 var webURLs = Set<String>()
+                var webURLPresent = 0
+                var webURLChatGPTHost = 0
+                var webURLChatGPTRoot = 0
+                var webURLChatGPTConversationPath = 0
+                var webURLOtherHTTPHost = 0
+                var webURLNonHTTP = 0
+                var webURLUnparsed = 0
                 var webDocuments = Set<String>()
                 var webIdentifiers = Set<String>()
                 var webDOMIdentifiers = Set<String>()
@@ -2389,7 +2396,37 @@ final class OverlayController:
                     let webIdentifier = axWindowMetadataText(area, "AXIdentifier")
                     let webDOMIdentifier = axWindowMetadataText(area, "AXDOMIdentifier")
                     let windowURL = axWindowMetadataText(window, "AXURL")
-                    if !webURL.isEmpty { webURLs.insert(webURL) }
+                    if !webURL.isEmpty {
+                        webURLPresent += 1
+                        webURLs.insert(webURL)
+                        // Classify only aggregate URL shape. Never log a URL,
+                        // path, host, query, token or per-window identity.
+                        if let parsed = URLComponents(string: webURL),
+                           let scheme = parsed.scheme?.lowercased() {
+                            if scheme == "https" || scheme == "http" {
+                                if let host = parsed.host?.lowercased() {
+                                    if host == "chatgpt.com" ||
+                                       host == "www.chatgpt.com" {
+                                        webURLChatGPTHost += 1
+                                        if parsed.path.isEmpty || parsed.path == "/" {
+                                            webURLChatGPTRoot += 1
+                                        }
+                                        if parsed.path.contains("/c/") {
+                                            webURLChatGPTConversationPath += 1
+                                        }
+                                    } else {
+                                        webURLOtherHTTPHost += 1
+                                    }
+                                } else {
+                                    webURLUnparsed += 1
+                                }
+                            } else {
+                                webURLNonHTTP += 1
+                            }
+                        } else {
+                            webURLUnparsed += 1
+                        }
+                    }
                     if !webDocument.isEmpty { webDocuments.insert(webDocument) }
                     if !webIdentifier.isEmpty { webIdentifiers.insert(webIdentifier) }
                     if !webDOMIdentifier.isEmpty { webDOMIdentifiers.insert(webDOMIdentifier) }
@@ -2410,7 +2447,14 @@ final class OverlayController:
                 }
                 TitleHelperDiagnostics.shared.record(
                     "ax-visible-identity pid=\(pid) checked=\(samples.count) " +
-                    "webURL=\(webURLs.count) webDocument=\(webDocuments.count) " +
+                    "webURL=\(webURLs.count) webURLPresent=\(webURLPresent) " +
+                    "webURLChatGPTHost=\(webURLChatGPTHost) " +
+                    "webURLChatGPTRoot=\(webURLChatGPTRoot) " +
+                    "webURLChatGPTConversationPath=\(webURLChatGPTConversationPath) " +
+                    "webURLOtherHTTPHost=\(webURLOtherHTTPHost) " +
+                    "webURLNonHTTP=\(webURLNonHTTP) " +
+                    "webURLUnparsed=\(webURLUnparsed) " +
+                    "webDocument=\(webDocuments.count) " +
                     "webIdentifier=\(webIdentifiers.count) " +
                     "webDOMIdentifier=\(webDOMIdentifiers.count) " +
                     "windowURL=\(windowURLs.count) chatPath=\(chatPath) " +
