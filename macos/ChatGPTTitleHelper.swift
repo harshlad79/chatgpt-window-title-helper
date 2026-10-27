@@ -2100,6 +2100,7 @@ final class OverlayController:
             sidecarWindows.removeAll()
             sidecarWindowOrder.removeAll()
             lastAXWindowCensusSucceeded = false
+            lastAXCensusLogState = nil
             dockSidecar.update([])
             pendingAXTitleEvents.removeAll()
             titleScheduler = TitleWorkScheduler()
@@ -2122,6 +2123,7 @@ final class OverlayController:
             sidecarWindows.removeAll()
             sidecarWindowOrder.removeAll()
             lastAXWindowCensusSucceeded = false
+            lastAXCensusLogState = nil
             dockSidecar.update([])
             pendingAXTitleEvents.removeAll()
             titleScheduler = TitleWorkScheduler()
