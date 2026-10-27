@@ -211,6 +211,17 @@ private func boundedMinimizedWebAreaTitle(
     return (false, "", index < queue.count || index >= 48)
 }
 
+// Metadata-only probe: read documented AXWindow attributes without logging
+// their contents. Some hosts return CFURL rather than CFString for AXURL.
+private func axWindowMetadataText(_ window: AXUIElement, _ key: String) -> String {
+    guard let raw = axGet(window, key) else { return "" }
+    if let value = raw as? String {
+        return value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    if let value = raw as? URL { return value.absoluteString }
+    return ""
+}
+
 // Read-only observation can safely subscribe to multiple title buttons.
 // The current ChatGPT AX tree exposes two AXButtons with the conversation
 // title. Uniqueness is essential for *pressing* buttons, but would incorrectly
@@ -2272,11 +2283,34 @@ final class OverlayController:
                 var matchedSaved = 0
                 var matchedPrevious = 0
                 var matchedRecent = 0
+                var documents = Set<String>()
+                var urls = Set<String>()
+                var identifiers = Set<String>()
+                var documentCount = 0
+                var urlCount = 0
+                var identifierCount = 0
                 for window in raw.prefix(8) {
                     guard axBool(window, kAXMinimizedAttribute) == true else {
                         continue
                     }
                     minimized += 1
+                    // Read only the window itself; never traverse message values.
+                    // Retain values only transiently for aggregate uniqueness.
+                    let document = axWindowMetadataText(window, "AXDocument")
+                    let url = axWindowMetadataText(window, "AXURL")
+                    let identifier = axWindowMetadataText(window, "AXIdentifier")
+                    if !document.isEmpty {
+                        documentCount += 1
+                        documents.insert(document)
+                    }
+                    if !url.isEmpty {
+                        urlCount += 1
+                        urls.insert(url)
+                    }
+                    if !identifier.isEmpty {
+                        identifierCount += 1
+                        identifiers.insert(identifier)
+                    }
                     let result = boundedMinimizedWebAreaTitle(window)
                     if result.limited { limited += 1 }
                     guard result.found else { continue }
@@ -2298,6 +2332,11 @@ final class OverlayController:
                     "matchedSaved=\(matchedSaved)/\(saved.count) " +
                     "matchedPrevious=\(matchedPrevious)/\(previous.count) " +
                     "matchedRecent=\(matchedRecent)/\(recent.count)")
+                TitleHelperDiagnostics.shared.record(
+                    "ax-minimized-metadata pid=\(pid) checked=\(minimized) " +
+                    "document=\(documentCount) uniqueDocument=\(documents.count) " +
+                    "url=\(urlCount) uniqueURL=\(urls.count) " +
+                    "identifier=\(identifierCount) uniqueIdentifier=\(identifiers.count)")
             }
         }
         TitleHelperDiagnostics.shared.record(
