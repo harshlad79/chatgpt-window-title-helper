@@ -174,6 +174,43 @@ func findWebArea(_ root: AXUIElement) -> AXUIElement? {
     return nil
 }
 
+// Diagnostic only: bounded, read-only AXWebArea discovery for minimized windows.
+// This does not inspect AXValue/message text or change any window state.
+private func boundedMinimizedWebAreaTitle(
+    _ window: AXUIElement
+) -> (found: Bool, title: String, limited: Bool) {
+    let started = ProcessInfo.processInfo.systemUptime
+    var queue = [window]
+    var seen: Set<String> = []
+    var index = 0
+    while index < queue.count && index < 48 &&
+          ProcessInfo.processInfo.systemUptime - started < 2.5 {
+        let element = queue[index]
+        index += 1
+        let id = String(CFHash(element))
+        guard seen.insert(id).inserted else { continue }
+        _ = AXUIElementSetMessagingTimeout(element, 0.2)
+        if axString(element, kAXRoleAttribute) == "AXWebArea" {
+            let title = axString(element, kAXTitleAttribute)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return (true, title, false)
+        }
+        let ordinary = axChildren(element)
+        let children: [AXUIElement]
+        if !ordinary.isEmpty {
+            children = ordinary
+        } else {
+            children = (axGet(element, kAXVisibleChildrenAttribute)
+                as? [AXUIElement]) ??
+                ((axGet(element, kAXContentsAttribute) as? [AXUIElement]) ?? [])
+        }
+        for child in children.prefix(12) where queue.count < 48 {
+            queue.append(child)
+        }
+    }
+    return (false, "", index < queue.count || index >= 48)
+}
+
 // Read-only observation can safely subscribe to multiple title buttons.
 // The current ChatGPT AX tree exposes two AXButtons with the conversation
 // title. Uniqueness is essential for *pressing* buttons, but would incorrectly
@@ -1284,6 +1321,7 @@ final class OverlayController:
     private var lastAXWindowCensusSucceeded = false
     // Counts only, emitted on changes; never logs conversation titles.
     private var lastAXCensusLogState: String?
+    private var minimizedAXProbePID: pid_t = 0
 
     private var timer: Timer?
 
@@ -2101,6 +2139,7 @@ final class OverlayController:
             sidecarWindowOrder.removeAll()
             lastAXWindowCensusSucceeded = false
             lastAXCensusLogState = nil
+            minimizedAXProbePID = 0
             dockSidecar.update([])
             pendingAXTitleEvents.removeAll()
             titleScheduler = TitleWorkScheduler()
@@ -2124,6 +2163,7 @@ final class OverlayController:
             sidecarWindowOrder.removeAll()
             lastAXWindowCensusSucceeded = false
             lastAXCensusLogState = nil
+            minimizedAXProbePID = 0
             dockSidecar.update([])
             pendingAXTitleEvents.removeAll()
             titleScheduler = TitleWorkScheduler()
@@ -2207,6 +2247,58 @@ final class OverlayController:
                 TitleHelperDiagnostics.shared.record("ax-window-census unavailable")
             }
             lastAXCensusLogState = censusState
+        }
+        // One bounded background census per ChatGPT PID. The normal refresh
+        // deliberately skips minimized AX trees; do not mistake that for no chats.
+        if lastAXWindowCensusSucceeded && minimizedAXProbePID != pid {
+            minimizedAXProbePID = pid
+            let saved = Set(sessionHistory.lastSessionTargets(pid: pid))
+            let previous = Set(sessionHistory.snapshot.previousSessionOpen)
+            let recent = Set(sessionHistory.snapshot.recentTitles)
+            DispatchQueue.global(qos: .utility).async {
+                let root = AXUIElementCreateApplication(pid)
+                _ = AXUIElementSetMessagingTimeout(root, 0.2)
+                guard let raw = axGet(root, kAXWindowsAttribute)
+                    as? [AXUIElement], raw.count < 40 else {
+                    TitleHelperDiagnostics.shared.record(
+                        "ax-minimized-webarea unavailable pid=\(pid)")
+                    return
+                }
+                var minimized = 0
+                var found = 0
+                var named = 0
+                var generic = 0
+                var limited = 0
+                var matchedSaved = 0
+                var matchedPrevious = 0
+                var matchedRecent = 0
+                for window in raw.prefix(8) {
+                    guard axBool(window, kAXMinimizedAttribute) == true else {
+                        continue
+                    }
+                    minimized += 1
+                    let result = boundedMinimizedWebAreaTitle(window)
+                    if result.limited { limited += 1 }
+                    guard result.found else { continue }
+                    found += 1
+                    let title = result.title
+                    if title.isEmpty || title == "ChatGPT" {
+                        generic += 1
+                    } else {
+                        named += 1
+                    }
+                    if saved.contains(title) { matchedSaved += 1 }
+                    if previous.contains(title) { matchedPrevious += 1 }
+                    if recent.contains(title) { matchedRecent += 1 }
+                }
+                TitleHelperDiagnostics.shared.record(
+                    "ax-minimized-webarea pid=\(pid) raw=\(raw.count) " +
+                    "minimized=\(minimized) found=\(found) named=\(named) " +
+                    "generic=\(generic) limited=\(limited) " +
+                    "matchedSaved=\(matchedSaved)/\(saved.count) " +
+                    "matchedPrevious=\(matchedPrevious)/\(previous.count) " +
+                    "matchedRecent=\(matchedRecent)/\(recent.count)")
+            }
         }
         TitleHelperDiagnostics.shared.record(
             "refresh-success knownWindows=\(windows.count) backgroundTick=\(allowBackgroundFallback) nativeEnabled=\(nativeTitleEnabled)")
