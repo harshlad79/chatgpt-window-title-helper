@@ -144,6 +144,14 @@ assert 'shareEnabled=' in new and 'sharePressable=' in new
 assert 'shareActionable=' in new and 'shareMenuRole=' in new
 assert 'copyLinkEnabled=' in new and 'copyLinkPressable=' in new
 assert 'if enabled && hasPress { shareActionable += 1 }' in new
+# Non-public-share navigation affordance from installed ChatGPT app bundle.
+# Only AXLink/AXMenuItem metadata is inspected; no owner UI interaction.
+assert 'openOnChatGPTControls=' in new
+assert 'openOnChatGPTConversationURLs=' in new
+assert 'role == "AXLink" || role == "AXMenuItem"' in new
+assert 'label.contains("open on chatgpt.com")' in new
+assert 'parsed.path.hasPrefix("/c/")' in new
+assert 'axWindowMetadataText(element, "AXURL")' in new
 assert 'AXUIElementPerformAction(element' not in new
 
 assert 'Set(sessionHistory.lastSessionTargets(pid: pid))' in new
