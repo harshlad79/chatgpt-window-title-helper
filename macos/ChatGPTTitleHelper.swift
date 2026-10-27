@@ -1631,6 +1631,18 @@ final class OverlayController:
         }
 
         refresh()
+        // Opt-in smoke test for a single independent generic native window.
+        // Never run on ordinary launch or restore; no conversation navigation.
+        if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_BLANK_PROBE"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self else { return }
+                self.recentRestorer.probeBlankWindow { success, detail in
+                    TitleHelperDiagnostics.shared.record(
+                        "blank-probe success=\(success) \(detail)")
+                    self.refresh()
+                }
+            }
+        }
     }
 
 
