@@ -270,6 +270,23 @@ assert 'AXUIElementSetAttributeValue' not in search_probe
 assert 'setValue(' not in search_probe
 assert 'typeText' not in search_probe
 
+# Isolated Search input capability check: read-only, identity-fenced, no text entry.
+assert 'TITLEHELPER_SAFE_ISOLATED_INPUT_CAPABILITIES' in new
+assert 'self.recentRestorer.probeIsolatedSearchInputCapabilities(' in new
+assert 'isolated-input-capabilities success=' in new
+input_probe = restorer.split('    func probeIsolatedSearchInputCapabilities(', 1)[1].split(
+    '    // One-shot, strictly read-only diagnosis', 1)[0]
+assert 'expected.count == 8' in input_probe
+assert 'before == expected' in input_probe and 'after == expected' in input_probe
+assert 'String(CFHash($0)) == expectedID' in input_probe
+assert 'AXUIElementIsAttributeSettable' in input_probe
+assert 'inputCount == 1' in input_probe
+assert 'originalsPreserved=' in input_probe
+for forbidden in ['AXUIElementPerformAction', 'AXUIElementSetAttributeValue',
+                  'fileNewWindow(', 'app.activate(', 'dockRecentMatches(',
+                  'press(', 'NSLog(', 'print(']:
+    assert forbidden not in input_probe, forbidden
+
 # Isolated result metadata probe: privacy-safe, read-only, identity-fenced.
 assert 'TITLEHELPER_SAFE_ISOLATED_RESULT_METADATA' in new
 assert 'self.recentRestorer.probeIsolatedSearchResultMetadata(' in new
