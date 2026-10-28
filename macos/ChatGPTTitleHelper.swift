@@ -1643,6 +1643,18 @@ final class OverlayController:
                 }
             }
         }
+        // Separate explicit one-shot. Only a newly created blank native
+        // window receives the sidebar Search AXPress; never type/select.
+        if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_SEARCH_UI_PROBE"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self else { return }
+                self.recentRestorer.probeSearchUI { success, detail in
+                    TitleHelperDiagnostics.shared.record(
+                        "search-ui-probe success=\(success) \(detail)")
+                    self.refresh()
+                }
+            }
+        }
     }
 
 
