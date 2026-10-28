@@ -275,7 +275,7 @@ assert 'TITLEHELPER_SAFE_ISOLATED_INPUT_CAPABILITIES' in new
 assert 'self.recentRestorer.probeIsolatedSearchInputCapabilities(' in new
 assert 'isolated-input-capabilities success=' in new
 input_probe = restorer.split('    func probeIsolatedSearchInputCapabilities(', 1)[1].split(
-    '    // One-shot, strictly read-only diagnosis', 1)[0]
+    '    // Explicit one-shot Search query', 1)[0]
 assert 'expected.count == 8' in input_probe
 assert 'before == expected' in input_probe and 'after == expected' in input_probe
 assert 'String(CFHash($0)) == expectedID' in input_probe
@@ -313,7 +313,7 @@ assert 'TITLEHELPER_SAFE_ISOLATED_RESULT_METADATA' in new
 assert 'self.recentRestorer.probeIsolatedSearchResultMetadata(' in new
 assert 'isolated-result-metadata success=' in new
 metadata_probe = restorer.split('    func probeIsolatedSearchResultMetadata(', 1)[1].split(
-    '    // One-shot, strictly read-only diagnosis', 1)[0]
+    '    // Read-only capability check', 1)[0]
 assert 'app.processIdentifier == expectedPID' in metadata_probe
 assert 'expected.count == 8' in metadata_probe
 assert 'before == expected' in metadata_probe and 'after == expected' in metadata_probe
