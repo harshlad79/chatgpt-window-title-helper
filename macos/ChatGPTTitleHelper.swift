@@ -1649,7 +1649,8 @@ final class OverlayController:
             "TITLEHELPER_SAFE_ISOLATED_WINDOW_ID"],
            let baseline = ProcessInfo.processInfo.environment[
             "TITLEHELPER_SAFE_ISOLATED_WINDOW_BASELINE"],
-           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_SEARCH_PRESS"] != "1" {
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_SEARCH_PRESS"] != "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOCUS_DIAG"] != "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
                 guard let self else { return }
                 self.recentRestorer.probeIsolatedWindowMetrics(
@@ -1657,6 +1658,28 @@ final class OverlayController:
                 ) { success, detail in
                     TitleHelperDiagnostics.shared.record(
                         "isolated-window-metrics success=\(success) \(detail)")
+                }
+            }
+        }
+        // One-shot read-only focus/baseline diagnosis for the isolated window.
+        // This path never invokes AXPress, activation or window mutation.
+        if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOCUS_DIAG"] == "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_SEARCH_PRESS"] != "1",
+           let isolatedID = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_WINDOW_ID"],
+           let baseline = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_WINDOW_BASELINE"],
+           let pidText = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_SEARCH_PID"],
+           let expectedPID = Int32(pidText), expectedPID > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self else { return }
+                self.recentRestorer.probeIsolatedFocusGate(
+                    expectedID: isolatedID, expectedSnapshot: baseline,
+                    expectedPID: expectedPID
+                ) { success, detail in
+                    TitleHelperDiagnostics.shared.record(
+                        "isolated-focus-gate success=\(success) \(detail)")
                 }
             }
         }
