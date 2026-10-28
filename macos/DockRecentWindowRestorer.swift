@@ -494,6 +494,11 @@ final class DockRecentWindowRestorer {
         var menuActions = 0
         var nonemptyIDs = 0
         var chatURLs = 0
+        // Only fixed AX role names are emitted; never log UI labels or values.
+        let safeRoles: Set<String> = ["AXWindow", "AXWebArea", "AXGroup", "AXButton", "AXStaticText", "AXList", "AXListBox", "AXOption", "AXRow", "AXCell", "AXMenuItem", "AXLink", "AXScrollArea", "AXTextField", "AXSearchField", "AXComboBox", "AXImage", "AXCheckBox", "AXHeading", "AXTextArea", "AXToolbar", "AXSplitGroup"]
+        var roleCounts: [String: Int] = [:]
+        var pressRoles: [String: Int] = [:]
+        var menuRoles: [String: Int] = [:]
         let started = ProcessInfo.processInfo.systemUptime
         while index < queue.count &&
             ProcessInfo.processInfo.systemUptime - started < 5.0 {
@@ -501,6 +506,8 @@ final class DockRecentWindowRestorer {
             index += 1
             guard seen.insert(String(CFHash(element))).inserted else { continue }
             let role = str(element, kAXRoleAttribute)
+            let safeRole = safeRoles.contains(role) ? role : "other"
+            roleCounts[safeRole, default: 0] += 1
             if ["AXTextField", "AXSearchField", "AXComboBox"].contains(role) {
                 inputs += 1
                 if (read(element, kAXValueAttribute) as? String) == "ChatGPT" {
@@ -513,12 +520,18 @@ final class DockRecentWindowRestorer {
             if role == "AXButton" { buttons += 1 }
             if role == "AXLink" { links += 1 }
             if role == "AXGroup" { groups += 1 }
-            if ["AXRow", "AXCell", "AXMenuItem", "AXButton", "AXLink", "AXGroup"].contains(role) {
+            if ["AXRow", "AXCell", "AXMenuItem", "AXButton", "AXLink", "AXGroup", "AXOption", "AXList", "AXListBox"].contains(role) {
                 var rawActions: CFArray?
                 if AXUIElementCopyActionNames(element, &rawActions) == .success,
                    let actions = rawActions as? [String] {
-                    if actions.contains("AXPress") { pressable += 1 }
-                    if actions.contains("AXShowMenu") { menuActions += 1 }
+                    if actions.contains("AXPress") {
+                        pressable += 1
+                        pressRoles[safeRole, default: 0] += 1
+                    }
+                    if actions.contains("AXShowMenu") {
+                        menuActions += 1
+                        menuRoles[safeRole, default: 0] += 1
+                    }
                 }
                 if let identifier = read(element, kAXIdentifierAttribute) as? String,
                    !identifier.isEmpty { nonemptyIDs += 1 }
@@ -542,12 +555,17 @@ final class DockRecentWindowRestorer {
         let (after, _) = snapshot()
         let preserved = after == expected
         let queryValid = inputs == 1 && queryMatches == 1
+        func summary(_ counts: [String: Int]) -> String {
+            counts.keys.sorted().map { "\($0):\(counts[$0] ?? 0)" }.joined(separator: ",")
+        }
         completed(preserved && !limited && queryValid,
             "count=8 minimized=3 queryValid=\(queryValid) " +
             "rows=\(rows) cells=\(cells) menuItems=\(menuItems) " +
             "buttons=\(buttons) links=\(links) groups=\(groups) " +
             "pressable=\(pressable) menuActions=\(menuActions) " +
             "nonemptyIDs=\(nonemptyIDs) chatURLs=\(chatURLs) " +
+            "roleCounts=\(summary(roleCounts)) " +
+            "pressRoles=\(summary(pressRoles)) menuRoles=\(summary(menuRoles)) " +
             "visited=\(seen.count) limited=\(limited) " +
             "originalsPreserved=\(preserved)")
     }
