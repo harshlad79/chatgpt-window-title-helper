@@ -310,6 +310,103 @@ final class DockRecentWindowRestorer {
             "dialogs=\(scan.dialogs) originalsPreserved=\(preserved)")
     }
 
+    // Explicit one-shot Search UI press on the previously verified eighth window.
+    // Requires an exact eight-window census, a fixed ChatGPT PID and the target
+    // already focused. No activation, AXRaise, text input or result selection.
+    func probeIsolatedSearchPress(
+        expectedID: String, expectedSnapshot: String, expectedPID: pid_t,
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }), app.processIdentifier == expectedPID else {
+            completed(false, "busy-AX-or-pid-changed"); return
+        }
+        var expected: [String: Bool] = [:]
+        for entry in expectedSnapshot.split(separator: ",") {
+            let fields = entry.split(separator: ":")
+            guard fields.count == 2,
+                  (fields[1] == "0" || fields[1] == "1"),
+                  expected[String(fields[0])] == nil else {
+                completed(false, "invalid-baseline"); return
+            }
+            expected[String(fields[0])] = fields[1] == "1"
+        }
+        guard expected.count == 8, expected[expectedID] == false,
+              expected.values.filter({ $0 }).count == 3 else {
+            completed(false, "unexpected-baseline"); return
+        }
+        let root = AXUIElementCreateApplication(expectedPID)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        func baselineSafe() -> (Bool, AXUIElement?) {
+            let windows = self.winList(root)
+            guard windows.count == 8 else { return (false, nil) }
+            var actual: [String: Bool] = [:]
+            for window in windows {
+                let id = String(CFHash(window))
+                guard actual[id] == nil,
+                      self.str(window, kAXRoleAttribute) == "AXWindow",
+                      let minimized = (self.read(window, kAXMinimizedAttribute)
+                          as? NSNumber)?.boolValue else { return (false, nil) }
+                actual[id] = minimized
+            }
+            guard actual == expected,
+                  let target = windows.first(where: {
+                      String(CFHash($0)) == expectedID
+                  }), self.title(target) == "ChatGPT" else {
+                return (false, nil)
+            }
+            return (true, target)
+        }
+        guard baselineSafe().0,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == expectedPID,
+              let rawFocused = read(root, kAXFocusedWindowAttribute),
+              CFGetTypeID(rawFocused) == AXUIElementGetTypeID(),
+              String(CFHash(rawFocused as! AXUIElement)) == expectedID,
+              let target = baselineSafe().1 else {
+            completed(false, "baseline-or-target-focus-changed"); return
+        }
+        let scan = searchUIScan(target)
+        guard !scan.limited, scan.buttons.count == 1,
+              scan.inputs == 0, scan.dialogs == 0,
+              baselineSafe().0,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == expectedPID,
+              let rawFocusAgain = read(root, kAXFocusedWindowAttribute),
+              CFGetTypeID(rawFocusAgain) == AXUIElementGetTypeID(),
+              String(CFHash(rawFocusAgain as! AXUIElement)) == expectedID else {
+            completed(false, "search-button-or-prepress-guard-failed"); return
+        }
+        busy = true
+        guard press(scan.buttons[0]) else {
+            busy = false
+            completed(false, "isolated-search-AXPress-failed"); return
+        }
+        let started = ProcessInfo.processInfo.systemUptime
+        func poll() {
+            let safe = baselineSafe().0
+            guard safe else {
+                self.busy = false
+                completed(false, "postpress-window-census-changed"); return
+            }
+            let after = self.searchUIScan(target)
+            let opened = !after.limited &&
+                (after.inputs > scan.inputs || after.dialogs > scan.dialogs)
+            if !opened && !after.limited &&
+                ProcessInfo.processInfo.systemUptime - started < 6.0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { poll() }
+                return
+            }
+            self.busy = false
+            completed(opened,
+                "isolatedSearchPressed=true opened=\\(opened) " +
+                "beforeInputs=\\(scan.inputs) afterInputs=\\(after.inputs) " +
+                "beforeDialogs=\\(scan.dialogs) afterDialogs=\\(after.dialogs) " +
+                "AXLimited=\\(after.limited) originalsPreserved=\\(safe)")
+        }
+        poll()
+    }
+
     // Explicit opt-in, read-only measurement of the *currently focused*
     // ChatGPT AXWindow. It never creates/navigates/raises/closes a window,
     // enters a search query, or logs private titles, IDs, or contents.
