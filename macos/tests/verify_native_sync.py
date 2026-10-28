@@ -423,3 +423,28 @@ assert 'fileNewWindow(' not in press_probe
 assert 'app.activate()' not in press_probe
 assert 'AXUIElementSetAttributeValue' not in press_probe
 assert 'dockRecentMatches(' not in press_probe
+
+# Reversible isolated Search contrast must not touch owner windows or results.
+assert 'TITLEHELPER_SAFE_ISOLATED_QUERY_CONTRAST' in new
+assert 'self.recentRestorer.probeIsolatedSearchContrast(' in new
+assert 'isolated-query-contrast success=' in new
+contrast_probe = restorer.split(
+    '    func probeIsolatedSearchContrast(', 1
+)[1].split('    // Read-only capability check', 1)[0]
+for required in [
+    'expected.count == 8', 'expected[expectedID] == false',
+    'expected.values.filter({ $0 }).count == 3',
+    'targetSafe()', 'kAXFocusedWindowAttribute',
+    'AXUIElementIsAttributeSettable', 'AXUIElementSetAttributeValue',
+    'zzqv_noresults_20261029_isolated8',
+    '"ChatGPT" as NSString', 'noMatchReadback',
+    'restored=', 'contrastObserved=', 'before=', 'noMatch=', 'after=',
+    'originalsPreserved=', 'probeIsolatedSearchResultActions('
+]:
+    assert required in contrast_probe, required
+for forbidden in [
+    'AXUIElementPerformAction', 'fileNewWindow(', 'app.activate(',
+    'dockRecentMatches(', 'sendMessage(', 'typeText(', 'press(',
+    'NSLog(', 'print('
+]:
+    assert forbidden not in contrast_probe, forbidden
