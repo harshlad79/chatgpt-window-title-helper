@@ -431,6 +431,127 @@ final class DockRecentWindowRestorer {
             "originalsPreserved=\(preserved)")
     }
 
+    // Read-only AX role/action census for the already queried isolated window.
+    // Never reveal titles, result values, IDs, URLs or message text.
+    func probeIsolatedSearchResultActions(
+        expectedID: String, expectedSnapshot: String, expectedPID: pid_t,
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }), app.processIdentifier == expectedPID else {
+            completed(false, "result-actions-AX-or-pid-unavailable"); return
+        }
+        var expected: [String: Bool] = [:]
+        for entry in expectedSnapshot.split(separator: ",") {
+            let fields = entry.split(separator: ":")
+            guard fields.count == 2,
+                  (fields[1] == "0" || fields[1] == "1"),
+                  expected[String(fields[0])] == nil else {
+                completed(false, "result-actions-invalid-baseline"); return
+            }
+            expected[String(fields[0])] = fields[1] == "1"
+        }
+        guard expected.count == 8, expected[expectedID] == false,
+              expected.values.filter({ $0 }).count == 3 else {
+            completed(false, "result-actions-unexpected-baseline"); return
+        }
+        let root = AXUIElementCreateApplication(expectedPID)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        func snapshot() -> ([String: Bool]?, AXUIElement?) {
+            let windows = winList(root)
+            guard windows.count == 8 else { return (nil, nil) }
+            var actual: [String: Bool] = [:]
+            for window in windows {
+                let id = String(CFHash(window))
+                guard actual[id] == nil,
+                      str(window, kAXRoleAttribute) == "AXWindow",
+                      let minimized = (read(window, kAXMinimizedAttribute)
+                          as? NSNumber)?.boolValue else { return (nil, nil) }
+                actual[id] = minimized
+            }
+            return (actual, windows.first(where: {
+                String(CFHash($0)) == expectedID
+            }))
+        }
+        let (before, target) = snapshot()
+        guard before == expected, let target, title(target) == "ChatGPT" else {
+            completed(false, "result-actions-baseline-or-target-changed"); return
+        }
+        var queue: [AXUIElement] = [target]
+        var seen: Set<String> = []
+        var index = 0
+        var inputs = 0
+        var queryMatches = 0
+        var rows = 0
+        var cells = 0
+        var menuItems = 0
+        var buttons = 0
+        var links = 0
+        var groups = 0
+        var pressable = 0
+        var menuActions = 0
+        var nonemptyIDs = 0
+        var chatURLs = 0
+        let started = ProcessInfo.processInfo.systemUptime
+        while index < queue.count &&
+            ProcessInfo.processInfo.systemUptime - started < 5.0 {
+            let element = queue[index]
+            index += 1
+            guard seen.insert(String(CFHash(element))).inserted else { continue }
+            let role = str(element, kAXRoleAttribute)
+            if ["AXTextField", "AXSearchField", "AXComboBox"].contains(role) {
+                inputs += 1
+                if (read(element, kAXValueAttribute) as? String) == "ChatGPT" {
+                    queryMatches += 1
+                }
+            }
+            if role == "AXRow" { rows += 1 }
+            if role == "AXCell" { cells += 1 }
+            if role == "AXMenuItem" { menuItems += 1 }
+            if role == "AXButton" { buttons += 1 }
+            if role == "AXLink" { links += 1 }
+            if role == "AXGroup" { groups += 1 }
+            if ["AXRow", "AXCell", "AXMenuItem", "AXButton", "AXLink", "AXGroup"].contains(role) {
+                var rawActions: CFArray?
+                if AXUIElementCopyActionNames(element, &rawActions) == .success,
+                   let actions = rawActions as? [String] {
+                    if actions.contains("AXPress") { pressable += 1 }
+                    if actions.contains("AXShowMenu") { menuActions += 1 }
+                }
+                if let identifier = read(element, kAXIdentifierAttribute) as? String,
+                   !identifier.isEmpty { nonemptyIDs += 1 }
+                if let rawURL = read(element, kAXURLAttribute) {
+                    let value: String
+                    if let url = rawURL as? URL { value = url.absoluteString }
+                    else { value = rawURL as? String ?? "" }
+                    if value.hasPrefix("https://chatgpt.com/c/") {
+                        chatURLs += 1
+                    }
+                }
+            }
+            var next = children(element)
+            if next.isEmpty {
+                next = (read(element, kAXVisibleChildrenAttribute)
+                    as? [AXUIElement]) ?? []
+            }
+            queue.append(contentsOf: next)
+        }
+        let limited = index < queue.count
+        let (after, _) = snapshot()
+        let preserved = after == expected
+        let queryValid = inputs == 1 && queryMatches == 1
+        completed(preserved && !limited && queryValid,
+            "count=8 minimized=3 queryValid=\(queryValid) " +
+            "rows=\(rows) cells=\(cells) menuItems=\(menuItems) " +
+            "buttons=\(buttons) links=\(links) groups=\(groups) " +
+            "pressable=\(pressable) menuActions=\(menuActions) " +
+            "nonemptyIDs=\(nonemptyIDs) chatURLs=\(chatURLs) " +
+            "visited=\(seen.count) limited=\(limited) " +
+            "originalsPreserved=\(preserved)")
+    }
+
     // Read-only capability check for the existing isolated Search input.
     // No AXSetValue, AXPress, activation, query, selection or navigation.
     func probeIsolatedSearchInputCapabilities(
