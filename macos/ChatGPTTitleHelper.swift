@@ -1642,6 +1642,23 @@ final class OverlayController:
                 }
             }
         }
+        // One-shot, identity-fenced read-only scan of the eighth blank window.
+        // Both environment variables must be explicitly supplied; ordinary
+        // launch never scans the isolated window.
+        if let isolatedID = ProcessInfo.processInfo.environment[
+            "TITLEHELPER_SAFE_ISOLATED_WINDOW_ID"],
+           let baseline = ProcessInfo.processInfo.environment[
+            "TITLEHELPER_SAFE_ISOLATED_WINDOW_BASELINE"] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self else { return }
+                self.recentRestorer.probeIsolatedWindowMetrics(
+                    expectedID: isolatedID, expectedSnapshot: baseline
+                ) { success, detail in
+                    TitleHelperDiagnostics.shared.record(
+                        "isolated-window-metrics success=\(success) \(detail)")
+                }
+            }
+        }
         // Explicit read-only census of the currently focused ChatGPT window.
         // Never create a window, activate ChatGPT, or press any control.
         if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_FOCUSED_SEARCH_METRICS"] == "1" {
