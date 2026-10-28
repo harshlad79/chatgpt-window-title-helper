@@ -130,7 +130,14 @@ assert 'AXUIElementSetAttributeValue(area' not in new
 
 # Share/copy-link discovery must remain read-only and bounded.
 assert 'boundedShareControlCensus' in new
-assert 'index < 96' in new
+share_scan = new.split('private func boundedShareControlCensus(', 1)[1].split('// Read-only observation can safely subscribe', 1)[0]
+assert 'index < 96' not in share_scan
+assert 'children.prefix(12)' not in share_scan
+assert 'while index < queue.count &&' in share_scan
+assert 'ProcessInfo.processInfo.systemUptime - started < 2.0' in share_scan
+assert 'queue.append(contentsOf: children)' in share_scan
+assert 'queue.count - index, index < queue.count' in share_scan
+assert 'shareScanElapsedMs=' in new and 'shareScanRemaining=' in new
 assert 'ProcessInfo.processInfo.systemUptime - started < 2.0' in new
 assert 'shareCandidates=' in new and 'copyLinkCandidates=' in new
 assert 'shareNodesVisited=' in new and 'shareScanLimited=' in new
