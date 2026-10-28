@@ -270,6 +270,27 @@ assert 'AXUIElementSetAttributeValue' not in search_probe
 assert 'setValue(' not in search_probe
 assert 'typeText' not in search_probe
 
+# Read-only, opt-in focus diagnostics distinguish baseline, foreground and
+# target-focused conditions without pressing or exposing other window identities.
+assert 'TITLEHELPER_SAFE_ISOLATED_FOCUS_DIAG' in new
+assert 'self.recentRestorer.probeIsolatedFocusGate(' in new
+assert 'isolated-focus-gate success=' in new
+focus_diag = restorer.split('    func probeIsolatedFocusGate(', 1)[1].split(
+    '    // Explicit one-shot Search UI press', 1)[0]
+assert 'expected.count == 8' in focus_diag
+assert 'actual == expected' not in focus_diag
+assert 'before == expected' in focus_diag and 'after == expected' in focus_diag
+assert 'kAXFocusedWindowAttribute' in focus_diag
+assert 'chatgptFrontmost=' in focus_diag
+assert 'focusedWindowAvailable=' in focus_diag
+assert 'isolatedTargetFocused=' in focus_diag
+assert 'originalsPreserved=true' in focus_diag
+assert 'AXUIElementPerformAction' not in focus_diag
+assert 'AXUIElementSetAttributeValue' not in focus_diag
+assert 'fileNewWindow(' not in focus_diag
+assert 'press(' not in focus_diag
+assert 'app.activate()' not in focus_diag
+
 # Isolated eighth-window Search press: fail closed on identity, PID and focus.
 # It must not create a ninth window or navigate/type/select owner content.
 assert 'TITLEHELPER_SAFE_ISOLATED_SEARCH_PRESS' in new
