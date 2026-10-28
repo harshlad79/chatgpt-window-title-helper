@@ -313,7 +313,7 @@ assert 'TITLEHELPER_SAFE_ISOLATED_RESULT_METADATA' in new
 assert 'self.recentRestorer.probeIsolatedSearchResultMetadata(' in new
 assert 'isolated-result-metadata success=' in new
 metadata_probe = restorer.split('    func probeIsolatedSearchResultMetadata(', 1)[1].split(
-    '    // Read-only capability check', 1)[0]
+    '    // Opt-in reversible contrast', 1)[0]
 assert 'app.processIdentifier == expectedPID' in metadata_probe
 assert 'expected.count == 8' in metadata_probe
 assert 'before == expected' in metadata_probe and 'after == expected' in metadata_probe
@@ -333,7 +333,7 @@ assert 'self.recentRestorer.probeIsolatedSearchResultActions(' in new
 assert 'isolated-result-actions success=' in new
 result_actions_probe = restorer.split(
     '    func probeIsolatedSearchResultActions(', 1
-)[1].split('    // Read-only capability check', 1)[0]
+)[1].split('    // Opt-in reversible contrast', 1)[0]
 for required in ['expected.count == 8', 'expected[expectedID] == false',
                  'expected.values.filter({ $0 }).count == 3',
                  'before == expected', 'after == expected',
