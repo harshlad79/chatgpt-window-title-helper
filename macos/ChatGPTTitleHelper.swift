@@ -2494,26 +2494,6 @@ final class OverlayController:
                     "matchedSaved=\(matchedSaved)/\(saved.count) " +
                     "matchedPrevious=\(matchedPrevious)/\(previous.count) " +
                     "matchedRecent=\(matchedRecent)/\(recent.count)")
-                // Explicit one-shot diagnostic of the common, static app: AXURL.
-                // Only reveal it when every sampled conversation has the same
-                // URL and it contains no query, fragment, ID-shaped path or
-                // characters outside the expected static app-origin alphabet.
-                // Never log per-conversation URLs or message content.
-                if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_COMMON_APP_AXURL"] == "1" {
-                    if webURLPresent == samples.count, samples.count >= 2,
-                       webURLs.count == 1, let common = webURLs.first,
-                       common.count <= 160,
-                       common.range(of: "^[A-Za-z0-9._:/-]+$", options: .regularExpression) != nil,
-                       let parsed = URLComponents(string: common),
-                       parsed.scheme?.lowercased() == "app",
-                       parsed.query == nil, parsed.fragment == nil,
-                       !parsed.path.contains("/c/"),
-                       common.range(of: "(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", options: .regularExpression) == nil {
-                        TitleHelperDiagnostics.shared.record("ax-common-app-url verified=\(samples.count) value=\(common)")
-                    } else {
-                        TitleHelperDiagnostics.shared.record("ax-common-app-url blocked=not-static-common")
-                    }
-                }
                 TitleHelperDiagnostics.shared.record(
                     "ax-minimized-metadata pid=\(pid) checked=\(minimized) " +
                     "document=\(documentCount) uniqueDocument=\(documents.count) " +
@@ -2696,6 +2676,26 @@ final class OverlayController:
                     "matchedSaved=\(matchedSaved)/\(saved.count) " +
                     "matchedPrevious=\(matchedPrevious)/\(previous.count) " +
                     "matchedRecent=\(matchedRecent)/\(recent.count)")
+                // Explicit one-shot diagnostic of the common, static app: AXURL.
+                // Only reveal it when every sampled conversation has the same
+                // URL and it contains no query, fragment, ID-shaped path or
+                // characters outside the expected static app-origin alphabet.
+                // Never log per-conversation URLs or message content.
+                if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_COMMON_APP_AXURL"] == "1" {
+                    if webURLPresent == samples.count, samples.count >= 2,
+                       webURLs.count == 1, let common = webURLs.first,
+                       common.count <= 160,
+                       common.range(of: "^[A-Za-z0-9._:/-]+$", options: .regularExpression) != nil,
+                       let parsed = URLComponents(string: common),
+                       parsed.scheme?.lowercased() == "app",
+                       parsed.query == nil, parsed.fragment == nil,
+                       !parsed.path.contains("/c/"),
+                       common.range(of: "(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", options: .regularExpression) == nil {
+                        TitleHelperDiagnostics.shared.record("ax-common-app-url verified=\(samples.count) value=\(common)")
+                    } else {
+                        TitleHelperDiagnostics.shared.record("ax-common-app-url blocked=not-static-common")
+                    }
+                }
             }
         }
         // Save only a complete known title census, never transient missing
