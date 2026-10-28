@@ -189,3 +189,22 @@ assert 'originalsRetained' in restore
 assert 'originalMinimized' in restore
 assert restore.index('frontmostApplication?.processIdentifier') < restore.index('self.press(newWindowMenu)')
 assert restore.index('func waitForNewWindow()') < restore.index('self.dockRecentMatches(title)')
+
+# Search UI diagnostic is opt-in, creates a fresh window, and never types,
+# selects a result, or navigates a saved owner conversation.
+assert 'TITLEHELPER_SAFE_SEARCH_UI_PROBE' in new
+assert 'self.recentRestorer.probeSearchUI' in new
+assert 'func probeSearchUI(completed:' in restorer
+assert 'private func probeSearchOnNewWindow(' in restorer
+assert 'newWindowFocused()' in restorer
+assert 'originalsSafe()' in restorer
+assert 'search-button-count=' in restorer
+assert 'self.press(scan.buttons[0])' in restorer
+assert 'search-UI-only opened=' in restorer
+search_probe = restorer.split('    func probeSearchUI(completed:', 1)[1].split('    func restore(title:', 1)[0]
+assert 'fileNewWindow(root)' in search_probe
+assert 'self.probeSearchOnNewWindow(' in search_probe
+assert 'dockRecentMatches(' not in search_probe
+assert 'AXUIElementSetAttributeValue' not in search_probe
+assert 'setValue(' not in search_probe
+assert 'typeText' not in search_probe
