@@ -211,6 +211,25 @@ assert 'index < 800' not in search_scan
 assert 'next.prefix(' not in search_scan
 assert 'index >= 800' not in search_scan
 assert 'let timedOut = index < queue.count &&' in search_scan
+# No-click focused-window Search scan measurement: no new native window,
+# AX mutation, user content, or unbounded node-count cap.
+assert 'TITLEHELPER_SAFE_FOCUSED_SEARCH_METRICS' in new
+assert 'self.recentRestorer.probeFocusedSearchMetrics' in new
+assert 'focused-search-metrics success=' in new
+assert 'func probeFocusedSearchMetrics(' in restorer
+assert 'visited.count, Int(elapsed * 1000), queue.count - index' in search_scan
+assert 'remainingCount: Int' in search_scan
+metrics_probe = restorer.split('    func probeFocusedSearchMetrics(', 1)[1].split('    private func probeSearchOnNewWindow(', 1)[0]
+assert 'kAXFocusedWindowAttribute' in metrics_probe
+assert 'kAXFocusedUIElementAttribute' in metrics_probe
+assert 'searchUIScan(focused)' in metrics_probe
+assert 'windowsPreserved=' in metrics_probe
+assert 'timedOut=' in metrics_probe and 'elapsedMs=' in metrics_probe
+assert 'fileNewWindow(' not in metrics_probe
+assert 'self.press(' not in metrics_probe
+assert 'AXUIElementSetAttributeValue' not in metrics_probe
+assert 'app.activate()' not in metrics_probe
+
 search_probe = restorer.split('    func probeSearchUI(completed:', 1)[1].split('    func restore(title:', 1)[0]
 assert 'fileNewWindow(root)' in search_probe
 assert 'self.probeSearchOnNewWindow(' in search_probe
