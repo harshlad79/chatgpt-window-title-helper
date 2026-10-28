@@ -279,6 +279,40 @@ final class DockRecentWindowRestorer {
         } else {
             focusedRole = "unavailable"
         }
+        // The focused palette can be in a different native window than the
+        // historical test window. Inspect only AX roles/ownership; no labels.
+        let nativeKind = title(focused) == "ChatGPT" ? "generic" :
+            (title(focused).isEmpty ? "empty" : "named")
+        let genericWindows = originals.filter { title($0) == "ChatGPT" }.count
+        let focusedIndex = ids.firstIndex(of: focusedID) ?? -1
+        var focusedUIWindowMatched = false
+        var focusedParentWindowMatched = false
+        var focusedParentDepth = 0
+        if let rawUI = read(root, kAXFocusedUIElementAttribute),
+           CFGetTypeID(rawUI) == AXUIElementGetTypeID() {
+            let ui = rawUI as! AXUIElement
+            if let rawOwner = read(ui, kAXWindowAttribute),
+               CFGetTypeID(rawOwner) == AXUIElementGetTypeID() {
+                focusedUIWindowMatched = String(CFHash(rawOwner)) == focusedID
+            }
+            var current = ui
+            var seen = Set<String>()
+            // Parent-only chain: never enumerate private message descendants.
+            while focusedParentDepth < 24 {
+                let key = String(CFHash(current))
+                guard seen.insert(key).inserted else { break }
+                if key == focusedID {
+                    focusedParentWindowMatched = true
+                    break
+                }
+                AXUIElementSetMessagingTimeout(current, 0.2)
+                guard let rawParent = read(current, kAXParentAttribute),
+                      CFGetTypeID(rawParent) == AXUIElementGetTypeID()
+                else { break }
+                current = rawParent as! AXUIElement
+                focusedParentDepth += 1
+            }
+        }
         let scan = searchUIScan(focused)
         let after = winList(root)
         let statesPreserved = after.count == originals.count &&
@@ -292,7 +326,12 @@ final class DockRecentWindowRestorer {
             "visited=\(scan.visitedCount) elapsedMs=\(scan.elapsedMs) " +
             "remaining=\(scan.remainingCount) timedOut=\(scan.limited) " +
             "searchButtons=\(scan.buttons.count) inputs=\(scan.inputs) " +
-            "dialogs=\(scan.dialogs) windowsPreserved=\(statesPreserved)")
+            "dialogs=\(scan.dialogs) windowsPreserved=\(statesPreserved) " +
+            "nativeKind=\(nativeKind) genericWindows=\(genericWindows) " +
+            "focusedIndex=\(focusedIndex) minimizedWindows=\(beforeMinimized.filter { $0 == true }.count) " +
+            "uiWindowMatched=\(focusedUIWindowMatched) " +
+            "parentWindowMatched=\(focusedParentWindowMatched) " +
+            "parentDepth=\(focusedParentDepth)")
     }
 
     private func probeSearchOnNewWindow(
