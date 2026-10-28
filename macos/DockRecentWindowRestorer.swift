@@ -288,11 +288,11 @@ final class DockRecentWindowRestorer {
                     beforeMinimized[i]
             }
         completed(statesPreserved,
-            "windowCount=\\(originals.count) focusedRole=\\(focusedRole) " +
-            "visited=\\(scan.visitedCount) elapsedMs=\\(scan.elapsedMs) " +
-            "remaining=\\(scan.remainingCount) timedOut=\\(scan.limited) " +
-            "searchButtons=\\(scan.buttons.count) inputs=\\(scan.inputs) " +
-            "dialogs=\\(scan.dialogs) windowsPreserved=\\(statesPreserved)")
+            "windowCount=\(originals.count) focusedRole=\(focusedRole) " +
+            "visited=\(scan.visitedCount) elapsedMs=\(scan.elapsedMs) " +
+            "remaining=\(scan.remainingCount) timedOut=\(scan.limited) " +
+            "searchButtons=\(scan.buttons.count) inputs=\(scan.inputs) " +
+            "dialogs=\(scan.dialogs) windowsPreserved=\(statesPreserved)")
     }
 
     private func probeSearchOnNewWindow(
