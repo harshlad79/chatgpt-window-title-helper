@@ -191,7 +191,8 @@ final class DockRecentWindowRestorer {
     // build (visible=false), not a File-menu AXMenuItem. Probe the visible
     // sidebar Search AXButton on an independently verified new window only.
     private func searchUIScan(_ window: AXUIElement)
-        -> (buttons: [AXUIElement], inputs: Int, dialogs: Int, limited: Bool) {
+        -> (buttons: [AXUIElement], inputs: Int, dialogs: Int, limited: Bool,
+            visitedCount: Int, elapsedMs: Int, remainingCount: Int) {
         let allowed: Set<String> = [
             "search", "search chats", "search chats…", "search conversations",
             "검색", "채팅 검색", "채팅 검색…", "대화 검색", "대화 검색…"
@@ -233,9 +234,65 @@ final class DockRecentWindowRestorer {
             }
             queue.append(contentsOf: next)
         }
-        let timedOut = index < queue.count &&
-            ProcessInfo.processInfo.systemUptime - started >= 5.0
-        return (buttons, inputs, dialogs, timedOut)
+        let elapsed = ProcessInfo.processInfo.systemUptime - started
+        let timedOut = index < queue.count && elapsed >= 5.0
+        return (buttons, inputs, dialogs, timedOut,
+            visited.count, Int(elapsed * 1000), queue.count - index)
+    }
+
+    // Explicit opt-in, read-only measurement of the *currently focused*
+    // ChatGPT AXWindow. It never creates/navigates/raises/closes a window,
+    // enters a search query, or logs private titles, IDs, or contents.
+    func probeFocusedSearchMetrics(completed: @escaping (Bool, String) -> Void) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }) else { completed(false, "no-AX-or-app"); return }
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier ==
+                app.processIdentifier else {
+            completed(false, "ChatGPT-not-frontmost"); return
+        }
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        let originals = winList(root)
+        let ids = originals.map { String(CFHash($0)) }
+        guard !originals.isEmpty, Set(ids).count == originals.count,
+              let rawFocused = read(root, kAXFocusedWindowAttribute),
+              CFGetTypeID(rawFocused) == AXUIElementGetTypeID() else {
+            completed(false, "window-census-or-focus-unavailable"); return
+        }
+        let focused = rawFocused as! AXUIElement
+        let focusedID = String(CFHash(focused))
+        guard ids.contains(focusedID),
+              (read(focused, kAXMinimizedAttribute) as? NSNumber)?.boolValue == false
+        else { completed(false, "focused-window-not-eligible"); return }
+        let beforeMinimized = originals.map {
+            (read($0, kAXMinimizedAttribute) as? NSNumber)?.boolValue
+        }
+        guard beforeMinimized.allSatisfy({ $0 != nil }) else {
+            completed(false, "minimized-state-unavailable"); return
+        }
+        let focusedRole: String
+        if let rawFocus = read(root, kAXFocusedUIElementAttribute),
+           CFGetTypeID(rawFocus) == AXUIElementGetTypeID() {
+            focusedRole = str(rawFocus as! AXUIElement, kAXRoleAttribute)
+        } else {
+            focusedRole = "unavailable"
+        }
+        let scan = searchUIScan(focused)
+        let after = winList(root)
+        let statesPreserved = after.count == originals.count &&
+            after.map({ String(CFHash($0)) }) == ids &&
+            after.enumerated().allSatisfy { i, item in
+                (read(item, kAXMinimizedAttribute) as? NSNumber)?.boolValue ==
+                    beforeMinimized[i]
+            }
+        completed(statesPreserved,
+            "windowCount=\\(originals.count) focusedRole=\\(focusedRole) " +
+            "visited=\\(scan.visitedCount) elapsedMs=\\(scan.elapsedMs) " +
+            "remaining=\\(scan.remainingCount) timedOut=\\(scan.limited) " +
+            "searchButtons=\\(scan.buttons.count) inputs=\\(scan.inputs) " +
+            "dialogs=\\(scan.dialogs) windowsPreserved=\\(statesPreserved)")
     }
 
     private func probeSearchOnNewWindow(
