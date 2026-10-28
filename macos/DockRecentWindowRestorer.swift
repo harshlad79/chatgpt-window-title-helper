@@ -479,9 +479,10 @@ final class DockRecentWindowRestorer {
         guard before == expected, let target, title(target) == "ChatGPT" else {
             completed(false, "result-actions-baseline-or-target-changed"); return
         }
-        // Track only safe AX roles and list ancestry. Never collect text/IDs.
-        var queue: [(element: AXUIElement, parentRole: String, insideList: Bool)] = [
-            (element: target, parentRole: "root", insideList: false)
+        // Track fixed AX roles, per-list ancestry and aggregate query-match counts.
+        // Never emit any text, IDs, URLs, hashes, or raw accessibility values.
+        var queue: [(element: AXUIElement, parentRole: String, listIndex: Int?)] = [
+            (element: target, parentRole: "root", listIndex: nil)
         ]
         var seen: Set<String> = []
         var index = 0
@@ -502,6 +503,11 @@ final class DockRecentWindowRestorer {
         var roleCounts: [String: Int] = [:]
         var listParentRoles: [String: Int] = [:]
         var listDirectChildren: [Int] = []
+        var listDirectRoles: [Int: [String: Int]] = [:]
+        var listPressGroups: [Int: Int] = [:]
+        var listTextNodes: [Int: Int] = [:]
+        var listQueryTextNodes: [Int: Int] = [:]
+        var listPressParentRoles: [Int: [String: Int]] = [:]
         var groupParentRoles: [String: Int] = [:]
         var groupsInsideList = 0
         var pressGroupsInsideList = 0
@@ -521,7 +527,20 @@ final class DockRecentWindowRestorer {
             if role == "AXList" {
                 listParentRoles[node.parentRole, default: 0] += 1
             }
-            if role == "AXGroup" && node.insideList {
+            if let listIndex = node.listIndex {
+                if node.parentRole == "AXList" {
+                    listDirectRoles[listIndex, default: [:]][safeRole, default: 0] += 1
+                }
+                if role == "AXStaticText" {
+                    listTextNodes[listIndex, default: 0] += 1
+                    // Match count only. Never store or log the underlying text.
+                    if let value = read(element, kAXValueAttribute) as? String,
+                       value.range(of: "ChatGPT", options: .caseInsensitive) != nil {
+                        listQueryTextNodes[listIndex, default: 0] += 1
+                    }
+                }
+            }
+            if role == "AXGroup" && node.listIndex != nil {
                 groupsInsideList += 1
             }
             if ["AXTextField", "AXSearchField", "AXComboBox"].contains(role) {
@@ -545,13 +564,17 @@ final class DockRecentWindowRestorer {
                         pressRoles[safeRole, default: 0] += 1
                         if role == "AXGroup" {
                             groupParentRoles[node.parentRole, default: 0] += 1
-                            if node.insideList { pressGroupsInsideList += 1 }
+                            if let listIndex = node.listIndex {
+                                pressGroupsInsideList += 1
+                                listPressGroups[listIndex, default: 0] += 1
+                                listPressParentRoles[listIndex, default: [:]][node.parentRole, default: 0] += 1
+                            }
                         }
                     }
                     if actions.contains("AXShowMenu") {
                         menuActions += 1
                         menuRoles[safeRole, default: 0] += 1
-                        if role == "AXGroup" && node.insideList {
+                        if role == "AXGroup" && node.listIndex != nil {
                             menuGroupsInsideList += 1
                         }
                     }
@@ -572,10 +595,15 @@ final class DockRecentWindowRestorer {
                 next = (read(element, kAXVisibleChildrenAttribute)
                     as? [AXUIElement]) ?? []
             }
-            if role == "AXList" { listDirectChildren.append(next.count) }
+            let childListIndex: Int?
+            if role == "AXList" {
+                childListIndex = listDirectChildren.count
+                listDirectChildren.append(next.count)
+            } else {
+                childListIndex = node.listIndex
+            }
             queue.append(contentsOf: next.map {
-                (element: $0, parentRole: safeRole,
-                 insideList: node.insideList || role == "AXList")
+                (element: $0, parentRole: safeRole, listIndex: childListIndex)
             })
         }
         let limited = index < queue.count
@@ -585,6 +613,14 @@ final class DockRecentWindowRestorer {
         func summary(_ counts: [String: Int]) -> String {
             counts.keys.sorted().map { "\($0):\(counts[$0] ?? 0)" }.joined(separator: ",")
         }
+        let listDetails = listDirectChildren.indices.map { listIndex in
+            "\(listIndex):children=\(listDirectChildren[listIndex])" +
+            ":press=\(listPressGroups[listIndex, default: 0])" +
+            ":text=\(listTextNodes[listIndex, default: 0])" +
+            ":queryText=\(listQueryTextNodes[listIndex, default: 0])" +
+            ":directRoles=\(summary(listDirectRoles[listIndex, default: [:]]))" +
+            ":pressParents=\(summary(listPressParentRoles[listIndex, default: [:]]))"
+        }.joined(separator: ";")
         completed(preserved && !limited && queryValid,
             "count=8 minimized=3 queryValid=\(queryValid) " +
             "rows=\(rows) cells=\(cells) menuItems=\(menuItems) " +
@@ -597,6 +633,7 @@ final class DockRecentWindowRestorer {
             "pressGroupsInsideList=\(pressGroupsInsideList) " +
             "menuGroupsInsideList=\(menuGroupsInsideList) " +
             "pressGroupParents=\(summary(groupParentRoles)) " +
+            "listDetails=\(listDetails) " +
             "roleCounts=\(summary(roleCounts)) " +
             "pressRoles=\(summary(pressRoles)) menuRoles=\(summary(menuRoles)) " +
             "visited=\(seen.count) limited=\(limited) " +
