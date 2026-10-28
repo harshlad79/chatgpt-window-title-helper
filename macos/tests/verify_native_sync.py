@@ -205,7 +205,7 @@ assert 'search-UI-only opened=' in restorer
 # Never truncate a large Chromium AX tree by total node or per-parent count.
 search_scan = restorer.split('    private func searchUIScan(', 1)[1].split('    private func probeSearchOnNewWindow(', 1)[0]
 assert 'ProcessInfo.processInfo.systemUptime - started < 5.0' in search_scan
-assert 'ProcessInfo.processInfo.systemUptime - started >= 5.0' in search_scan
+assert 'let timedOut = index < queue.count && elapsed >= 5.0' in search_scan
 assert 'queue.append(contentsOf: next)' in search_scan
 assert 'index < 800' not in search_scan
 assert 'next.prefix(' not in search_scan
