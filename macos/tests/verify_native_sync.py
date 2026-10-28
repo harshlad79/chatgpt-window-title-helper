@@ -270,6 +270,25 @@ assert 'AXUIElementSetAttributeValue' not in search_probe
 assert 'setValue(' not in search_probe
 assert 'typeText' not in search_probe
 
+# Isolated result metadata probe: privacy-safe, read-only, identity-fenced.
+assert 'TITLEHELPER_SAFE_ISOLATED_RESULT_METADATA' in new
+assert 'self.recentRestorer.probeIsolatedSearchResultMetadata(' in new
+assert 'isolated-result-metadata success=' in new
+metadata_probe = restorer.split('    func probeIsolatedSearchResultMetadata(', 1)[1].split(
+    '    // One-shot, strictly read-only diagnosis', 1)[0]
+assert 'app.processIdentifier == expectedPID' in metadata_probe
+assert 'expected.count == 8' in metadata_probe
+assert 'before == expected' in metadata_probe and 'after == expected' in metadata_probe
+assert 'String(CFHash($0)) == expectedID' in metadata_probe
+assert 'AXUIElementCopyAttributeNames' in metadata_probe
+assert 'AXValue' in metadata_probe and 'AXIdentifier' in metadata_probe and 'AXURL' in metadata_probe
+assert 'uuidShaped=' in metadata_probe and 'chatURLShaped=' in metadata_probe
+assert 'originalsPreserved=' in metadata_probe
+for forbidden in ['AXUIElementPerformAction', 'AXUIElementSetAttributeValue',
+                  'fileNewWindow(', 'app.activate(', 'dockRecentMatches(',
+                  'press(', 'NSLog(', 'print(']:
+    assert forbidden not in metadata_probe, forbidden
+
 # Read-only, opt-in focus diagnostics distinguish baseline, foreground and
 # target-focused conditions without pressing or exposing other window identities.
 assert 'TITLEHELPER_SAFE_ISOLATED_FOCUS_DIAG' in new
