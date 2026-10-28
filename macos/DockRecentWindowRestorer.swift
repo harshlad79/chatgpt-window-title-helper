@@ -479,7 +479,10 @@ final class DockRecentWindowRestorer {
         guard before == expected, let target, title(target) == "ChatGPT" else {
             completed(false, "result-actions-baseline-or-target-changed"); return
         }
-        var queue: [AXUIElement] = [target]
+        // Track only safe AX roles and list ancestry. Never collect text/IDs.
+        var queue: [(element: AXUIElement, parentRole: String, insideList: Bool)] = [
+            (element: target, parentRole: "root", insideList: false)
+        ]
         var seen: Set<String> = []
         var index = 0
         var inputs = 0
@@ -497,17 +500,30 @@ final class DockRecentWindowRestorer {
         // Only fixed AX role names are emitted; never log UI labels or values.
         let safeRoles: Set<String> = ["AXWindow", "AXWebArea", "AXGroup", "AXButton", "AXStaticText", "AXList", "AXListBox", "AXOption", "AXRow", "AXCell", "AXMenuItem", "AXLink", "AXScrollArea", "AXTextField", "AXSearchField", "AXComboBox", "AXImage", "AXCheckBox", "AXHeading", "AXTextArea", "AXToolbar", "AXSplitGroup"]
         var roleCounts: [String: Int] = [:]
+        var listParentRoles: [String: Int] = [:]
+        var listDirectChildren: [Int] = []
+        var groupParentRoles: [String: Int] = [:]
+        var groupsInsideList = 0
+        var pressGroupsInsideList = 0
+        var menuGroupsInsideList = 0
         var pressRoles: [String: Int] = [:]
         var menuRoles: [String: Int] = [:]
         let started = ProcessInfo.processInfo.systemUptime
         while index < queue.count &&
             ProcessInfo.processInfo.systemUptime - started < 5.0 {
-            let element = queue[index]
+            let node = queue[index]
+            let element = node.element
             index += 1
             guard seen.insert(String(CFHash(element))).inserted else { continue }
             let role = str(element, kAXRoleAttribute)
             let safeRole = safeRoles.contains(role) ? role : "other"
             roleCounts[safeRole, default: 0] += 1
+            if role == "AXList" {
+                listParentRoles[node.parentRole, default: 0] += 1
+            }
+            if role == "AXGroup" && node.insideList {
+                groupsInsideList += 1
+            }
             if ["AXTextField", "AXSearchField", "AXComboBox"].contains(role) {
                 inputs += 1
                 if (read(element, kAXValueAttribute) as? String) == "ChatGPT" {
@@ -527,10 +543,17 @@ final class DockRecentWindowRestorer {
                     if actions.contains("AXPress") {
                         pressable += 1
                         pressRoles[safeRole, default: 0] += 1
+                        if role == "AXGroup" {
+                            groupParentRoles[node.parentRole, default: 0] += 1
+                            if node.insideList { pressGroupsInsideList += 1 }
+                        }
                     }
                     if actions.contains("AXShowMenu") {
                         menuActions += 1
                         menuRoles[safeRole, default: 0] += 1
+                        if role == "AXGroup" && node.insideList {
+                            menuGroupsInsideList += 1
+                        }
                     }
                 }
                 if let identifier = read(element, kAXIdentifierAttribute) as? String,
@@ -549,7 +572,11 @@ final class DockRecentWindowRestorer {
                 next = (read(element, kAXVisibleChildrenAttribute)
                     as? [AXUIElement]) ?? []
             }
-            queue.append(contentsOf: next)
+            if role == "AXList" { listDirectChildren.append(next.count) }
+            queue.append(contentsOf: next.map {
+                (element: $0, parentRole: safeRole,
+                 insideList: node.insideList || role == "AXList")
+            })
         }
         let limited = index < queue.count
         let (after, _) = snapshot()
@@ -564,6 +591,12 @@ final class DockRecentWindowRestorer {
             "buttons=\(buttons) links=\(links) groups=\(groups) " +
             "pressable=\(pressable) menuActions=\(menuActions) " +
             "nonemptyIDs=\(nonemptyIDs) chatURLs=\(chatURLs) " +
+            "listParents=\(summary(listParentRoles)) " +
+            "listChildren=\(listDirectChildren.map(String.init).joined(separator: ",")) " +
+            "groupsInsideList=\(groupsInsideList) " +
+            "pressGroupsInsideList=\(pressGroupsInsideList) " +
+            "menuGroupsInsideList=\(menuGroupsInsideList) " +
+            "pressGroupParents=\(summary(groupParentRoles)) " +
             "roleCounts=\(summary(roleCounts)) " +
             "pressRoles=\(summary(pressRoles)) menuRoles=\(summary(menuRoles)) " +
             "visited=\(seen.count) limited=\(limited) " +
