@@ -342,6 +342,9 @@ for required in ['expected.count == 8', 'expected[expectedID] == false',
                  'kAXURLAttribute', 'queryMatches == 1',
                  'originalsPreserved=', 'chatURLs=', 'pressable=',
                  'roleCounts=', 'pressRoles=', 'menuRoles=',
+                 'listParents=', 'listChildren=', 'groupsInsideList=',
+                 'pressGroupsInsideList=', 'menuGroupsInsideList=',
+                 'pressGroupParents=', 'node.insideList',
                  'safeRoles.contains(role)', '"AXOption"', '"AXListBox"']:
     assert required in result_actions_probe, required
 for forbidden in ['AXUIElementPerformAction', 'AXUIElementSetAttributeValue',
