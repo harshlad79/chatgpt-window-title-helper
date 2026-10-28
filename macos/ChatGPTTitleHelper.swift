@@ -1652,7 +1652,8 @@ final class OverlayController:
            ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_SEARCH_PRESS"] != "1",
            ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOCUS_DIAG"] != "1",
            ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOREGROUND_SEARCH"] != "1",
-           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_RESULT_METADATA"] != "1" {
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_RESULT_METADATA"] != "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_INPUT_CAPABILITIES"] != "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
                 guard let self else { return }
                 self.recentRestorer.probeIsolatedWindowMetrics(
@@ -1660,6 +1661,28 @@ final class OverlayController:
                 ) { success, detail in
                     TitleHelperDiagnostics.shared.record(
                         "isolated-window-metrics success=\(success) \(detail)")
+                }
+            }
+        }
+        // Explicit read-only input settable/empty capability probe; no typing.
+        if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_INPUT_CAPABILITIES"] == "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_SEARCH_PRESS"] != "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_RESULT_METADATA"] != "1",
+           let isolatedID = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_WINDOW_ID"],
+           let baseline = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_WINDOW_BASELINE"],
+           let pidText = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_SEARCH_PID"],
+           let expectedPID = Int32(pidText), expectedPID > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self else { return }
+                self.recentRestorer.probeIsolatedSearchInputCapabilities(
+                    expectedID: isolatedID, expectedSnapshot: baseline,
+                    expectedPID: expectedPID
+                ) { success, detail in
+                    TitleHelperDiagnostics.shared.record(
+                        "isolated-input-capabilities success=\(success) \(detail)")
                 }
             }
         }
