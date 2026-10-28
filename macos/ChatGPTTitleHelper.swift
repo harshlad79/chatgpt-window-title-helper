@@ -222,7 +222,7 @@ private func axWindowMetadataText(_ window: AXUIElement, _ key: String) -> Strin
     return ""
 }
 
-// Read-only, bounded census of user-facing share/copy-link controls in an
+// Read-only, time-bounded census of user-facing share/copy-link controls in an
 // ALREADY VISIBLE conversation AXWebArea. No AXPress, AXValue or raw labels.
 private func boundedShareControlCensus(
     _ root: AXUIElement
@@ -230,7 +230,7 @@ private func boundedShareControlCensus(
       shareEnabled: Int, sharePressable: Int, shareActionable: Int,
       shareMenuRole: Int, copyLinkEnabled: Int, copyLinkPressable: Int,
       openOnChatGPTControls: Int, openOnChatGPTConversationURLs: Int,
-      limited: Bool) {
+      elapsedMs: Int, remaining: Int, limited: Bool) {
     let started = ProcessInfo.processInfo.systemUptime
     var queue = [root]
     var seen: Set<String> = []
@@ -245,7 +245,7 @@ private func boundedShareControlCensus(
     var copyLinkPressable = 0
     var openOnChatGPTControls = 0
     var openOnChatGPTConversationURLs = 0
-    while index < queue.count && index < 96 &&
+    while index < queue.count &&
           ProcessInfo.processInfo.systemUptime - started < 2.0 {
         let element = queue[index]
         index += 1
@@ -315,15 +315,14 @@ private func boundedShareControlCensus(
                 ((axGet(element, kAXContentsAttribute)
                     as? [AXUIElement]) ?? [])
         }
-        for child in children.prefix(12) where queue.count < 96 {
-            queue.append(child)
-        }
+        queue.append(contentsOf: children)
     }
     return (seen.count, share, copyLink,
             shareEnabled, sharePressable, shareActionable,
             shareMenuRole, copyLinkEnabled, copyLinkPressable,
             openOnChatGPTControls, openOnChatGPTConversationURLs,
-            index < queue.count || index >= 96)
+            Int((ProcessInfo.processInfo.systemUptime - started) * 1000),
+            queue.count - index, index < queue.count)
 }
 
 // Read-only observation can safely subscribe to multiple title buttons.
@@ -2542,6 +2541,8 @@ final class OverlayController:
                 var openOnChatGPTConversationURLs = 0
                 var shareNodesVisited = 0
                 var shareScanLimited = 0
+                var shareScanElapsedMs = 0
+                var shareScanRemaining = 0
                 var webURLs = Set<String>()
                 var webURLPresent = 0
                 var webURLChatGPTHost = 0
@@ -2576,6 +2577,8 @@ final class OverlayController:
                     openOnChatGPTConversationURLs += controls.openOnChatGPTConversationURLs
                     shareNodesVisited += controls.visited
                     if controls.limited { shareScanLimited += 1 }
+                    shareScanElapsedMs += controls.elapsedMs
+                    shareScanRemaining += controls.remaining
                     _ = AXUIElementSetMessagingTimeout(area, 0.2)
                     _ = AXUIElementSetMessagingTimeout(window, 0.2)
                     let webURL = axWindowMetadataText(area, "AXURL")
@@ -2653,6 +2656,8 @@ final class OverlayController:
                     "openOnChatGPTConversationURLs=\(openOnChatGPTConversationURLs) " +
                     "shareNodesVisited=\(shareNodesVisited) " +
                     "shareScanLimited=\(shareScanLimited) " +
+                    "shareScanElapsedMs=\(shareScanElapsedMs) " +
+                    "shareScanRemaining=\(shareScanRemaining) " +
                     "webURL=\(webURLs.count) webURLPresent=\(webURLPresent) " +
                     "webURLChatGPTHost=\(webURLChatGPTHost) " +
                     "webURLChatGPTRoot=\(webURLChatGPTRoot) " +
