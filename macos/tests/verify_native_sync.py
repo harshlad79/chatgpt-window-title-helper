@@ -291,6 +291,29 @@ assert 'fileNewWindow(' not in focus_diag
 assert 'press(' not in focus_diag
 assert 'app.activate()' not in focus_diag
 
+# One-shot activation is restricted to the previously focused isolated window;
+# restore the prior foreground app only if ChatGPT still owns foreground.
+assert 'TITLEHELPER_SAFE_ISOLATED_FOREGROUND_SEARCH' in new
+assert 'self.recentRestorer.probeIsolatedForegroundSearch(' in new
+assert 'isolated-foreground-search success=' in new
+foreground_probe = restorer.split('    func probeIsolatedForegroundSearch(', 1)[1].split(
+    '    // Explicit opt-in, read-only measurement', 1)[0]
+assert 'expected.count == 8' in foreground_probe
+assert 'expected[expectedID] == false' in foreground_probe
+assert 'expected.values.filter({ $0 }).count == 3' in foreground_probe
+assert 'actual == expected' in foreground_probe
+assert 'targetFocused()' in foreground_probe
+assert 'app.activate(options:' in foreground_probe
+assert 'prior.activate(options:' in foreground_probe
+assert 'self.probeIsolatedSearchPress(' in foreground_probe
+assert 'NSWorkspace.shared.frontmostApplication?.processIdentifier ==' in foreground_probe
+assert 'originalsPreserved=' in foreground_probe
+assert 'priorFocusRestored=' in foreground_probe
+assert 'fileNewWindow(' not in foreground_probe
+assert 'AXUIElementPerformAction' not in foreground_probe
+assert 'AXUIElementSetAttributeValue' not in foreground_probe
+assert 'dockRecentMatches(' not in foreground_probe
+
 # Isolated eighth-window Search press: fail closed on identity, PID and focus.
 # It must not create a ninth window or navigate/type/select owner content.
 assert 'TITLEHELPER_SAFE_ISOLATED_SEARCH_PRESS' in new
