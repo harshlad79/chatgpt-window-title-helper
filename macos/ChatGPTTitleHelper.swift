@@ -2416,6 +2416,23 @@ final class OverlayController:
                         "ax-window-census \(censusDetail)")
                     lastAXCensusLogState = censusDetail
                 }
+                // Opt-in, read-only, process-local native AX identity snapshot.
+                // Never log conversation titles, URLs, message text or stable
+                // account identifiers. AX element hashes are only meaningful
+                // within this running helper process and ChatGPT PID.
+                if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_AX_WINDOW_SNAPSHOT"] == "1" {
+                    let entries = sidecarWindowOrder.prefix(39).enumerated().compactMap {
+                        index, id -> String? in
+                        guard let window = sidecarWindows[id] else { return nil }
+                        let minimized = axBool(window, kAXMinimizedAttribute) == true
+                        let generic = axString(window, kAXTitleAttribute) == "ChatGPT"
+                        let recognized = titleCache[id] != nil
+                        return "\(index):\(id):min=\(minimized ? 1 : 0):generic=\(generic ? 1 : 0):known=\(recognized ? 1 : 0)"
+                    }
+                    TitleHelperDiagnostics.shared.record(
+                        "ax-window-identity-snapshot pid=\(pid) raw=\(sidecarWindowOrder.count) " +
+                        "entries=\(entries.joined(separator: ";"))")
+                }
             } else if lastAXCensusLogState != "unavailable" {
                 TitleHelperDiagnostics.shared.record("ax-window-census unavailable")
                 lastAXCensusLogState = "unavailable"
