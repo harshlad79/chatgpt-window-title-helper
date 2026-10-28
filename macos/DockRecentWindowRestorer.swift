@@ -186,6 +186,250 @@ final class DockRecentWindowRestorer {
         }
     }
 
+
+    // Search Chats is a hidden native accelerator in the installed ChatGPT
+    // build (visible=false), not a File-menu AXMenuItem. Probe the visible
+    // sidebar Search AXButton on an independently verified new window only.
+    private func searchUIScan(_ window: AXUIElement)
+        -> (buttons: [AXUIElement], inputs: Int, dialogs: Int, limited: Bool) {
+        let allowed: Set<String> = [
+            "search", "search chats", "search chats…", "search conversations",
+            "검색", "채팅 검색", "채팅 검색…", "대화 검색", "대화 검색…"
+        ]
+        var queue: [AXUIElement] = [window]
+        var visited: Set<String> = []
+        var buttons: [AXUIElement] = []
+        var inputs = 0
+        var dialogs = 0
+        var index = 0
+        let started = ProcessInfo.processInfo.systemUptime
+        while index < queue.count && index < 800 &&
+            ProcessInfo.processInfo.systemUptime - started < 3.0 {
+            let element = queue[index]
+            index += 1
+            let key = String(CFHash(element))
+            guard visited.insert(key).inserted else { continue }
+            let role = str(element, kAXRoleAttribute)
+            if role == "AXTextField" || role == "AXSearchField" ||
+                role == "AXComboBox" { inputs += 1 }
+            if role == "AXDialog" || role == "AXSheet" { dialogs += 1 }
+            if role == "AXButton" {
+                let labels = [
+                    str(element, kAXTitleAttribute),
+                    str(element, kAXDescriptionAttribute),
+                    str(element, kAXHelpAttribute)
+                ].map { $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                          .lowercased() }
+                if labels.contains(where: { allowed.contains($0) }) {
+                    buttons.append(element)
+                }
+            }
+            var next = children(element)
+            if next.isEmpty {
+                next = (read(element, kAXVisibleChildrenAttribute)
+                    as? [AXUIElement]) ?? []
+            }
+            queue.append(contentsOf: next.prefix(48))
+        }
+        return (buttons, inputs, dialogs,
+            index < queue.count || index >= 800)
+    }
+
+    private func probeSearchOnNewWindow(
+        root: AXUIElement, app: NSRunningApplication,
+        created: AXUIElement, originals: [AXUIElement],
+        originalMinimized: [String: Bool],
+        priorFrontmost: NSRunningApplication?,
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        let newID = String(CFHash(created))
+        func finish(_ success: Bool, _ reason: String) {
+            self.busy = false
+            if let priorFrontmost,
+               priorFrontmost.processIdentifier != app.processIdentifier {
+                _ = priorFrontmost.activate()
+            }
+            completed(success, reason)
+        }
+        func originalsSafe() -> Bool {
+            let after = self.winList(root)
+            guard after.count == originals.count + 1,
+                  after.contains(where: { String(CFHash($0)) == newID })
+            else { return false }
+            return originals.allSatisfy { old in
+                let key = String(CFHash(old))
+                guard let live = after.first(where: {
+                    String(CFHash($0)) == key
+                }), let minimized = self.read(
+                    live, kAXMinimizedAttribute) as? NSNumber
+                else { return false }
+                return minimized.boolValue == originalMinimized[key]
+            }
+        }
+        func newWindowFocused() -> Bool {
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier ==
+                    app.processIdentifier,
+                  let focused = self.read(root, kAXFocusedWindowAttribute)
+                    as? AXUIElement else { return false }
+            return String(CFHash(focused)) == newID
+        }
+        let started = ProcessInfo.processInfo.systemUptime
+        func waitForSearchButton() {
+            guard originalsSafe(), self.title(created) == "ChatGPT",
+                  newWindowFocused() else {
+                finish(false, "search-preflight-window-focus-or-originals-changed")
+                return
+            }
+            let scan = self.searchUIScan(created)
+            guard !scan.limited else {
+                finish(false, "search-button-AX-scan-limited")
+                return
+            }
+            if scan.buttons.isEmpty &&
+               ProcessInfo.processInfo.systemUptime - started < 6.0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    waitForSearchButton()
+                }
+                return
+            }
+            guard scan.buttons.count == 1 else {
+                finish(false, "search-button-count=\(scan.buttons.count)")
+                return
+            }
+            guard self.press(scan.buttons[0]) else {
+                finish(false, "search-button-AXPress-failed")
+                return
+            }
+            let pressedAt = ProcessInfo.processInfo.systemUptime
+            func verifySearchUI() {
+                guard originalsSafe(), newWindowFocused() else {
+                    finish(false, "search-after-press-window-or-focus-changed")
+                    return
+                }
+                let after = self.searchUIScan(created)
+                let visible = after.inputs > scan.inputs ||
+                    after.dialogs > scan.dialogs
+                if !visible && !after.limited &&
+                   ProcessInfo.processInfo.systemUptime - pressedAt < 6.0 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        verifySearchUI()
+                    }
+                    return
+                }
+                finish(visible && !after.limited,
+                    "search-UI-only opened=\(visible) " +
+                    "inputsBefore=\(scan.inputs) inputsAfter=\(after.inputs) " +
+                    "dialogsBefore=\(scan.dialogs) dialogsAfter=\(after.dialogs) " +
+                    "originalsRetained=true AXLimited=\(after.limited)")
+            }
+            verifySearchUI()
+        }
+        // Give the new blank window's renderer time to expose its sidebar.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            waitForSearchButton()
+        }
+    }
+
+    // Explicit one-shot Search UI-only probe; no query or result selection.
+    func probeSearchUI(completed: @escaping (Bool, String) -> Void) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }) else { completed(false, "busy-or-no-AX-permission"); return }
+
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(root, 0.6)
+        let original = winList(root)
+        let originalIDs = Set(original.map { String(CFHash($0)) })
+        guard !original.isEmpty, original.count <= 12,
+              originalIDs.count == original.count,
+              fileNewWindow(root) != nil
+        else { completed(false, "preflight-window-or-menu-unsafe"); return }
+
+        // Fail closed if any original window cannot report minimized state.
+        var originalMinimized: [String: Bool] = [:]
+        for win in original {
+            guard str(win, kAXRoleAttribute) == "AXWindow",
+                  let minimized = read(win, kAXMinimizedAttribute) as? NSNumber
+            else { completed(false, "preflight-minimized-unavailable"); return }
+            originalMinimized[String(CFHash(win))] = minimized.boolValue
+        }
+        let priorFrontmost = NSWorkspace.shared.frontmostApplication
+        busy = true
+        guard app.activate() else {
+            busy = false
+            completed(false, "activation-request-rejected")
+            return
+        }
+
+        // The previous test pressed File > New Window immediately after
+        // activation and saw AXPress success but no new window. Wait for
+        // confirmed focus, then resolve the menu item again.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            guard let self else { return }
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier ==
+                    app.processIdentifier else {
+                self.busy = false
+                priorFrontmost?.activate()
+                completed(false, "focus-not-confirmed")
+                return
+            }
+            guard let newWindowMenu = self.fileNewWindow(root),
+                  self.press(newWindowMenu) else {
+                self.busy = false
+                priorFrontmost?.activate()
+                completed(false, "focused-menu-or-AXPress-failed")
+                return
+            }
+            let startedAt = ProcessInfo.processInfo.systemUptime
+            func poll() {
+                let after = self.winList(root)
+                let created = after.filter {
+                    !originalIDs.contains(String(CFHash($0)))
+                }
+                let elapsed = ProcessInfo.processInfo.systemUptime - startedAt
+                if after.count == original.count && created.isEmpty &&
+                    elapsed < 8.0 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        poll()
+                    }
+                    return
+                }
+                let originalsRetained = original.allSatisfy { old in
+                    let key = String(CFHash(old))
+                    guard let live = after.first(where: {
+                        String(CFHash($0)) == key
+                    }), let minimized = self.read(
+                        live, kAXMinimizedAttribute) as? NSNumber
+                    else { return false }
+                    return minimized.boolValue == originalMinimized[key]
+                }
+                let newGeneric = created.count == 1 &&
+                    self.title(created[0]) == "ChatGPT"
+                let success = after.count == original.count + 1 &&
+                    created.count == 1 && originalsRetained && newGeneric
+                guard success else {
+                    self.busy = false
+                    if let priorFrontmost,
+                       priorFrontmost.processIdentifier != app.processIdentifier {
+                        _ = priorFrontmost.activate()
+                    }
+                    completed(false, "new-window-failed before=\(original.count) " +
+                        "after=\(after.count) created=\(created.count) " +
+                        "retained=\(originalsRetained) generic=\(newGeneric)")
+                    return
+                }
+                // Only the exact newly created generic window may receive Search.
+                // No query, selection, clipboard, or owner conversation navigation.
+                self.probeSearchOnNewWindow(root: root, app: app,
+                    created: created[0], originals: original,
+                    originalMinimized: originalMinimized,
+                    priorFrontmost: priorFrontmost, completed: completed)
+            }
+            poll()
+        }
+    }
+
     func restore(title: String, completed: @escaping (Bool, String) -> Void) {
         guard !busy else { completed(false, "복원 작업 진행 중"); return }
         guard !title.isEmpty, AXIsProcessTrusted(),
