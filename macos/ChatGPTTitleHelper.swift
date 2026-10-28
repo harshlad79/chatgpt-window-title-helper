@@ -1650,7 +1650,8 @@ final class OverlayController:
            let baseline = ProcessInfo.processInfo.environment[
             "TITLEHELPER_SAFE_ISOLATED_WINDOW_BASELINE"],
            ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_SEARCH_PRESS"] != "1",
-           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOCUS_DIAG"] != "1" {
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOCUS_DIAG"] != "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOREGROUND_SEARCH"] != "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
                 guard let self else { return }
                 self.recentRestorer.probeIsolatedWindowMetrics(
@@ -1701,6 +1702,29 @@ final class OverlayController:
                 ) { success, detail in
                     TitleHelperDiagnostics.shared.record(
                         "isolated-search-press success=\(success) \(detail)")
+                }
+            }
+        }
+        // Explicit isolated-window-only foreground activation, Search press,
+        // and prior app focus restoration. Never enabled on ordinary launch.
+        if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOREGROUND_SEARCH"] == "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_SEARCH_PRESS"] != "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOCUS_DIAG"] != "1",
+           let isolatedID = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_WINDOW_ID"],
+           let baseline = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_WINDOW_BASELINE"],
+           let pidText = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_SEARCH_PID"],
+           let expectedPID = Int32(pidText), expectedPID > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self else { return }
+                self.recentRestorer.probeIsolatedForegroundSearch(
+                    expectedID: isolatedID, expectedSnapshot: baseline,
+                    expectedPID: expectedPID
+                ) { success, detail in
+                    TitleHelperDiagnostics.shared.record(
+                        "isolated-foreground-search success=\(success) \(detail)")
                 }
             }
         }
