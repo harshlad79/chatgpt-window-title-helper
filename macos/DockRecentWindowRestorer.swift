@@ -399,10 +399,10 @@ final class DockRecentWindowRestorer {
             }
             self.busy = false
             completed(opened,
-                "isolatedSearchPressed=true opened=\\(opened) " +
-                "beforeInputs=\\(scan.inputs) afterInputs=\\(after.inputs) " +
-                "beforeDialogs=\\(scan.dialogs) afterDialogs=\\(after.dialogs) " +
-                "AXLimited=\\(after.limited) originalsPreserved=\\(safe)")
+                "isolatedSearchPressed=true opened=\(opened) " +
+                "beforeInputs=\(scan.inputs) afterInputs=\(after.inputs) " +
+                "beforeDialogs=\(scan.dialogs) afterDialogs=\(after.dialogs) " +
+                "AXLimited=\(after.limited) originalsPreserved=\(safe)")
         }
         poll()
     }
