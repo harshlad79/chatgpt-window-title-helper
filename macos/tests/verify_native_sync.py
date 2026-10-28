@@ -327,6 +327,26 @@ for forbidden in ['AXUIElementPerformAction', 'AXUIElementSetAttributeValue',
                   'press(', 'NSLog(', 'print(']:
     assert forbidden not in metadata_probe, forbidden
 
+# Search-result role/action census: strict target-only read, no UI action.
+assert 'TITLEHELPER_SAFE_ISOLATED_RESULT_ACTIONS' in new
+assert 'self.recentRestorer.probeIsolatedSearchResultActions(' in new
+assert 'isolated-result-actions success=' in new
+result_actions_probe = restorer.split(
+    '    func probeIsolatedSearchResultActions(', 1
+)[1].split('    // Read-only capability check', 1)[0]
+for required in ['expected.count == 8', 'expected[expectedID] == false',
+                 'expected.values.filter({ $0 }).count == 3',
+                 'before == expected', 'after == expected',
+                 'String(CFHash($0)) == expectedID',
+                 'AXUIElementCopyActionNames', 'kAXIdentifierAttribute',
+                 'kAXURLAttribute', 'queryMatches == 1',
+                 'originalsPreserved=', 'chatURLs=', 'pressable=']:
+    assert required in result_actions_probe, required
+for forbidden in ['AXUIElementPerformAction', 'AXUIElementSetAttributeValue',
+                  'fileNewWindow(', 'app.activate(', 'dockRecentMatches(',
+                  'press(', 'NSLog(', 'print(']:
+    assert forbidden not in result_actions_probe, forbidden
+
 # Read-only, opt-in focus diagnostics distinguish baseline, foreground and
 # target-focused conditions without pressing or exposing other window identities.
 assert 'TITLEHELPER_SAFE_ISOLATED_FOCUS_DIAG' in new
