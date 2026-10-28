@@ -1643,6 +1643,17 @@ final class OverlayController:
                 }
             }
         }
+        // Explicit read-only census of the currently focused ChatGPT window.
+        // Never create a window, activate ChatGPT, or press any control.
+        if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_FOCUSED_SEARCH_METRICS"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                guard let self else { return }
+                self.recentRestorer.probeFocusedSearchMetrics { success, detail in
+                    TitleHelperDiagnostics.shared.record(
+                        "focused-search-metrics success=\(success) \(detail)")
+                }
+            }
+        }
         // Separate explicit one-shot. Only a newly created blank native
         // window receives the sidebar Search AXPress; never type/select.
         if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_SEARCH_UI_PROBE"] == "1" {
