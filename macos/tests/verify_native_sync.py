@@ -229,6 +229,25 @@ assert 'fileNewWindow(' not in metrics_probe
 assert 'self.press(' not in metrics_probe
 assert 'AXUIElementSetAttributeValue' not in metrics_probe
 assert 'app.activate()' not in metrics_probe
+# Read-only ownership evidence: distinguish generic/named focused window,
+# parent AXWindow linkage and AXWindow identity without reading private labels.
+assert 'nativeKind=' in metrics_probe and 'genericWindows=' in metrics_probe
+assert 'focusedIndex=' in metrics_probe and 'minimizedWindows=' in metrics_probe
+assert 'kAXWindowAttribute' in metrics_probe
+assert 'kAXParentAttribute' in metrics_probe
+assert 'parentWindowMatched=' in metrics_probe
+assert 'uiWindowMatched=' in metrics_probe
+assert 'AXUIElementSetMessagingTimeout(current, 0.2)' in metrics_probe
+assert 'while focusedParentDepth < 24' in metrics_probe
+assert 'kAXValueAttribute' not in metrics_probe
+assert 'AXUIElementPerformAction' not in metrics_probe
+assert 'AXUIElementSetAttributeValue' not in metrics_probe
+# Visible conversation AXURL was non-HTTP and non-unique; record only
+# aggregate scheme/path shape, never full URL, path, or chat identifier.
+assert 'webURLAppScheme=' in new and 'webURLChatGPTScheme=' in new
+assert 'webURLNonHTTPConversationPath=' in new
+assert 'if scheme == "app"' in new and 'if scheme == "chatgpt"' in new
+assert 'if parsed.path.contains("/c/")' in new
 
 search_probe = restorer.split('    func probeSearchUI(completed:', 1)[1].split('    func restore(title:', 1)[0]
 assert 'fileNewWindow(root)' in search_probe
