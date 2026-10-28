@@ -640,6 +640,160 @@ final class DockRecentWindowRestorer {
             "originalsPreserved=\(preserved)")
     }
 
+    // Opt-in reversible contrast ONLY on the pre-existing isolated eighth window.
+    // Input is restored to its exact known baseline; no results are pressed.
+    // Logs only aggregate AX role counts, never text, titles, IDs or URLs.
+    func probeIsolatedSearchContrast(
+        expectedID: String, expectedSnapshot: String, expectedPID: pid_t,
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }), app.processIdentifier == expectedPID else {
+            completed(false, "contrast-AX-or-pid-unavailable"); return
+        }
+        var expected: [String: Bool] = [:]
+        for entry in expectedSnapshot.split(separator: ",") {
+            let fields = entry.split(separator: ":")
+            guard fields.count == 2,
+                  (fields[1] == "0" || fields[1] == "1"),
+                  expected[String(fields[0])] == nil else {
+                completed(false, "contrast-invalid-baseline"); return
+            }
+            expected[String(fields[0])] = fields[1] == "1"
+        }
+        guard expected.count == 8, expected[expectedID] == false,
+              expected.values.filter({ $0 }).count == 3 else {
+            completed(false, "contrast-unexpected-baseline"); return
+        }
+        let root = AXUIElementCreateApplication(expectedPID)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        func snapshot() -> ([String: Bool]?, AXUIElement?) {
+            let windows = winList(root)
+            guard windows.count == 8 else { return (nil, nil) }
+            var actual: [String: Bool] = [:]
+            for window in windows {
+                let id = String(CFHash(window))
+                guard actual[id] == nil,
+                      str(window, kAXRoleAttribute) == "AXWindow",
+                      let minimized = (read(window, kAXMinimizedAttribute)
+                          as? NSNumber)?.boolValue else { return (nil, nil) }
+                actual[id] = minimized
+            }
+            return (actual, windows.first(where: {
+                String(CFHash($0)) == expectedID
+            }))
+        }
+        func targetSafe() -> Bool {
+            let (actual, target) = snapshot()
+            guard actual == expected, let target,
+                  title(target) == "ChatGPT",
+                  let rawFocused = read(root, kAXFocusedWindowAttribute),
+                  CFGetTypeID(rawFocused) == AXUIElementGetTypeID() else {
+                return false
+            }
+            return String(CFHash(rawFocused as! AXUIElement)) == expectedID
+        }
+        guard targetSafe(), let target = snapshot().1 else {
+            completed(false, "contrast-baseline-or-focus-changed"); return
+        }
+        var queue: [AXUIElement] = [target]
+        var seen: Set<String> = []
+        var inputs: [AXUIElement] = []
+        var index = 0
+        let started = ProcessInfo.processInfo.systemUptime
+        while index < queue.count &&
+            ProcessInfo.processInfo.systemUptime - started < 5.0 {
+            let element = queue[index]
+            index += 1
+            guard seen.insert(String(CFHash(element))).inserted else { continue }
+            if ["AXTextField", "AXSearchField", "AXComboBox"].contains(
+                str(element, kAXRoleAttribute)
+            ) { inputs.append(element) }
+            var next = children(element)
+            if next.isEmpty {
+                next = (read(element, kAXVisibleChildrenAttribute)
+                    as? [AXUIElement]) ?? []
+            }
+            queue.append(contentsOf: next)
+        }
+        guard index == queue.count, inputs.count == 1,
+              (read(inputs[0], kAXValueAttribute) as? String) == "ChatGPT",
+              targetSafe() else {
+            completed(false, "contrast-query-not-unique-or-unexpected"); return
+        }
+        let input = inputs[0]
+        var settable = DarwinBoolean(false)
+        guard AXUIElementIsAttributeSettable(
+            input, kAXValueAttribute as CFString, &settable
+        ) == .success, settable.boolValue else {
+            completed(false, "contrast-input-not-settable"); return
+        }
+        func listCounts(_ detail: String) -> String {
+            let parts = detail.components(separatedBy: "listDetails=")
+            guard parts.count > 1 else { return "unavailable" }
+            return parts[1].components(separatedBy: " roleCounts=")[0]
+        }
+        probeIsolatedSearchResultActions(
+            expectedID: expectedID, expectedSnapshot: expectedSnapshot,
+            expectedPID: expectedPID
+        ) { baselineOK, baselineDetail in
+            guard baselineOK, targetSafe() else {
+                completed(false, "contrast-initial-census-failed"); return
+            }
+            let noMatch = "zzqv_noresults_20261029_isolated8"
+            let first = AXUIElementSetAttributeValue(
+                input, kAXValueAttribute as CFString, noMatch as NSString
+            )
+            guard first == .success else {
+                completed(false, "contrast-no-match-set-failed status=\(first.rawValue)")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                let noMatchReadback = (self.read(input, kAXValueAttribute)
+                    as? String) == noMatch
+                self.probeIsolatedSearchResultActions(
+                    expectedID: expectedID, expectedSnapshot: expectedSnapshot,
+                    expectedPID: expectedPID
+                ) { _, noMatchDetail in
+                    // Restore only the same input in the same unchanged window.
+                    // If the guard fails, do not risk writing to another window.
+                    guard targetSafe(), noMatchReadback else {
+                        completed(false, "contrast-restore-guard-failed; isolated-query-may-remain")
+                        return
+                    }
+                    let restore = AXUIElementSetAttributeValue(
+                        input, kAXValueAttribute as CFString, "ChatGPT" as NSString
+                    )
+                    guard restore == .success else {
+                        completed(false, "contrast-restore-write-failed status=\(restore.rawValue)")
+                        return
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                        let restored = targetSafe() &&
+                            (self.read(input, kAXValueAttribute) as? String) == "ChatGPT"
+                        self.probeIsolatedSearchResultActions(
+                            expectedID: expectedID,
+                            expectedSnapshot: expectedSnapshot,
+                            expectedPID: expectedPID
+                        ) { finalOK, finalDetail in
+                            let before = listCounts(baselineDetail)
+                            let changed = listCounts(noMatchDetail)
+                            let after = listCounts(finalDetail)
+                            let contrastObserved = before != changed
+                            completed(restored && finalOK,
+                                "count=8 minimized=3 noMatchReadback=\(noMatchReadback) " +
+                                "restored=\(restored) contrastObserved=\(contrastObserved) " +
+                                "before=\(before) noMatch=\(changed) after=\(after) " +
+                                "originalsPreserved=\(targetSafe())")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Read-only capability check for the existing isolated Search input.
     // No AXSetValue, AXPress, activation, query, selection or navigation.
     func probeIsolatedSearchInputCapabilities(
