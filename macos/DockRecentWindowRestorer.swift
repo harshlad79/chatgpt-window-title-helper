@@ -478,6 +478,98 @@ final class DockRecentWindowRestorer {
         poll()
     }
 
+    // One-shot, identity-fenced activation of the already focused isolated eighth
+    // window. Restore the previously frontmost application after the Search probe.
+    // No AXRaise, new window, text entry, chat selection or owner-window navigation.
+    func probeIsolatedForegroundSearch(
+        expectedID: String, expectedSnapshot: String, expectedPID: pid_t,
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }), app.processIdentifier == expectedPID,
+              let prior = NSWorkspace.shared.frontmostApplication,
+              prior.processIdentifier != expectedPID, !prior.isTerminated else {
+            completed(false, "foreground-preflight-app-unavailable"); return
+        }
+        var expected: [String: Bool] = [:]
+        for entry in expectedSnapshot.split(separator: ",") {
+            let fields = entry.split(separator: ":")
+            guard fields.count == 2,
+                  (fields[1] == "0" || fields[1] == "1"),
+                  expected[String(fields[0])] == nil else {
+                completed(false, "foreground-invalid-baseline"); return
+            }
+            expected[String(fields[0])] = fields[1] == "1"
+        }
+        guard expected.count == 8, expected[expectedID] == false,
+              expected.values.filter({ $0 }).count == 3 else {
+            completed(false, "foreground-unexpected-baseline"); return
+        }
+        let root = AXUIElementCreateApplication(expectedPID)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        func baselineSafe() -> Bool {
+            let windows = self.winList(root)
+            guard windows.count == 8 else { return false }
+            var actual: [String: Bool] = [:]
+            for window in windows {
+                let id = String(CFHash(window))
+                guard actual[id] == nil,
+                      self.str(window, kAXRoleAttribute) == "AXWindow",
+                      let minimized = (self.read(window, kAXMinimizedAttribute)
+                          as? NSNumber)?.boolValue else { return false }
+                actual[id] = minimized
+            }
+            guard actual == expected,
+                  let target = windows.first(where: {
+                      String(CFHash($0)) == expectedID
+                  }), self.title(target) == "ChatGPT" else { return false }
+            return true
+        }
+        func targetFocused() -> Bool {
+            guard let raw = self.read(root, kAXFocusedWindowAttribute),
+                  CFGetTypeID(raw) == AXUIElementGetTypeID() else { return false }
+            return String(CFHash(raw as! AXUIElement)) == expectedID
+        }
+        guard baselineSafe(), targetFocused(),
+              NSWorkspace.shared.frontmostApplication?.processIdentifier ==
+                  prior.processIdentifier else {
+            completed(false, "foreground-baseline-or-target-changed"); return
+        }
+        // App activation raises its *already focused* window. No AXRaise on
+        // any window and no request to change the ChatGPT focused AXWindow.
+        guard app.activate(options: [.activateIgnoringOtherApps]) else {
+            completed(false, "foreground-activation-denied"); return
+        }
+        func restorePriorFocus() -> Bool {
+            // Never steal focus back if the user switched to a third app.
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier ==
+                    expectedPID, !prior.isTerminated else { return false }
+            return prior.activate(options: [.activateIgnoringOtherApps])
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            guard baselineSafe(), targetFocused(),
+                  NSWorkspace.shared.frontmostApplication?.processIdentifier ==
+                      expectedPID else {
+                let restored = restorePriorFocus()
+                completed(false,
+                    "foreground-postactivation-guard-failed restored=\(restored)")
+                return
+            }
+            self.probeIsolatedSearchPress(
+                expectedID: expectedID, expectedSnapshot: expectedSnapshot,
+                expectedPID: expectedPID
+            ) { success, detail in
+                let preserved = baselineSafe()
+                let restored = restorePriorFocus()
+                completed(success && preserved && restored,
+                    "search=\(success) originalsPreserved=\(preserved) " +
+                    "priorFocusRestored=\(restored) \(detail)")
+            }
+        }
+    }
+
     // Explicit opt-in, read-only measurement of the *currently focused*
     // ChatGPT AXWindow. It never creates/navigates/raises/closes a window,
     // enters a search query, or logs private titles, IDs, or contents.
