@@ -1654,7 +1654,8 @@ final class OverlayController:
            ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOREGROUND_SEARCH"] != "1",
            ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_RESULT_METADATA"] != "1",
            ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_INPUT_CAPABILITIES"] != "1",
-           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_SEARCH_QUERY"] != "1" {
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_SEARCH_QUERY"] != "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_QUERY_CONTRAST"] != "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
                 guard let self else { return }
                 self.recentRestorer.probeIsolatedWindowMetrics(
@@ -1729,6 +1730,28 @@ final class OverlayController:
                 ) { success, detail in
                     TitleHelperDiagnostics.shared.record(
                         "isolated-result-actions success=\(success) \(detail)")
+                }
+            }
+        }
+        // Reversible Search query contrast on the guarded isolated eighth window.
+        // Never presses a result or navigates a user conversation.
+        if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_QUERY_CONTRAST"] == "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_RESULT_ACTIONS"] != "1",
+           let isolatedID = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_WINDOW_ID"],
+           let baseline = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_WINDOW_BASELINE"],
+           let pidText = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_SEARCH_PID"],
+           let expectedPID = Int32(pidText), expectedPID > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self else { return }
+                self.recentRestorer.probeIsolatedSearchContrast(
+                    expectedID: isolatedID, expectedSnapshot: baseline,
+                    expectedPID: expectedPID
+                ) { success, detail in
+                    TitleHelperDiagnostics.shared.record(
+                        "isolated-query-contrast success=\(success) \(detail)")
                 }
             }
         }
