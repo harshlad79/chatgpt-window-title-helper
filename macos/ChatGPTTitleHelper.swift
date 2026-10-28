@@ -1648,7 +1648,8 @@ final class OverlayController:
         if let isolatedID = ProcessInfo.processInfo.environment[
             "TITLEHELPER_SAFE_ISOLATED_WINDOW_ID"],
            let baseline = ProcessInfo.processInfo.environment[
-            "TITLEHELPER_SAFE_ISOLATED_WINDOW_BASELINE"] {
+            "TITLEHELPER_SAFE_ISOLATED_WINDOW_BASELINE"],
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_SEARCH_PRESS"] != "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
                 guard let self else { return }
                 self.recentRestorer.probeIsolatedWindowMetrics(
@@ -1656,6 +1657,27 @@ final class OverlayController:
                 ) { success, detail in
                     TitleHelperDiagnostics.shared.record(
                         "isolated-window-metrics success=\(success) \(detail)")
+                }
+            }
+        }
+        // A separate one-shot mutation of the isolated eighth window only.
+        // Requires the exact prior census, fixed ChatGPT PID, and focused target.
+        if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_SEARCH_PRESS"] == "1",
+           let isolatedID = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_WINDOW_ID"],
+           let baseline = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_WINDOW_BASELINE"],
+           let pidText = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_SEARCH_PID"],
+           let expectedPID = Int32(pidText), expectedPID > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self else { return }
+                self.recentRestorer.probeIsolatedSearchPress(
+                    expectedID: isolatedID, expectedSnapshot: baseline,
+                    expectedPID: expectedPID
+                ) { success, detail in
+                    TitleHelperDiagnostics.shared.record(
+                        "isolated-search-press success=\(success) \(detail)")
                 }
             }
         }
