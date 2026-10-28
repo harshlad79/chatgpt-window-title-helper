@@ -344,7 +344,10 @@ for required in ['expected.count == 8', 'expected[expectedID] == false',
                  'roleCounts=', 'pressRoles=', 'menuRoles=',
                  'listParents=', 'listChildren=', 'groupsInsideList=',
                  'pressGroupsInsideList=', 'menuGroupsInsideList=',
-                 'pressGroupParents=', 'node.insideList',
+                 'pressGroupParents=', 'node.listIndex',
+                 'listDetails=', 'listDirectRoles', 'listPressGroups',
+                 'listTextNodes', 'listQueryTextNodes',
+                 'listPressParentRoles',
                  'safeRoles.contains(role)', '"AXOption"', '"AXListBox"']:
     assert required in result_actions_probe, required
 for forbidden in ['AXUIElementPerformAction', 'AXUIElementSetAttributeValue',
