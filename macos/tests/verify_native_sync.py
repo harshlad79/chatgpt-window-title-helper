@@ -201,6 +201,15 @@ assert 'originalsSafe()' in restorer
 assert 'search-button-count=' in restorer
 assert 'self.press(scan.buttons[0])' in restorer
 assert 'search-UI-only opened=' in restorer
+# Search AX hierarchy traversal must have a wall-clock/monotonic deadline only.
+# Never truncate a large Chromium AX tree by total node or per-parent count.
+search_scan = restorer.split('    private func searchUIScan(', 1)[1].split('    private func probeSearchOnNewWindow(', 1)[0]
+assert 'ProcessInfo.processInfo.systemUptime - started < 3.0' in search_scan
+assert 'queue.append(contentsOf: next)' in search_scan
+assert 'index < 800' not in search_scan
+assert 'next.prefix(' not in search_scan
+assert 'index >= 800' not in search_scan
+assert 'let timedOut = index < queue.count &&' in search_scan
 search_probe = restorer.split('    func probeSearchUI(completed:', 1)[1].split('    func restore(title:', 1)[0]
 assert 'fileNewWindow(root)' in search_probe
 assert 'self.probeSearchOnNewWindow(' in search_probe
