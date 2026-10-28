@@ -269,8 +269,10 @@ final class DockRecentWindowRestorer {
         func newWindowFocused() -> Bool {
             guard NSWorkspace.shared.frontmostApplication?.processIdentifier ==
                     app.processIdentifier,
-                  let focused = self.read(root, kAXFocusedWindowAttribute)
-                    as? AXUIElement else { return false }
+                  let raw = self.read(root, kAXFocusedWindowAttribute),
+                  CFGetTypeID(raw) == AXUIElementGetTypeID()
+            else { return false }
+            let focused = raw as! AXUIElement
             return String(CFHash(focused)) == newID
         }
         let started = ProcessInfo.processInfo.systemUptime
