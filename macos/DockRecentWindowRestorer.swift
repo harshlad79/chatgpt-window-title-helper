@@ -203,7 +203,9 @@ final class DockRecentWindowRestorer {
         var dialogs = 0
         var index = 0
         let started = ProcessInfo.processInfo.systemUptime
-        while index < queue.count && index < 800 &&
+        // Search the full AX subtree. Stop only on the monotonic time budget,
+        // never on an arbitrary element count or per-parent child cap.
+        while index < queue.count &&
             ProcessInfo.processInfo.systemUptime - started < 3.0 {
             let element = queue[index]
             index += 1
@@ -229,10 +231,11 @@ final class DockRecentWindowRestorer {
                 next = (read(element, kAXVisibleChildrenAttribute)
                     as? [AXUIElement]) ?? []
             }
-            queue.append(contentsOf: next.prefix(48))
+            queue.append(contentsOf: next)
         }
-        return (buttons, inputs, dialogs,
-            index < queue.count || index >= 800)
+        let timedOut = index < queue.count &&
+            ProcessInfo.processInfo.systemUptime - started >= 3.0
+        return (buttons, inputs, dialogs, timedOut)
     }
 
     private func probeSearchOnNewWindow(
