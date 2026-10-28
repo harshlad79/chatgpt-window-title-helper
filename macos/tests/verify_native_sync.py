@@ -287,6 +287,27 @@ for forbidden in ['AXUIElementPerformAction', 'AXUIElementSetAttributeValue',
                   'press(', 'NSLog(', 'print(']:
     assert forbidden not in input_probe, forbidden
 
+# Isolated fixed-query write is opt-in, baseline/focus/empty-input fenced.
+assert 'TITLEHELPER_SAFE_ISOLATED_SEARCH_QUERY' in new
+assert 'self.recentRestorer.probeIsolatedSearchQuery(' in new
+assert 'isolated-search-query success=' in new
+query_probe = restorer.split('    func probeIsolatedSearchQuery(', 1)[1].split(
+    '    // One-shot, strictly read-only diagnosis', 1)[0]
+for required in ['expected.count == 8', 'expected[expectedID] == false',
+                 'expected.values.filter({ $0 }).count == 3',
+                 'before == expected', 'snapshot().0 == expected',
+                 'String(CFHash(focused as! AXUIElement)) == expectedID',
+                 'inputs.count == 1', 'kAXValueAttribute', '== ""',
+                 'AXUIElementIsAttributeSettable', 'AXUIElementSetAttributeValue',
+                 '"ChatGPT" as NSString', 'DispatchQueue.main.asyncAfter',
+                 'self.probeIsolatedSearchResultMetadata(',
+                 'originalsPreserved=', 'AXValueReadback=']:
+    assert required in query_probe, required
+for forbidden in ['fileNewWindow(', 'dockRecentMatches(', 'app.activate(',
+                  'AXUIElementPerformAction', 'NSLog(', 'print(',
+                  'sendMessage(', 'typeText(']:
+    assert forbidden not in query_probe, forbidden
+
 # Isolated result metadata probe: privacy-safe, read-only, identity-fenced.
 assert 'TITLEHELPER_SAFE_ISOLATED_RESULT_METADATA' in new
 assert 'self.recentRestorer.probeIsolatedSearchResultMetadata(' in new
