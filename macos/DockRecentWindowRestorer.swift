@@ -310,6 +310,77 @@ final class DockRecentWindowRestorer {
             "dialogs=\(scan.dialogs) originalsPreserved=\(preserved)")
     }
 
+    // One-shot, strictly read-only diagnosis of the isolated window's focus gate.
+    // No AX actions, activation, titles, content, or other-window hashes logged.
+    func probeIsolatedFocusGate(
+        expectedID: String, expectedSnapshot: String, expectedPID: pid_t,
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }), app.processIdentifier == expectedPID else {
+            completed(false, "busy-AX-or-pid-changed"); return
+        }
+        var expected: [String: Bool] = [:]
+        for entry in expectedSnapshot.split(separator: ",") {
+            let fields = entry.split(separator: ":")
+            guard fields.count == 2,
+                  (fields[1] == "0" || fields[1] == "1"),
+                  expected[String(fields[0])] == nil else {
+                completed(false, "invalid-baseline"); return
+            }
+            expected[String(fields[0])] = fields[1] == "1"
+        }
+        guard expected.count == 8, expected[expectedID] == false,
+              expected.values.filter({ $0 }).count == 3 else {
+            completed(false, "unexpected-baseline"); return
+        }
+        let root = AXUIElementCreateApplication(expectedPID)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        func snapshot() -> ([String: Bool]?, [AXUIElement]) {
+            let windows = winList(root)
+            guard windows.count == 8 else { return (nil, windows) }
+            var actual: [String: Bool] = [:]
+            for window in windows {
+                let id = String(CFHash(window))
+                guard actual[id] == nil,
+                      str(window, kAXRoleAttribute) == "AXWindow",
+                      let minimized = (read(window, kAXMinimizedAttribute)
+                          as? NSNumber)?.boolValue else {
+                    return (nil, windows)
+                }
+                actual[id] = minimized
+            }
+            return (actual, windows)
+        }
+        let (before, windows) = snapshot()
+        guard before == expected,
+              let target = windows.first(where: {
+                  String(CFHash($0)) == expectedID
+              }), title(target) == "ChatGPT" else {
+            completed(false, "baseline-changed-or-target-not-generic"); return
+        }
+        let chatgptFrontmost =
+            NSWorkspace.shared.frontmostApplication?.processIdentifier == expectedPID
+        let focusedRaw = read(root, kAXFocusedWindowAttribute)
+        let focusAvailable = focusedRaw.map {
+            CFGetTypeID($0) == AXUIElementGetTypeID()
+        } ?? false
+        let isolatedTargetFocused = focusAvailable &&
+            String(CFHash(focusedRaw as! AXUIElement)) == expectedID
+        let (after, _) = snapshot()
+        guard after == expected else {
+            completed(false, "postdiagnostic-baseline-changed"); return
+        }
+        completed(true,
+            "baseline=true count=8 minimized=3 " +
+            "chatgptFrontmost=\(chatgptFrontmost) " +
+            "focusedWindowAvailable=\(focusAvailable) " +
+            "isolatedTargetFocused=\(isolatedTargetFocused) " +
+            "originalsPreserved=true")
+    }
+
     // Explicit one-shot Search UI press on the previously verified eighth window.
     // Requires an exact eight-window census, a fixed ChatGPT PID and the target
     // already focused. No activation, AXRaise, text input or result selection.
