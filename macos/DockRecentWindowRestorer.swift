@@ -206,7 +206,7 @@ final class DockRecentWindowRestorer {
         // Search the full AX subtree. Stop only on the monotonic time budget,
         // never on an arbitrary element count or per-parent child cap.
         while index < queue.count &&
-            ProcessInfo.processInfo.systemUptime - started < 3.0 {
+            ProcessInfo.processInfo.systemUptime - started < 5.0 {
             let element = queue[index]
             index += 1
             let key = String(CFHash(element))
@@ -234,7 +234,7 @@ final class DockRecentWindowRestorer {
             queue.append(contentsOf: next)
         }
         let timedOut = index < queue.count &&
-            ProcessInfo.processInfo.systemUptime - started >= 3.0
+            ProcessInfo.processInfo.systemUptime - started >= 5.0
         return (buttons, inputs, dialogs, timedOut)
     }
 
