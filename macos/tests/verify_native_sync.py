@@ -340,7 +340,9 @@ for required in ['expected.count == 8', 'expected[expectedID] == false',
                  'String(CFHash($0)) == expectedID',
                  'AXUIElementCopyActionNames', 'kAXIdentifierAttribute',
                  'kAXURLAttribute', 'queryMatches == 1',
-                 'originalsPreserved=', 'chatURLs=', 'pressable=']:
+                 'originalsPreserved=', 'chatURLs=', 'pressable=',
+                 'roleCounts=', 'pressRoles=', 'menuRoles=',
+                 'safeRoles.contains(role)', '"AXOption"', '"AXListBox"']:
     assert required in result_actions_probe, required
 for forbidden in ['AXUIElementPerformAction', 'AXUIElementSetAttributeValue',
                   'fileNewWindow(', 'app.activate(', 'dockRecentMatches(',
