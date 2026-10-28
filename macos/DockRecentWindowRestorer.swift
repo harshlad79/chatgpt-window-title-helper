@@ -240,6 +240,76 @@ final class DockRecentWindowRestorer {
             visited.count, Int(elapsed * 1000), queue.count - index)
     }
 
+    // Opt-in read-only probe of one previously identity-verified blank window.
+    // The caller supplies the exact complete native AX census (hash:minimized).
+    // Fail closed on any changed window, missing identity or unexpected state.
+    func probeIsolatedWindowMetrics(
+        expectedID: String, expectedSnapshot: String,
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }) else { completed(false, "no-AX-or-app"); return }
+        var expected: [String: Bool] = [:]
+        for entry in expectedSnapshot.split(separator: ",") {
+            let fields = entry.split(separator: ":")
+            guard fields.count == 2,
+                  (fields[1] == "0" || fields[1] == "1"),
+                  expected[String(fields[0])] == nil else {
+                completed(false, "invalid-expected-snapshot"); return
+            }
+            expected[String(fields[0])] = fields[1] == "1"
+        }
+        guard expected.count == 8, expected[expectedID] == false,
+              expected.values.filter({ $0 }).count == 3 else {
+            completed(false, "expected-baseline-not-eight-or-three"); return
+        }
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        let windows = winList(root)
+        guard windows.count == expected.count else {
+            completed(false, "window-count-changed"); return
+        }
+        var actual: [String: Bool] = [:]
+        for window in windows {
+            let id = String(CFHash(window))
+            guard actual[id] == nil,
+                  let minimized = (read(window, kAXMinimizedAttribute) as? NSNumber)?.boolValue,
+                  str(window, kAXRoleAttribute) == "AXWindow" else {
+                completed(false, "window-identity-or-state-unavailable"); return
+            }
+            actual[id] = minimized
+        }
+        guard actual == expected,
+              let target = windows.first(where: {
+                  String(CFHash($0)) == expectedID
+              }),
+              title(target) == "ChatGPT" else {
+            completed(false, "baseline-changed-or-target-not-generic"); return
+        }
+        // Read only the isolated AX subtree. Never log labels, titles, IDs,
+        // message text, query text, or URL. No AXPress or app activation.
+        let scan = searchUIScan(target)
+        let after = winList(root)
+        var afterStates: [String: Bool] = [:]
+        for window in after {
+            let id = String(CFHash(window))
+            guard afterStates[id] == nil,
+                  let minimized = (read(window, kAXMinimizedAttribute) as? NSNumber)?.boolValue else {
+                completed(false, "postscan-window-state-unavailable"); return
+            }
+            afterStates[id] = minimized
+        }
+        let preserved = afterStates == expected
+        completed(preserved && !scan.limited,
+            "isolated=true count=\(windows.count) minimized=3 " +
+            "visited=\(scan.visitedCount) elapsedMs=\(scan.elapsedMs) " +
+            "remaining=\(scan.remainingCount) limited=\(scan.limited) " +
+            "searchButtons=\(scan.buttons.count) inputs=\(scan.inputs) " +
+            "dialogs=\(scan.dialogs) originalsPreserved=\(preserved)")
+    }
+
     // Explicit opt-in, read-only measurement of the *currently focused*
     // ChatGPT AXWindow. It never creates/navigates/raises/closes a window,
     // enters a search query, or logs private titles, IDs, or contents.
