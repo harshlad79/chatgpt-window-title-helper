@@ -269,3 +269,28 @@ assert 'dockRecentMatches(' not in search_probe
 assert 'AXUIElementSetAttributeValue' not in search_probe
 assert 'setValue(' not in search_probe
 assert 'typeText' not in search_probe
+
+# Isolated eighth-window Search press: fail closed on identity, PID and focus.
+# It must not create a ninth window or navigate/type/select owner content.
+assert 'TITLEHELPER_SAFE_ISOLATED_SEARCH_PRESS' in new
+assert 'TITLEHELPER_SAFE_ISOLATED_SEARCH_PID' in new
+assert 'self.recentRestorer.probeIsolatedSearchPress(' in new
+assert 'isolated-search-press success=' in new
+press_probe = restorer.split('    func probeIsolatedSearchPress(', 1)[1].split(
+    '    // Explicit opt-in, read-only measurement', 1)[0]
+assert 'app.processIdentifier == expectedPID' in press_probe
+assert 'expected.count == 8' in press_probe
+assert 'expected[expectedID] == false' in press_probe
+assert 'expected.values.filter({ $0 }).count == 3' in press_probe
+assert 'actual == expected' in press_probe
+assert 'kAXFocusedWindowAttribute' in press_probe
+assert 'String(CFHash(rawFocused as! AXUIElement)) == expectedID' in press_probe
+assert 'scan.buttons.count == 1' in press_probe
+assert 'scan.inputs == 0, scan.dialogs == 0' in press_probe
+assert 'press(scan.buttons[0])' in press_probe
+assert 'baselineSafe().0' in press_probe
+assert 'searchUIScan(target)' in press_probe
+assert 'fileNewWindow(' not in press_probe
+assert 'app.activate()' not in press_probe
+assert 'AXUIElementSetAttributeValue' not in press_probe
+assert 'dockRecentMatches(' not in press_probe
