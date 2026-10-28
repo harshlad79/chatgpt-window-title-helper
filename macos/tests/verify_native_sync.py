@@ -253,6 +253,12 @@ assert 'AXUIElementSetAttributeValue' not in metrics_probe
 # aggregate scheme/path shape, never full URL, path, or chat identifier.
 assert 'webURLAppScheme=' in new and 'webURLChatGPTScheme=' in new
 assert 'webURLNonHTTPConversationPath=' in new
+# Opt-in common app-origin readback is permitted only for static identical URLs.
+assert 'TITLEHELPER_SAFE_COMMON_APP_AXURL' in new
+assert 'webURLPresent == samples.count' in new
+assert 'webURLs.count == 1' in new
+assert 'parsed.query == nil, parsed.fragment == nil' in new
+assert 'ax-common-app-url blocked=not-static-common' in new
 assert 'if scheme == "app"' in new and 'if scheme == "chatgpt"' in new
 assert 'if parsed.path.contains("/c/")' in new
 
