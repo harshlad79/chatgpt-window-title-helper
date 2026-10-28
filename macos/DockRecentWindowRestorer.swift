@@ -528,6 +528,125 @@ final class DockRecentWindowRestorer {
             "limited=\(limited) originalsPreserved=\(preserved)")
     }
 
+    // Explicit one-shot Search query on the *existing isolated eighth window*.
+    // The fixed, non-sensitive word is never sent as a chat message. No result
+    // selection, owner-window navigation, new window, or application activation.
+    func probeIsolatedSearchQuery(
+        expectedID: String, expectedSnapshot: String, expectedPID: pid_t,
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }), app.processIdentifier == expectedPID else {
+            completed(false, "query-AX-or-pid-unavailable"); return
+        }
+        var expected: [String: Bool] = [:]
+        for entry in expectedSnapshot.split(separator: ",") {
+            let fields = entry.split(separator: ":")
+            guard fields.count == 2,
+                  (fields[1] == "0" || fields[1] == "1"),
+                  expected[String(fields[0])] == nil else {
+                completed(false, "query-invalid-baseline"); return
+            }
+            expected[String(fields[0])] = fields[1] == "1"
+        }
+        guard expected.count == 8, expected[expectedID] == false,
+              expected.values.filter({ $0 }).count == 3 else {
+            completed(false, "query-unexpected-baseline"); return
+        }
+        let root = AXUIElementCreateApplication(expectedPID)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        func snapshot() -> ([String: Bool]?, AXUIElement?) {
+            let windows = winList(root)
+            guard windows.count == 8 else { return (nil, nil) }
+            var actual: [String: Bool] = [:]
+            for window in windows {
+                let id = String(CFHash(window))
+                guard actual[id] == nil,
+                      str(window, kAXRoleAttribute) == "AXWindow",
+                      let minimized = (read(window, kAXMinimizedAttribute)
+                          as? NSNumber)?.boolValue else { return (nil, nil) }
+                actual[id] = minimized
+            }
+            return (actual, windows.first(where: {
+                String(CFHash($0)) == expectedID
+            }))
+        }
+        let (before, target) = snapshot()
+        guard before == expected, let target, title(target) == "ChatGPT",
+              let focused = read(root, kAXFocusedWindowAttribute),
+              CFGetTypeID(focused) == AXUIElementGetTypeID(),
+              String(CFHash(focused as! AXUIElement)) == expectedID else {
+            completed(false, "query-baseline-or-target-focus-changed"); return
+        }
+        let scan = searchUIScan(target)
+        guard !scan.limited, scan.inputs == 1 else {
+            completed(false, "query-search-input-not-unique"); return
+        }
+        var queue: [AXUIElement] = [target]
+        var seen: Set<String> = []
+        var inputs: [AXUIElement] = []
+        var index = 0
+        let started = ProcessInfo.processInfo.systemUptime
+        while index < queue.count &&
+            ProcessInfo.processInfo.systemUptime - started < 5.0 {
+            let element = queue[index]
+            index += 1
+            guard seen.insert(String(CFHash(element))).inserted else { continue }
+            if ["AXTextField", "AXSearchField", "AXComboBox"].contains(
+                str(element, kAXRoleAttribute)
+            ) {
+                inputs.append(element)
+            }
+            var next = children(element)
+            if next.isEmpty {
+                next = (read(element, kAXVisibleChildrenAttribute)
+                    as? [AXUIElement]) ?? []
+            }
+            queue.append(contentsOf: next)
+        }
+        guard index == queue.count, inputs.count == 1,
+              (read(inputs[0], kAXValueAttribute) as? String) == "" else {
+            completed(false, "query-input-not-empty-or-scan-limited"); return
+        }
+        var settable = DarwinBoolean(false)
+        guard AXUIElementIsAttributeSettable(
+            inputs[0], kAXValueAttribute as CFString, &settable
+        ) == .success, settable.boolValue,
+              snapshot().0 == expected else {
+            completed(false, "query-input-not-settable-or-baseline-changed"); return
+        }
+        let query = "ChatGPT" as NSString
+        let status = AXUIElementSetAttributeValue(
+            inputs[0], kAXValueAttribute as CFString, query
+        )
+        guard status == .success else {
+            completed(false, "query-AXSetValue-failed status=\(status.rawValue)")
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+            let (after, afterTarget) = snapshot()
+            let preserved = after == expected &&
+                afterTarget.map { self.title($0) == "ChatGPT" } == true
+            let readback = (self.read(inputs[0], kAXValueAttribute)
+                as? String) == "ChatGPT"
+            guard preserved else {
+                completed(false, "query-postwrite-window-baseline-changed")
+                return
+            }
+            self.probeIsolatedSearchResultMetadata(
+                expectedID: expectedID, expectedSnapshot: expectedSnapshot,
+                expectedPID: expectedPID
+            ) { metadataOK, detail in
+                completed(readback && metadataOK,
+                    "AXSetValue=true AXValueReadback=\(readback) " +
+                    "originalsPreserved=\(preserved) metadataOK=\(metadataOK) " +
+                    detail)
+            }
+        }
+    }
+
     // One-shot, strictly read-only diagnosis of the isolated window's focus gate.
     // No AX actions, activation, titles, content, or other-window hashes logged.
     func probeIsolatedFocusGate(
