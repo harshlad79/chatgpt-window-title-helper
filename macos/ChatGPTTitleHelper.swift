@@ -2549,6 +2549,9 @@ final class OverlayController:
                 var webURLChatGPTConversationPath = 0
                 var webURLOtherHTTPHost = 0
                 var webURLNonHTTP = 0
+                var webURLAppScheme = 0
+                var webURLChatGPTScheme = 0
+                var webURLNonHTTPConversationPath = 0
                 var webURLUnparsed = 0
                 var webDocuments = Set<String>()
                 var webIdentifiers = Set<String>()
@@ -2606,6 +2609,13 @@ final class OverlayController:
                                 }
                             } else {
                                 webURLNonHTTP += 1
+                                // Do not log the URL or any path/ID. Classify
+                                // non-HTTP schemes and conversation-shaped paths.
+                                if scheme == "app" { webURLAppScheme += 1 }
+                                if scheme == "chatgpt" { webURLChatGPTScheme += 1 }
+                                if parsed.path.contains("/c/") {
+                                    webURLNonHTTPConversationPath += 1
+                                }
                             }
                         } else {
                             webURLUnparsed += 1
@@ -2649,6 +2659,9 @@ final class OverlayController:
                     "webURLChatGPTConversationPath=\(webURLChatGPTConversationPath) " +
                     "webURLOtherHTTPHost=\(webURLOtherHTTPHost) " +
                     "webURLNonHTTP=\(webURLNonHTTP) " +
+                    "webURLAppScheme=\(webURLAppScheme) " +
+                    "webURLChatGPTScheme=\(webURLChatGPTScheme) " +
+                    "webURLNonHTTPConversationPath=\(webURLNonHTTPConversationPath) " +
                     "webURLUnparsed=\(webURLUnparsed) " +
                     "webDocument=\(webDocuments.count) " +
                     "webIdentifier=\(webIdentifiers.count) " +
