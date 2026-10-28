@@ -431,6 +431,103 @@ final class DockRecentWindowRestorer {
             "originalsPreserved=\(preserved)")
     }
 
+    // Read-only capability check for the existing isolated Search input.
+    // No AXSetValue, AXPress, activation, query, selection or navigation.
+    func probeIsolatedSearchInputCapabilities(
+        expectedID: String, expectedSnapshot: String, expectedPID: pid_t,
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }), app.processIdentifier == expectedPID else {
+            completed(false, "input-capabilities-AX-or-pid-unavailable"); return
+        }
+        var expected: [String: Bool] = [:]
+        for entry in expectedSnapshot.split(separator: ",") {
+            let fields = entry.split(separator: ":")
+            guard fields.count == 2,
+                  (fields[1] == "0" || fields[1] == "1"),
+                  expected[String(fields[0])] == nil else {
+                completed(false, "input-capabilities-invalid-baseline"); return
+            }
+            expected[String(fields[0])] = fields[1] == "1"
+        }
+        guard expected.count == 8, expected[expectedID] == false,
+              expected.values.filter({ $0 }).count == 3 else {
+            completed(false, "input-capabilities-unexpected-baseline"); return
+        }
+        let root = AXUIElementCreateApplication(expectedPID)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        func snapshot() -> ([String: Bool]?, AXUIElement?) {
+            let windows = winList(root)
+            guard windows.count == 8 else { return (nil, nil) }
+            var actual: [String: Bool] = [:]
+            for window in windows {
+                let id = String(CFHash(window))
+                guard actual[id] == nil,
+                      str(window, kAXRoleAttribute) == "AXWindow",
+                      let minimized = (read(window, kAXMinimizedAttribute)
+                          as? NSNumber)?.boolValue else { return (nil, nil) }
+                actual[id] = minimized
+            }
+            return (actual, windows.first(where: {
+                String(CFHash($0)) == expectedID
+            }))
+        }
+        let (before, target) = snapshot()
+        guard before == expected, let target, title(target) == "ChatGPT" else {
+            completed(false, "input-capabilities-baseline-or-target-changed"); return
+        }
+        let search = searchUIScan(target)
+        guard !search.limited, search.inputs == 1 else {
+            completed(false, "input-capabilities-search-not-unique"); return
+        }
+        var queue: [AXUIElement] = [target]
+        var seen: Set<String> = []
+        var index = 0
+        var inputCount = 0
+        var settableCount = 0
+        var emptyCount = 0
+        var roleTextField = 0
+        let started = ProcessInfo.processInfo.systemUptime
+        while index < queue.count &&
+            ProcessInfo.processInfo.systemUptime - started < 5.0 {
+            let element = queue[index]
+            index += 1
+            guard seen.insert(String(CFHash(element))).inserted else { continue }
+            let role = str(element, kAXRoleAttribute)
+            if ["AXTextField", "AXSearchField", "AXComboBox"].contains(role) {
+                inputCount += 1
+                if role == "AXTextField" { roleTextField += 1 }
+                var settable = DarwinBoolean(false)
+                if AXUIElementIsAttributeSettable(
+                    element, kAXValueAttribute as CFString, &settable
+                ) == .success && settable.boolValue {
+                    settableCount += 1
+                }
+                // Only report whether empty. Never log the actual input value.
+                if (read(element, kAXValueAttribute) as? String) == "" {
+                    emptyCount += 1
+                }
+            }
+            var next = children(element)
+            if next.isEmpty {
+                next = (read(element, kAXVisibleChildrenAttribute)
+                    as? [AXUIElement]) ?? []
+            }
+            queue.append(contentsOf: next)
+        }
+        let limited = index < queue.count
+        let (after, _) = snapshot()
+        let preserved = after == expected
+        completed(preserved && !limited && inputCount == 1,
+            "count=8 minimized=3 inputs=\(inputCount) " +
+            "settable=\(settableCount) empty=\(emptyCount) " +
+            "textField=\(roleTextField) visited=\(seen.count) " +
+            "limited=\(limited) originalsPreserved=\(preserved)")
+    }
+
     // One-shot, strictly read-only diagnosis of the isolated window's focus gate.
     // No AX actions, activation, titles, content, or other-window hashes logged.
     func probeIsolatedFocusGate(
