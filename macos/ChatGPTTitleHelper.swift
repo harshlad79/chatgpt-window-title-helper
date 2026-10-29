@@ -1778,6 +1778,30 @@ final class OverlayController:
                 }
             }
         }
+        // Explicit opt-in, one-shot AXRaise of the isolated eighth window.
+        // Restore the previously focused owner window; no Search mutation.
+        if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOCUS_PREFLIGHT"] == "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_QUERY_CONTRAST"] != "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_SEARCH_PRESS"] != "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOREGROUND_SEARCH"] != "1",
+           let isolatedID = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_WINDOW_ID"],
+           let baseline = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_WINDOW_BASELINE"],
+           let pidText = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_SEARCH_PID"],
+           let expectedPID = Int32(pidText), expectedPID > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self else { return }
+                self.recentRestorer.probeIsolatedFocusPreflight(
+                    expectedID: isolatedID, expectedSnapshot: baseline,
+                    expectedPID: expectedPID
+                ) { success, detail in
+                    TitleHelperDiagnostics.shared.record(
+                        "isolated-focus-preflight success=\(success) \(detail)")
+                }
+            }
+        }
         // One-shot read-only focus/baseline diagnosis for the isolated window.
         // This path never invokes AXPress, activation or window mutation.
         if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOCUS_DIAG"] == "1",
