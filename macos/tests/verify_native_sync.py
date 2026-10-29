@@ -355,6 +355,21 @@ for forbidden in ['AXUIElementPerformAction', 'AXUIElementSetAttributeValue',
                   'press(', 'NSLog(', 'print(']:
     assert forbidden not in result_actions_probe, forbidden
 
+# Per-result candidate signatures must be structural, count-only and read-only.
+for required in ['candidateAncestors', 'candidateParents', 'candidateChildCounts',
+                 'candidateTextCounts', 'candidateQueryCounts',
+                 'candidateGroupCounts', 'candidateHasMenu',
+                 'candidateCount=', 'candidateDetails=']:
+    assert required in result_actions_probe, required
+assert 'candidateDetails' in result_actions_probe
+assert 'candidateParents.append(node.parentRole)' in result_actions_probe
+assert 'candidateTextCounts[candidate] += 1' in result_actions_probe
+assert 'candidateQueryCounts[candidate] += 1' in result_actions_probe
+assert 'candidateHasMenu.append(candidateMenu)' in result_actions_probe
+assert 'candidateParents.indices.prefix(20)' in result_actions_probe
+assert 'AXUIElementSetAttributeValue' not in result_actions_probe
+assert 'AXUIElementPerformAction' not in result_actions_probe
+
 # Read-only, opt-in focus diagnostics distinguish baseline, foreground and
 # target-focused conditions without pressing or exposing other window identities.
 assert 'TITLEHELPER_SAFE_ISOLATED_FOCUS_DIAG' in new
