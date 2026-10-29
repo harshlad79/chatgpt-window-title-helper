@@ -537,7 +537,7 @@ final class DockRecentWindowRestorer {
             // Aggregate only counts under pressable result candidates, never values.
             for candidate in node.candidateAncestors {
                 if role == "AXGroup" { candidateGroupCounts[candidate] += 1 }
-                if role == "AXStaticText {
+                if role == "AXStaticText" {
                     candidateTextCounts[candidate] += 1
                     if let value = read(element, kAXValueAttribute) as? String,
                        value.range(of: "ChatGPT", options: .caseInsensitive) != nil {
