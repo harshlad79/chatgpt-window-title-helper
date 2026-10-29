@@ -567,3 +567,22 @@ for forbidden in [
     'NSLog(', 'print('
 ]:
     assert forbidden not in contrast_probe, forbidden
+
+# Generic AXWebArea metadata probe logs only fixed-key aggregate counts.
+# No raw URL, document, identifier, title, or message value may enter logs.
+assert 'webURL=\\(shape.webURL)' in new
+assert 'webDocument=\\(shape.webDocument)' in new
+assert 'webIdentifier=\\(shape.webIdentifier)' in new
+assert 'webDOMIdentifier=\\(shape.webDOMIdentifier)' in new
+assert 'webRepeatStable=\\(shape.webRepeatStable)' in new
+assert 'webRepeatChanged=\\(shape.webRepeatChanged)' in new
+generic_metadata = new.split('private func boundedGenericWebAreaShape(', 1)[1].split(
+    '// Diagnostic only: bounded, read-only AXWebArea', 1)[0]
+assert 'webKeyCounts[keyIndex] += 1' in generic_metadata
+assert 'axWindowMetadataText(element, key) == value' in generic_metadata
+for forbidden in [
+    'AXUIElementPerformAction', 'AXUIElementSetAttributeValue',
+    'NSLog(', 'print(', 'TitleHelperDiagnostics.shared.record',
+    'fileNewWindow(', 'dockRecentMatches('
+]:
+    assert forbidden not in generic_metadata, forbidden
