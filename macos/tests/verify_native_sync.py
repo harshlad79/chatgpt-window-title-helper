@@ -400,6 +400,24 @@ for forbidden in [
 ]:
     assert forbidden not in result_actions_probe, forbidden
 
+# Per-candidate AXURL/AXDOMIdentifier value SHAPES, never raw values.
+# Search must remain isolated, read-only, and fail closed on window census.
+for required in [
+    'candidateURLShapes', 'candidateDOMShapes', 'urlShape(', 'domShape(',
+    'candidateURLShapes.append([:])', 'candidateDOMShapes.append([:])',
+    'candidateURLShapes[candidate][shape, default: 0] += 1',
+    'candidateDOMShapes[candidate][shape, default: 0] += 1',
+    'directChat', 'projectChat', 'otherChatGPT', 'external',
+    'urlShapes=', 'domShapes=', 'originalsPreserved=',
+    'expected.count == 8', 'before == expected', 'after == expected'
+]:
+    assert required in result_actions_probe, required
+assert 'URLComponents(string: value)' in result_actions_probe
+assert 'options: .regularExpression' in result_actions_probe
+assert 'AXUIElementPerformAction' not in result_actions_probe
+assert 'AXUIElementSetAttributeValue' not in result_actions_probe
+assert 'NSLog(' not in result_actions_probe and 'print(' not in result_actions_probe
+
 # Read-only, opt-in focus diagnostics distinguish baseline, foreground and
 # target-focused conditions without pressing or exposing other window identities.
 assert 'TITLEHELPER_SAFE_ISOLATED_FOCUS_DIAG' in new
