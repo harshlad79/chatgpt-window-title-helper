@@ -6,7 +6,7 @@ struct ConversationRestorePlannerTests {
         let a = "12345678-1234-1234-1234-123456789abc"
         let b = "87654321-4321-4321-4321-cba987654321"
         let c = "abcdefab-cdef-abcd-efab-cdefabcdefab"
-        func route(_ id: String) -> String { "https://chatgpt.com/c/\\(id)" }
+        func route(_ id: String) -> String { "https://chatgpt.com/c/\(id)" }
         func saved(_ title: String, _ url: String?) -> ConversationRestorePlanner.SavedWindow {
             .init(title: title, routeURL: url)
         }
@@ -14,7 +14,7 @@ struct ConversationRestorePlannerTests {
             .init(routeURL: url)
         }
         func check(_ ok: Bool, _ label: String) {
-            precondition(ok, "planner failed: \\(label)")
+            precondition(ok, "planner failed: \(label)")
             passed += 1
         }
         var passed = 0
@@ -24,7 +24,7 @@ struct ConversationRestorePlannerTests {
             saved: [saved("same", route(a)), saved("same", route(b))], current: [])
         check(distinct.currentCensusVerified, "empty current census valid")
         check(distinct.targets.count == 2, "distinct IDs with same title")
-        check(distinct.targets.map(\\.savedIndex) == [0, 1], "stable order")
+        check(distinct.targets.map(\.savedIndex) == [0, 1], "stable order")
 
         // Same conversation in two windows: subtract only ONE existing window.
         let repeated = ConversationRestorePlanner.makePlan(
@@ -43,7 +43,7 @@ struct ConversationRestorePlannerTests {
         check(bothOpen.alreadyPresentIndices == [0, 1], "both indices consumed")
 
         // Same UUID with a project route is still one conversation identity.
-        let project = "https://chatgpt.com/g/g-p-test/c/\\(a)"
+        let project = "https://chatgpt.com/g/g-p-test/c/\(a)"
         let projectMatch = ConversationRestorePlanner.makePlan(
             saved: [saved("project", project)], current: [current(route(a))])
         check(projectMatch.targets.isEmpty, "project alias same conversation")
@@ -51,11 +51,11 @@ struct ConversationRestorePlannerTests {
 
         // Missing/invalid saved identity is reported, never guessed from title.
         let partial = ConversationRestorePlanner.makePlan(
-            saved: [saved("missing", nil), saved("bad", "http://chatgpt.com/c/\\(a)"),
+            saved: [saved("missing", nil), saved("bad", "http://chatgpt.com/c/\(a)"),
                     saved("valid", route(b))], current: [])
         check(partial.targets.count == 1, "valid target remains")
         check(partial.targets.first?.savedIndex == 2, "valid index retained")
-        check(partial.blocked.map(\\.reason) ==
+        check(partial.blocked.map(\.reason) ==
               [.missingSavedIdentity, .invalidSavedIdentity], "block reasons")
 
         // One unidentified currently open native window blocks ALL restoration.
@@ -82,6 +82,6 @@ struct ConversationRestorePlannerTests {
             saved: [saved("A", route(a))], current: [], maxTargets: -1)
         check(zero.targets.isEmpty && zero.blocked.count == 1, "negative limit safe")
 
-        print("ConversationRestorePlanner: \\(passed) assertions PASS")
+        print("ConversationRestorePlanner: \(passed) assertions PASS")
     }
 }
