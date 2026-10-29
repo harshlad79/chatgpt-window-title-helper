@@ -685,10 +685,15 @@ final class DockRecentWindowRestorer {
                 String(CFHash($0)) == expectedID
             }))
         }
-        func targetSafe() -> Bool {
+        // Identity-only restoration fence: a focus change must not strand the
+        // temporary query. Never restore if the user edited its value.
+        func targetIdentitySafe() -> Bool {
             let (actual, target) = snapshot()
-            guard actual == expected, let target,
-                  title(target) == "ChatGPT",
+            return app.processIdentifier == expectedPID &&
+                actual == expected && target.map { title($0) == "ChatGPT" } == true
+        }
+        func targetSafe() -> Bool {
+            guard targetIdentitySafe(),
                   let rawFocused = read(root, kAXFocusedWindowAttribute),
                   CFGetTypeID(rawFocused) == AXUIElementGetTypeID() else {
                 return false
@@ -759,8 +764,9 @@ final class DockRecentWindowRestorer {
                 ) { _, noMatchDetail in
                     // Restore only the same input in the same unchanged window.
                     // If the guard fails, do not risk writing to another window.
-                    guard targetSafe(), noMatchReadback else {
-                        completed(false, "contrast-restore-guard-failed; isolated-query-may-remain")
+                    guard targetIdentitySafe(),
+                          (self.read(input, kAXValueAttribute) as? String) == noMatch else {
+                        completed(false, "contrast-restore-identity-or-query-changed")
                         return
                     }
                     let restore = AXUIElementSetAttributeValue(
@@ -771,7 +777,7 @@ final class DockRecentWindowRestorer {
                         return
                     }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
-                        let restored = targetSafe() &&
+                        let restored = targetIdentitySafe() &&
                             (self.read(input, kAXValueAttribute) as? String) == "ChatGPT"
                         self.probeIsolatedSearchResultActions(
                             expectedID: expectedID,
@@ -1695,6 +1701,106 @@ final class DockRecentWindowRestorer {
                 checkResult()
             }
             waitForNewWindow()
+        }
+    }
+
+    // Single-process opt-in: raise only the isolated eighth window, contrast
+    // its Search results, restore its exact input, then restore owner focus.
+    // A foreground/focus change never causes us to steal focus back.
+    func probeIsolatedFocusAndSearchContrast(
+        expectedID: String, expectedSnapshot: String, expectedPID: pid_t,
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }), app.processIdentifier == expectedPID,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == expectedPID else {
+            completed(false, "focus-contrast-app-or-AX-unavailable"); return
+        }
+        var expected: [String: Bool] = [:]
+        for entry in expectedSnapshot.split(separator: ",") {
+            let fields = entry.split(separator: ":")
+            guard fields.count == 2,
+                  (fields[1] == "0" || fields[1] == "1"),
+                  expected[String(fields[0])] == nil else {
+                completed(false, "focus-contrast-invalid-baseline"); return
+            }
+            expected[String(fields[0])] = fields[1] == "1"
+        }
+        guard expected.count == 8, expected[expectedID] == false,
+              expected.values.filter({ $0 }).count == 3 else {
+            completed(false, "focus-contrast-unexpected-baseline"); return
+        }
+        let root = AXUIElementCreateApplication(expectedPID)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        func snapshot() -> ([String: Bool]?, [AXUIElement]) {
+            let windows = winList(root)
+            guard windows.count == 8 else { return (nil, windows) }
+            var actual: [String: Bool] = [:]
+            for window in windows {
+                let id = String(CFHash(window))
+                guard actual[id] == nil,
+                      str(window, kAXRoleAttribute) == "AXWindow",
+                      let minimized = (read(window, kAXMinimizedAttribute)
+                          as? NSNumber)?.boolValue else {
+                    return (nil, windows)
+                }
+                actual[id] = minimized
+            }
+            return (actual, windows)
+        }
+        func focusedID() -> String? {
+            guard let raw = read(root, kAXFocusedWindowAttribute),
+                  CFGetTypeID(raw) == AXUIElementGetTypeID() else { return nil }
+            return String(CFHash(raw as! AXUIElement))
+        }
+        let (before, windows) = snapshot()
+        guard before == expected,
+              let target = windows.first(where: {
+                  String(CFHash($0)) == expectedID
+              }), title(target) == "ChatGPT",
+              let originalID = focusedID(), originalID != expectedID,
+              let original = windows.first(where: {
+                  String(CFHash($0)) == originalID
+              }), expected[originalID] == false else {
+            completed(false, "focus-contrast-target-or-owner-focus-changed"); return
+        }
+        let raise = AXUIElementPerformAction(target, kAXRaiseAction as CFString)
+        guard raise == .success else {
+            completed(false, "focus-contrast-isolated-raise-failed status=\\(raise.rawValue)")
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            guard snapshot().0 == expected, focusedID() == expectedID,
+                  NSWorkspace.shared.frontmostApplication?.processIdentifier == expectedPID else {
+                completed(false, "focus-contrast-isolated-focus-not-confirmed")
+                return
+            }
+            self.probeIsolatedSearchContrast(
+                expectedID: expectedID, expectedSnapshot: expectedSnapshot,
+                expectedPID: expectedPID
+            ) { contrastOK, detail in
+                let preserved = snapshot().0 == expected
+                let stillFrontmost =
+                    NSWorkspace.shared.frontmostApplication?.processIdentifier == expectedPID
+                let mayRestoreFocus = preserved && stillFrontmost &&
+                    focusedID() == expectedID
+                let restoreStatus: AXError? = mayRestoreFocus
+                    ? AXUIElementPerformAction(original, kAXRaiseAction as CFString)
+                    : nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                    let finalPreserved = snapshot().0 == expected
+                    let originalFocusRestored = focusedID() == originalID
+                    completed(contrastOK && mayRestoreFocus &&
+                        restoreStatus == .success &&
+                        finalPreserved && originalFocusRestored,
+                        "contrastOK=\\(contrastOK) " +
+                        "originalFocusRestored=\\(originalFocusRestored) " +
+                        "restoreAXSuccess=\\(restoreStatus == .success) " +
+                        "originalsPreserved=\\(finalPreserved) " + detail)
+                }
+            }
         }
     }
 
