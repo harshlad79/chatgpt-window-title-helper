@@ -124,6 +124,40 @@ let finalReload = WindowSessionHistoryStore(file: file)
 expect(finalReload.snapshot.appPID == 200, "atomic JSON reload current PID")
 expect(!finalReload.observe(pid: 200, titles: [""], windowCount: 1),
        "untitled window cannot overwrite a valid manifest")
+// Partial evidence is a separate 0600 file, never a Restore All target.
+let partialEntries = [
+    WindowSessionHistoryStore.PartialEntry(
+        windowIndex: 0, title: "확인 A", minimized: false),
+    WindowSessionHistoryStore.PartialEntry(
+        windowIndex: 2, title: "확인 B", minimized: true)
+]
+expect(history.observePartial(pid: 100, windowCount: 4,
+                              entries: partialEntries),
+       "partial known titles persist even with unidentified windows")
+expect(history.partialSnapshot?.entries.count == 2 &&
+       history.partialSnapshot?.windowCount == 4,
+       "partial snapshot explicitly records incomplete coverage")
+expect(history.snapshot.lastCompleteOpen == ["대화 A", "대화 B"],
+       "partial evidence never overwrites complete restore manifest")
+expect(!history.observePartial(pid: 100, windowCount: 4, entries: []),
+       "temporary zero-title AX result cannot erase partial evidence")
+expect(!history.observePartial(pid: 100, windowCount: 4,
+       entries: Array(partialEntries.prefix(1))),
+       "AX title-cache drop cannot downgrade partial evidence")
+expect(!history.observePartial(pid: 100, windowCount: 4,
+       entries: [WindowSessionHistoryStore.PartialEntry(
+           windowIndex: 4, title: "invalid", minimized: nil)]),
+       "out-of-range window index rejected")
+let partialReload = WindowSessionHistoryStore(file: file)
+expect(partialReload.partialSnapshot?.entries == partialEntries,
+       "separate helper restart reloads partial title and minimized evidence")
+let partialPath = testDirectory.appendingPathComponent("window-session-partial.json")
+let partialMode = (try! FileManager.default.attributesOfItem(
+    atPath: partialPath.path)[.posixPermissions] as! NSNumber).intValue
+expect(partialMode & 0o777 == 0o600,
+       "partial conversation titles stored owner-only")
+expect(partialReload.lastSessionTargets(pid: 200) == ["대화 A", "대화 B"],
+       "partial evidence cannot change previous-session restore targets")
 try! FileManager.default.removeItem(at: testDirectory)
 print("PASS title history / session recovery \(passes) assertions")
 
