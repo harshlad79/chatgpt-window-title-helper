@@ -370,6 +370,36 @@ assert 'candidateParents.indices.prefix(20)' in result_actions_probe
 assert 'AXUIElementSetAttributeValue' not in result_actions_probe
 assert 'AXUIElementPerformAction' not in result_actions_probe
 
+# Candidate metadata is limited to AX platform key/action NAMES and presence
+# counters; never record AX values, titles, URLs, IDs or chat content.
+for required in [
+    'safeCandidateAttributes', 'safeCandidateActions',
+    'AXUIElementCopyAttributeNames',
+    'candidateAttributeKeys', 'candidateActionKeys',
+    'candidateDescendantIDKeys', 'candidateDescendantURLKeys',
+    'candidateDescendantDOMKeys',
+    'candidateAttributeKeys.append(candidateKeys)',
+    'candidateActionKeys.append(candidateActions)',
+    'candidateDescendantIDKeys.append(0)',
+    'candidateDescendantURLKeys.append(0)',
+    'candidateDescendantDOMKeys.append(0)',
+    ':attrs=', ':actions=', ':descID=', ':descURL=', ':descDOM=',
+    'candidateParents.indices.prefix(20)',
+]:
+    assert required in result_actions_probe, required
+assert 'AXUIElementCopyAttributeNames(element, &rawCandidateKeys)' in result_actions_probe
+assert 'AXUIElementCopyAttributeNames(element, &rawDescendantKeys)' in result_actions_probe
+assert 'keys.filter {' in result_actions_probe
+assert 'safeCandidateAttributes.contains($0)' in result_actions_probe
+assert 'safeCandidateActions.contains($0)' in result_actions_probe
+for forbidden in [
+    'AXUIElementSetAttributeValue', 'AXUIElementPerformAction',
+    'AXUIElementCopyParameterizedAttributeValue',
+    'fileNewWindow(', 'app.activate(', 'dockRecentMatches(', 'press(',
+    'NSLog(', 'print(',
+]:
+    assert forbidden not in result_actions_probe, forbidden
+
 # Read-only, opt-in focus diagnostics distinguish baseline, foreground and
 # target-focused conditions without pressing or exposing other window identities.
 assert 'TITLEHELPER_SAFE_ISOLATED_FOCUS_DIAG' in new
