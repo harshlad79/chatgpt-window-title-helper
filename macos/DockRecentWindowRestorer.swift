@@ -521,6 +521,24 @@ final class DockRecentWindowRestorer {
         var candidateQueryCounts: [Int] = []
         var candidateGroupCounts: [Int] = []
         var candidateHasMenu: [Bool] = []
+        // Read only AX metadata keys/action names, never attribute values.
+        // These names are fixed platform identifiers, not user-visible text.
+        let safeCandidateAttributes: Set<String> = [
+            "AXRole", "AXSubrole", "AXTitle", "AXValue", "AXDescription",
+            "AXHelp", "AXIdentifier", "AXDOMIdentifier", "AXURL",
+            "AXDocument", "AXSelected", "AXFocused", "AXEnabled",
+            "AXChildren", "AXVisibleChildren", "AXParent", "AXWindow",
+            "AXPosition", "AXSize", "AXLinkUIElements"
+        ]
+        let safeCandidateActions: Set<String> = [
+            "AXPress", "AXShowMenu", "AXCancel", "AXConfirm",
+            "AXPick", "AXRaise", "AXScrollToVisible"
+        ]
+        var candidateAttributeKeys: [String] = []
+        var candidateActionKeys: [String] = []
+        var candidateDescendantIDKeys: [Int] = []
+        var candidateDescendantURLKeys: [Int] = []
+        var candidateDescendantDOMKeys: [Int] = []
         let started = ProcessInfo.processInfo.systemUptime
         while index < queue.count &&
             ProcessInfo.processInfo.systemUptime - started < 5.0 {
@@ -536,6 +554,14 @@ final class DockRecentWindowRestorer {
             }
             // Aggregate only counts under pressable result candidates, never values.
             for candidate in node.candidateAncestors {
+                // Presence-only attribute census on candidate descendants.
+                var rawDescendantKeys: CFArray?
+                if AXUIElementCopyAttributeNames(element, &rawDescendantKeys) == .success,
+                   let keys = rawDescendantKeys as? [String] {
+                    if keys.contains("AXIdentifier") { candidateDescendantIDKeys[candidate] += 1 }
+                    if keys.contains("AXURL") { candidateDescendantURLKeys[candidate] += 1 }
+                    if keys.contains("AXDOMIdentifier") { candidateDescendantDOMKeys[candidate] += 1 }
+                }
                 if role == "AXGroup" { candidateGroupCounts[candidate] += 1 }
                 if role == "AXStaticText" {
                     candidateTextCounts[candidate] += 1
@@ -575,6 +601,7 @@ final class DockRecentWindowRestorer {
             if role == "AXGroup" { groups += 1 }
             var isCandidate = false
             var candidateMenu = false
+            var candidateActions = ""
             if ["AXRow", "AXCell", "AXMenuItem", "AXButton", "AXLink", "AXGroup", "AXOption", "AXList", "AXListBox"].contains(role) {
                 var rawActions: CFArray?
                 if AXUIElementCopyActionNames(element, &rawActions) == .success,
@@ -586,6 +613,9 @@ final class DockRecentWindowRestorer {
                             groupParentRoles[node.parentRole, default: 0] += 1
                             if let listIndex = node.listIndex {
                                 isCandidate = true
+                                candidateActions = actions.filter {
+                                    safeCandidateActions.contains($0)
+                                }.sorted().joined(separator: "|")
                                 pressGroupsInsideList += 1
                                 listPressGroups[listIndex, default: 0] += 1
                                 listPressParentRoles[listIndex, default: [:]][node.parentRole, default: 0] += 1
@@ -633,6 +663,19 @@ final class DockRecentWindowRestorer {
                 candidateQueryCounts.append(0)
                 candidateGroupCounts.append(0)
                 candidateHasMenu.append(candidateMenu)
+                candidateActionKeys.append(candidateActions)
+                var rawCandidateKeys: CFArray?
+                var candidateKeys = ""
+                if AXUIElementCopyAttributeNames(element, &rawCandidateKeys) == .success,
+                   let keys = rawCandidateKeys as? [String] {
+                    candidateKeys = keys.filter {
+                        safeCandidateAttributes.contains($0)
+                    }.sorted().joined(separator: "|")
+                }
+                candidateAttributeKeys.append(candidateKeys)
+                candidateDescendantIDKeys.append(0)
+                candidateDescendantURLKeys.append(0)
+                candidateDescendantDOMKeys.append(0)
                 childAncestors.append(candidate)
             }
             queue.append(contentsOf: next.map {
@@ -661,7 +704,12 @@ final class DockRecentWindowRestorer {
             ":groups=\(candidateGroupCounts[candidate])" +
             ":text=\(candidateTextCounts[candidate])" +
             ":queryText=\(candidateQueryCounts[candidate])" +
-            ":menu=\(candidateHasMenu[candidate] ? 1 : 0)"
+            ":menu=\(candidateHasMenu[candidate] ? 1 : 0)" +
+            ":attrs=\(candidateAttributeKeys[candidate])" +
+            ":actions=\(candidateActionKeys[candidate])" +
+            ":descID=\(candidateDescendantIDKeys[candidate])" +
+            ":descURL=\(candidateDescendantURLKeys[candidate])" +
+            ":descDOM=\(candidateDescendantDOMKeys[candidate])"
         }.joined(separator: ";")
         completed(preserved && !limited && queryValid,
             "count=8 minimized=3 queryValid=\(queryValid) " +
