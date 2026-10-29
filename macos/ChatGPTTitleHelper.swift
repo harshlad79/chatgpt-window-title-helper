@@ -175,12 +175,13 @@ func findWebArea(_ root: AXUIElement) -> AXUIElement? {
 }
 
 // Opt-in bounded, read-only AX shape census for GENERIC visible windows.
-// Logs role counts only; never reads AXValue, message text, URLs or titles.
+// Logs only aggregate role/metadata presence; never logs raw values or titles.
 private func boundedGenericWebAreaShape(
     _ window: AXUIElement
 ) -> (visited: Int, webAreas: Int, genericWebAreas: Int,
       namedWebAreas: Int, searchFields: Int, textAreas: Int,
-      buttons: Int, lists: Int, limited: Bool) {
+      buttons: Int, lists: Int, windowMetadata: Int,
+      webMetadata: Int, conversationRoutes: Int, limited: Bool) {
     let started = ProcessInfo.processInfo.systemUptime
     var queue = [window]
     var seen: Set<String> = []
@@ -192,6 +193,24 @@ private func boundedGenericWebAreaShape(
     var textAreas = 0
     var buttons = 0
     var lists = 0
+    // Presence-only metadata. No raw URL, document, identifier or title logs.
+    let windowMetadata = ["AXURL", "AXDocument", "AXIdentifier"]
+        .filter { !axWindowMetadataText(window, $0).isEmpty }.count
+    var webMetadata = 0
+    var conversationRoutes = 0
+    func isConversationRoute(_ value: String) -> Bool {
+        guard let parts = URLComponents(string: value),
+              let host = parts.host?.lowercased(),
+              host == "chatgpt.com" || host == "www.chatgpt.com" else {
+            return false
+        }
+        let segments = parts.path.split(separator: "/").map(String.init)
+        // Both /c/<uuid> and /g/<slug>/c/<uuid>; never log the UUID.
+        guard let c = segments.firstIndex(of: "c"),
+              c + 1 < segments.count,
+              UUID(uuidString: segments[c + 1]) != nil else { return false }
+        return c == 0 || (c >= 2 && segments[0] == "g")
+    }
     while index < queue.count && index < 220 &&
           ProcessInfo.processInfo.systemUptime - started < 1.8 {
         let element = queue[index]
@@ -201,6 +220,16 @@ private func boundedGenericWebAreaShape(
         let role = axString(element, kAXRoleAttribute)
         if role == "AXWebArea" {
             webAreas += 1
+            for key in ["AXURL", "AXDocument", "AXIdentifier", "AXDOMIdentifier"] {
+                let value = axWindowMetadataText(element, key)
+                if !value.isEmpty {
+                    webMetadata += 1
+                    if (key == "AXURL" || key == "AXDocument") &&
+                       isConversationRoute(value) {
+                        conversationRoutes += 1
+                    }
+                }
+            }
             let title = axString(element, kAXTitleAttribute)
             if title.isEmpty || title == "ChatGPT" {
                 genericWebAreas += 1
@@ -231,6 +260,7 @@ private func boundedGenericWebAreaShape(
     }
     return (index, webAreas, genericWebAreas, namedWebAreas,
             searchFields, textAreas, buttons, lists,
+            windowMetadata, webMetadata, conversationRoutes,
             index < queue.count || index >= 220)
 }
 
@@ -2774,6 +2804,9 @@ final class OverlayController:
                         "generic=\(shape.genericWebAreas) named=\(shape.namedWebAreas) " +
                         "search=\(shape.searchFields) textinputs=\(shape.textAreas) " +
                         "buttons=\(shape.buttons) lists=\(shape.lists) " +
+                        "windowMetadata=\(shape.windowMetadata) " +
+                        "webMetadata=\(shape.webMetadata) " +
+                        "conversationRoutes=\(shape.conversationRoutes) " +
                         "limited=\(shape.limited)")
                 }
                 TitleHelperDiagnostics.shared.record(
