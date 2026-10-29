@@ -181,7 +181,10 @@ private func boundedGenericWebAreaShape(
 ) -> (visited: Int, webAreas: Int, genericWebAreas: Int,
       namedWebAreas: Int, searchFields: Int, textAreas: Int,
       buttons: Int, lists: Int, windowMetadata: Int,
-      webMetadata: Int, conversationRoutes: Int, limited: Bool) {
+      webMetadata: Int, webURL: Int, webDocument: Int,
+      webIdentifier: Int, webDOMIdentifier: Int,
+      webRepeatStable: Int, webRepeatChanged: Int,
+      conversationRoutes: Int, limited: Bool) {
     let started = ProcessInfo.processInfo.systemUptime
     var queue = [window]
     var seen: Set<String> = []
@@ -197,6 +200,10 @@ private func boundedGenericWebAreaShape(
     let windowMetadata = ["AXURL", "AXDocument", "AXIdentifier"]
         .filter { !axWindowMetadataText(window, $0).isEmpty }.count
     var webMetadata = 0
+    // Fixed-key, aggregate counters only. Never persist metadata values.
+    var webKeyCounts = [0, 0, 0, 0]
+    var webRepeatStable = 0
+    var webRepeatChanged = 0
     var conversationRoutes = 0
     func isConversationRoute(_ value: String) -> Bool {
         guard let parts = URLComponents(string: value),
@@ -220,10 +227,18 @@ private func boundedGenericWebAreaShape(
         let role = axString(element, kAXRoleAttribute)
         if role == "AXWebArea" {
             webAreas += 1
-            for key in ["AXURL", "AXDocument", "AXIdentifier", "AXDOMIdentifier"] {
+            for (keyIndex, key) in ["AXURL", "AXDocument", "AXIdentifier", "AXDOMIdentifier"].enumerated() {
                 let value = axWindowMetadataText(element, key)
                 if !value.isEmpty {
                     webMetadata += 1
+                    webKeyCounts[keyIndex] += 1
+                    // A repeated read only checks immediate consistency,
+                    // not durability across app sessions or window identity.
+                    if axWindowMetadataText(element, key) == value {
+                        webRepeatStable += 1
+                    } else {
+                        webRepeatChanged += 1
+                    }
                     if (key == "AXURL" || key == "AXDocument") &&
                        isConversationRoute(value) {
                         conversationRoutes += 1
@@ -260,7 +275,9 @@ private func boundedGenericWebAreaShape(
     }
     return (index, webAreas, genericWebAreas, namedWebAreas,
             searchFields, textAreas, buttons, lists,
-            windowMetadata, webMetadata, conversationRoutes,
+            windowMetadata, webMetadata,
+            webKeyCounts[0], webKeyCounts[1], webKeyCounts[2], webKeyCounts[3],
+            webRepeatStable, webRepeatChanged, conversationRoutes,
             index < queue.count || index >= 220)
 }
 
@@ -2806,6 +2823,11 @@ final class OverlayController:
                         "buttons=\(shape.buttons) lists=\(shape.lists) " +
                         "windowMetadata=\(shape.windowMetadata) " +
                         "webMetadata=\(shape.webMetadata) " +
+                        "webURL=\(shape.webURL) webDocument=\(shape.webDocument) " +
+                        "webIdentifier=\(shape.webIdentifier) " +
+                        "webDOMIdentifier=\(shape.webDOMIdentifier) " +
+                        "webRepeatStable=\(shape.webRepeatStable) " +
+                        "webRepeatChanged=\(shape.webRepeatChanged) " +
                         "conversationRoutes=\(shape.conversationRoutes) " +
                         "limited=\(shape.limited)")
                 }
