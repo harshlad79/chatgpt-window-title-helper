@@ -376,6 +376,32 @@ assert 'fileNewWindow(' not in focus_diag
 assert 'press(' not in focus_diag
 assert 'app.activate()' not in focus_diag
 
+# Opt-in focus preflight may raise ONLY the known isolated generic window,
+# then restore the original focus. It never types, navigates or closes windows.
+assert 'TITLEHELPER_SAFE_ISOLATED_FOCUS_PREFLIGHT' in new
+assert 'self.recentRestorer.probeIsolatedFocusPreflight(' in new
+assert 'isolated-focus-preflight success=' in new
+focus_preflight = restorer.split('    func probeIsolatedFocusPreflight(', 1)[1].rsplit(
+    '\n}', 1)[0]
+for required in [
+    'expected.count == 8', 'expected[expectedID] == false',
+    'expected.values.filter({ $0 }).count == 3',
+    'before == expected', 'title(target) == "ChatGPT"',
+    'originalID != expectedID', 'expected[originalID] == false',
+    'kAXFocusedWindowAttribute',
+    'AXUIElementPerformAction(\n            target, kAXRaiseAction as CFString',
+    'AXUIElementPerformAction(original, kAXRaiseAction as CFString)',
+    'NSWorkspace.shared.frontmostApplication?.processIdentifier == expectedPID',
+    'originalFocusRestored=', 'originalsPreserved=', 'restoreAttempted=',
+]:
+    assert required in focus_preflight, required
+for forbidden in [
+    'AXUIElementSetAttributeValue', 'fileNewWindow(',
+    'dockRecentMatches(', 'press(', 'sendMessage(', 'typeText(',
+    'app.activate(', 'NSLog(', 'print('
+]:
+    assert forbidden not in focus_preflight, forbidden
+
 # One-shot activation is restricted to the previously focused isolated window;
 # restore the prior foreground app only if ChatGPT still owns foreground.
 assert 'TITLEHELPER_SAFE_ISOLATED_FOREGROUND_SEARCH' in new
