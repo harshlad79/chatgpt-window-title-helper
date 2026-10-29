@@ -11,7 +11,25 @@ final class WindowSessionHistoryStore {
         var recentTitles: [String] = []
     }
 
+    // Separate evidence only. Never use this partial snapshot as a Restore All
+    // target or as a durable conversation/window identity.
+    struct PartialEntry: Codable, Equatable {
+        let windowIndex: Int
+        let title: String
+        let minimized: Bool?
+    }
+
+    struct PartialSnapshot: Codable {
+        var version: Int = 1
+        let appPID: Int32
+        let observedAt: Date
+        let windowCount: Int
+        let entries: [PartialEntry]
+    }
+
     private let file: URL
+    private let partialFile: URL
+    private(set) var partialSnapshot: PartialSnapshot?
     private(set) var snapshot: Snapshot
     // ChatGPT normally closes windows one by one on Quit. Hold shrink
     // candidates until the app has remained alive with a stable smaller set.
@@ -23,6 +41,8 @@ final class WindowSessionHistoryStore {
         let support = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/ChatGPTTitleOverlay")
         self.file = file ?? support.appendingPathComponent("window-session-history.json")
+        self.partialFile = self.file.deletingLastPathComponent()
+            .appendingPathComponent("window-session-partial.json")
         if let data = try? Data(contentsOf: self.file),
            let loaded = try? JSONDecoder().decode(Snapshot.self, from: data),
            loaded.version == 1 {
@@ -33,6 +53,13 @@ final class WindowSessionHistoryStore {
                 [.posixPermissions: 0o600], ofItemAtPath: self.file.path)
         } else {
             self.snapshot = Snapshot()
+        }
+        if let bytes = try? Data(contentsOf: partialFile),
+           let loaded = try? JSONDecoder().decode(PartialSnapshot.self, from: bytes),
+           loaded.version == 1 {
+            self.partialSnapshot = loaded
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o600], ofItemAtPath: partialFile.path)
         }
     }
 
@@ -109,6 +136,52 @@ final class WindowSessionHistoryStore {
             snapshot = old
             TitleHelperDiagnostics.shared.record(
                 "history-save-failed code=\((error as NSError).code)")
+            return false
+        }
+    }
+
+    // Best-observed per-window evidence, independent of the complete manifest.
+    // AX ordering is ephemeral: windowIndex is evidence of a single census,
+    // NEVER a persistent identifier or a reason to open a conversation.
+    // Missing/unknown windows remain explicit via windowCount - entries.count.
+    @discardableResult
+    func observePartial(pid: pid_t, windowCount: Int,
+                        entries: [PartialEntry], now: Date = Date()) -> Bool {
+        guard pid > 0, windowCount > 0, entries.count <= windowCount,
+              Set(entries.map { $0.windowIndex }).count == entries.count,
+              entries.allSatisfy({
+                  $0.windowIndex >= 0 && $0.windowIndex < windowCount &&
+                  !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                  $0.title.count <= 512
+              }) else { return false }
+        // Never replace stronger evidence with a temporary AX-cache drop,
+        // a zero-title restart or a transient sequential Quit shrink.
+        guard !entries.isEmpty else { return false }
+        let ordered = entries.sorted { $0.windowIndex < $1.windowIndex }
+        if let old = partialSnapshot {
+            if old.appPID == Int32(pid) {
+                if ordered.count < old.entries.count ||
+                   windowCount < old.windowCount { return false }
+                if old.windowCount == windowCount && old.entries == ordered {
+                    return true
+                }
+            }
+        }
+        let next = PartialSnapshot(appPID: Int32(pid), observedAt: now,
+                                   windowCount: windowCount, entries: ordered)
+        do {
+            try FileManager.default.createDirectory(
+                at: partialFile.deletingLastPathComponent(),
+                withIntermediateDirectories: true)
+            let bytes = try JSONEncoder().encode(next)
+            try bytes.write(to: partialFile, options: [.atomic])
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o600], ofItemAtPath: partialFile.path)
+            partialSnapshot = next
+            return true
+        } catch {
+            TitleHelperDiagnostics.shared.record(
+                "history-partial-save-failed code=\((error as NSError).code)")
             return false
         }
     }
