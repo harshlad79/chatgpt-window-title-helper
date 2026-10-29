@@ -539,6 +539,46 @@ final class DockRecentWindowRestorer {
         var candidateDescendantIDKeys: [Int] = []
         var candidateDescendantURLKeys: [Int] = []
         var candidateDescendantDOMKeys: [Int] = []
+        // Fixed-label shape counters only. Raw AX values are never emitted.
+        var candidateURLShapes: [[String: Int]] = []
+        var candidateDOMShapes: [[String: Int]] = []
+        func urlShape(_ raw: Any?) -> String {
+            let value: String
+            if let string = raw as? String { value = string }
+            else if let url = raw as? URL { value = url.absoluteString }
+            else { return raw == nil ? "nil" : "unsupported" }
+            guard !value.isEmpty else { return "empty" }
+            guard let components = URLComponents(string: value),
+                  let scheme = components.scheme?.lowercased(),
+                  let host = components.host?.lowercased() else {
+                return "other"
+            }
+            guard scheme == "https", host == "chatgpt.com" else {
+                return "external"
+            }
+            let path = components.path
+            if path.range(of: #"^/c/[^/]+/?$"#,
+                          options: .regularExpression) != nil {
+                return "directChat"
+            }
+            if path.range(of: #"^/g/[^/]+/c/[^/]+/?$"#,
+                          options: .regularExpression) != nil {
+                return "projectChat"
+            }
+            return "otherChatGPT"
+        }
+        func domShape(_ raw: Any?) -> String {
+            guard let value = raw as? String else {
+                return raw == nil ? "nil" : "unsupported"
+            }
+            guard !value.isEmpty else { return "empty" }
+            if value.range(of:
+                #"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"#,
+                options: .regularExpression) != nil {
+                return "uuid"
+            }
+            return "other"
+        }
         let started = ProcessInfo.processInfo.systemUptime
         while index < queue.count &&
             ProcessInfo.processInfo.systemUptime - started < 5.0 {
@@ -559,8 +599,16 @@ final class DockRecentWindowRestorer {
                 if AXUIElementCopyAttributeNames(element, &rawDescendantKeys) == .success,
                    let keys = rawDescendantKeys as? [String] {
                     if keys.contains("AXIdentifier") { candidateDescendantIDKeys[candidate] += 1 }
-                    if keys.contains("AXURL") { candidateDescendantURLKeys[candidate] += 1 }
-                    if keys.contains("AXDOMIdentifier") { candidateDescendantDOMKeys[candidate] += 1 }
+                    if keys.contains("AXURL") {
+                        candidateDescendantURLKeys[candidate] += 1
+                        let shape = urlShape(read(element, "AXURL"))
+                        candidateURLShapes[candidate][shape, default: 0] += 1
+                    }
+                    if keys.contains("AXDOMIdentifier") {
+                        candidateDescendantDOMKeys[candidate] += 1
+                        let shape = domShape(read(element, "AXDOMIdentifier"))
+                        candidateDOMShapes[candidate][shape, default: 0] += 1
+                    }
                 }
                 if role == "AXGroup" { candidateGroupCounts[candidate] += 1 }
                 if role == "AXStaticText" {
@@ -676,6 +724,8 @@ final class DockRecentWindowRestorer {
                 candidateDescendantIDKeys.append(0)
                 candidateDescendantURLKeys.append(0)
                 candidateDescendantDOMKeys.append(0)
+                candidateURLShapes.append([:])
+                candidateDOMShapes.append([:])
                 childAncestors.append(candidate)
             }
             queue.append(contentsOf: next.map {
@@ -709,7 +759,9 @@ final class DockRecentWindowRestorer {
             ":actions=\(candidateActionKeys[candidate])" +
             ":descID=\(candidateDescendantIDKeys[candidate])" +
             ":descURL=\(candidateDescendantURLKeys[candidate])" +
-            ":descDOM=\(candidateDescendantDOMKeys[candidate])"
+            ":descDOM=\(candidateDescendantDOMKeys[candidate])" +
+            ":urlShapes=\(summary(candidateURLShapes[candidate]))" +
+            ":domShapes=\(summary(candidateDOMShapes[candidate]))"
         }.joined(separator: ";")
         completed(preserved && !limited && queryValid,
             "count=8 minimized=3 queryValid=\(queryValid) " +
