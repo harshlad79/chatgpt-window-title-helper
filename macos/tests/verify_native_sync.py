@@ -398,10 +398,13 @@ for forbidden in [
     'NSLog(', 'print('
 ]:
     assert forbidden not in combined_probe, forbidden
-assert 'func targetIdentitySafe() -> Bool' in contrast_probe
-assert '(self.read(input, kAXValueAttribute) as? String) == noMatch' in contrast_probe
-assert 'guard targetIdentitySafe(),' in contrast_probe
-assert 'guard targetSafe(), noMatchReadback' not in contrast_probe
+contrast_section = restorer.split(
+    '    func probeIsolatedSearchContrast(', 1
+)[1].split('    // Read-only capability check', 1)[0]
+assert 'func targetIdentitySafe() -> Bool' in contrast_section
+assert '(self.read(input, kAXValueAttribute) as? String) == noMatch' in contrast_section
+assert 'guard targetIdentitySafe(),' in contrast_section
+assert 'guard targetSafe(), noMatchReadback' not in contrast_section
 
 # Opt-in focus preflight may raise ONLY the known isolated generic window,
 # then restore the original focus. It never types, navigates or closes windows.
