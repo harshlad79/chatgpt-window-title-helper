@@ -1697,4 +1697,103 @@ final class DockRecentWindowRestorer {
             waitForNewWindow()
         }
     }
+
+    // One-shot isolated-window AXRaise/restore preflight. Opt-in only.
+    // The owner's focused native window is never closed, minimized or navigated.
+    // Do not run while a different application is foreground.
+    func probeIsolatedFocusPreflight(
+        expectedID: String, expectedSnapshot: String, expectedPID: pid_t,
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }), app.processIdentifier == expectedPID,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == expectedPID else {
+            completed(false, "focus-preflight-app-or-AX-unavailable"); return
+        }
+        var expected: [String: Bool] = [:]
+        for entry in expectedSnapshot.split(separator: ",") {
+            let fields = entry.split(separator: ":")
+            guard fields.count == 2,
+                  (fields[1] == "0" || fields[1] == "1"),
+                  expected[String(fields[0])] == nil else {
+                completed(false, "focus-preflight-invalid-baseline"); return
+            }
+            expected[String(fields[0])] = fields[1] == "1"
+        }
+        guard expected.count == 8, expected[expectedID] == false,
+              expected.values.filter({ $0 }).count == 3 else {
+            completed(false, "focus-preflight-unexpected-baseline"); return
+        }
+        let root = AXUIElementCreateApplication(expectedPID)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        func snapshot() -> ([String: Bool]?, [AXUIElement]) {
+            let windows = winList(root)
+            guard windows.count == 8 else { return (nil, windows) }
+            var actual: [String: Bool] = [:]
+            for window in windows {
+                let id = String(CFHash(window))
+                guard actual[id] == nil,
+                      str(window, kAXRoleAttribute) == "AXWindow",
+                      let minimized = (read(window, kAXMinimizedAttribute)
+                          as? NSNumber)?.boolValue else {
+                    return (nil, windows)
+                }
+                actual[id] = minimized
+            }
+            return (actual, windows)
+        }
+        func focusedID() -> String? {
+            guard let raw = read(root, kAXFocusedWindowAttribute),
+                  CFGetTypeID(raw) == AXUIElementGetTypeID() else { return nil }
+            return String(CFHash(raw as! AXUIElement))
+        }
+        let (before, windows) = snapshot()
+        guard before == expected,
+              let target = windows.first(where: {
+                  String(CFHash($0)) == expectedID
+              }), title(target) == "ChatGPT",
+              let originalID = focusedID(), originalID != expectedID,
+              let original = windows.first(where: {
+                  String(CFHash($0)) == originalID
+              }), expected[originalID] == false else {
+            completed(false, "focus-preflight-target-or-owner-focus-changed"); return
+        }
+        // Raise ONLY the known isolated generic window. Restore only the
+        // original focused window, and only if this preflight still owns focus.
+        busy = true
+        let raiseStatus = AXUIElementPerformAction(
+            target, kAXRaiseAction as CFString
+        )
+        guard raiseStatus == .success else {
+            busy = false
+            completed(false, "focus-preflight-isolated-raise-failed status=\(raiseStatus.rawValue)")
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            let targetFocused = focusedID() == expectedID
+            let preserved = snapshot().0 == expected
+            let stillFrontmost =
+                NSWorkspace.shared.frontmostApplication?.processIdentifier == expectedPID
+            // Never steal focus back if the owner moved to another window/app.
+            let canRestore = targetFocused && preserved && stillFrontmost
+            let restoreStatus: AXError? = canRestore
+                ? AXUIElementPerformAction(original, kAXRaiseAction as CFString)
+                : nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                let finalPreserved = snapshot().0 == expected
+                let originalFocused = focusedID() == originalID
+                self.busy = false
+                completed(canRestore && restoreStatus == .success &&
+                    finalPreserved && originalFocused,
+                    "baseline=true count=8 minimized=3 " +
+                    "isolatedFocused=\(targetFocused) " +
+                    "originalFocusRestored=\(originalFocused) " +
+                    "restoreAttempted=\(canRestore) " +
+                    "restoreAXSuccess=\(restoreStatus == .success) " +
+                    "originalsPreserved=\(finalPreserved)")
+            }
+        }
+    }
 }
