@@ -174,6 +174,66 @@ func findWebArea(_ root: AXUIElement) -> AXUIElement? {
     return nil
 }
 
+// Opt-in bounded, read-only AX shape census for GENERIC visible windows.
+// Logs role counts only; never reads AXValue, message text, URLs or titles.
+private func boundedGenericWebAreaShape(
+    _ window: AXUIElement
+) -> (visited: Int, webAreas: Int, genericWebAreas: Int,
+      namedWebAreas: Int, searchFields: Int, textAreas: Int,
+      buttons: Int, lists: Int, limited: Bool) {
+    let started = ProcessInfo.processInfo.systemUptime
+    var queue = [window]
+    var seen: Set<String> = []
+    var index = 0
+    var webAreas = 0
+    var genericWebAreas = 0
+    var namedWebAreas = 0
+    var searchFields = 0
+    var textAreas = 0
+    var buttons = 0
+    var lists = 0
+    while index < queue.count && index < 220 &&
+          ProcessInfo.processInfo.systemUptime - started < 1.8 {
+        let element = queue[index]
+        index += 1
+        guard seen.insert(String(CFHash(element))).inserted else { continue }
+        _ = AXUIElementSetMessagingTimeout(element, 0.12)
+        let role = axString(element, kAXRoleAttribute)
+        if role == "AXWebArea" {
+            webAreas += 1
+            let title = axString(element, kAXTitleAttribute)
+            if title.isEmpty || title == "ChatGPT" {
+                genericWebAreas += 1
+            } else {
+                namedWebAreas += 1
+            }
+        } else if role == "AXSearchField" {
+            searchFields += 1
+        } else if role == "AXTextArea" || role == "AXTextField" {
+            textAreas += 1
+        } else if role == "AXButton" {
+            buttons += 1
+        } else if role == "AXList" {
+            lists += 1
+        }
+        let ordinary = axChildren(element)
+        let children: [AXUIElement]
+        if !ordinary.isEmpty {
+            children = ordinary
+        } else {
+            children = (axGet(element, kAXVisibleChildrenAttribute)
+                as? [AXUIElement]) ??
+                ((axGet(element, kAXContentsAttribute) as? [AXUIElement]) ?? [])
+        }
+        for child in children.prefix(20) where queue.count < 300 {
+            queue.append(child)
+        }
+    }
+    return (index, webAreas, genericWebAreas, namedWebAreas,
+            searchFields, textAreas, buttons, lists,
+            index < queue.count || index >= 220)
+}
+
 // Diagnostic only: bounded, read-only AXWebArea discovery for minimized windows.
 // This does not inspect AXValue/message text or change any window state.
 private func boundedMinimizedWebAreaTitle(
@@ -1438,6 +1498,7 @@ final class OverlayController:
     private var lastAXCensusShape: String?
     private var lastAXCensusCheckedAt = Date.distantPast
     private var minimizedAXProbePID: pid_t = 0
+    private var genericAXProbePID: pid_t = 0
     // One bounded read-only identity census per visible conversation count.
     private var lastVisibleIdentityProbeCount = 0
 
@@ -2547,6 +2608,7 @@ final class OverlayController:
             lastAXCensusShape = nil
             lastAXCensusCheckedAt = .distantPast
             minimizedAXProbePID = 0
+            genericAXProbePID = 0
             lastVisibleIdentityProbeCount = 0
             dockSidecar.update([])
             pendingAXTitleEvents.removeAll()
@@ -2688,6 +2750,34 @@ final class OverlayController:
             } else if lastAXCensusLogState != "unavailable" {
                 TitleHelperDiagnostics.shared.record("ax-window-census unavailable")
                 lastAXCensusLogState = "unavailable"
+            }
+        }
+        // One-shot opt-in read-only shape scan of unrecognized GENERIC windows.
+        // Never touches minimized windows, user navigation, AXValue or content.
+        if lastAXWindowCensusSucceeded && genericAXProbePID != pid &&
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_GENERIC_AX_SHAPE"] == "1" {
+            genericAXProbePID = pid
+            let samples: [(Int, AXUIElement)] =
+                sidecarWindowOrder.enumerated().compactMap { index, id in
+                    guard let window = sidecarWindows[id],
+                          axBool(window, kAXMinimizedAttribute) != true,
+                          axString(window, kAXTitleAttribute) == "ChatGPT",
+                          titleCache[id] == nil else { return nil }
+                    return (index, window)
+                }
+            DispatchQueue.global(qos: .utility).async {
+                for (index, window) in samples.prefix(4) {
+                    let shape = boundedGenericWebAreaShape(window)
+                    TitleHelperDiagnostics.shared.record(
+                        "ax-generic-shape pid=\(pid) index=\(index) " +
+                        "visited=\(shape.visited) webareas=\(shape.webAreas) " +
+                        "generic=\(shape.genericWebAreas) named=\(shape.namedWebAreas) " +
+                        "search=\(shape.searchFields) textinputs=\(shape.textAreas) " +
+                        "buttons=\(shape.buttons) lists=\(shape.lists) " +
+                        "limited=\(shape.limited)")
+                }
+                TitleHelperDiagnostics.shared.record(
+                    "ax-generic-shape-complete pid=\(pid) sampled=\(min(samples.count, 4))")
             }
         }
         // One bounded background census per ChatGPT PID. The normal refresh
