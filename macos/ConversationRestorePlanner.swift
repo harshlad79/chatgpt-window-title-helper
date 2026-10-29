@@ -44,7 +44,16 @@ enum ConversationRestorePlanner {
     // For a verified census, subtract already-open multiplicity by conversation
     // UUID, not by title or ephemeral AX hash. Preserve saved window order.
     static func makePlan(saved: [SavedWindow], current: [CurrentWindow],
+                         currentCensusComplete: Bool,
                          maxTargets: Int = 100) -> Plan {
+        guard currentCensusComplete else {
+            return Plan(
+                currentCensusVerified: false, targets: [],
+                alreadyPresentIndices: [],
+                blocked: saved.indices.map {
+                    Blocked(savedIndex: $0, reason: .unverifiedCurrentWindow)
+                })
+        }
         var openCounts: [UUID: Int] = [:]
         for window in current {
             guard let raw = window.routeURL,
