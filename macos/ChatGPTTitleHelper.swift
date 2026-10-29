@@ -3163,14 +3163,35 @@ final class OverlayController:
     private func readConversationWindow(
         _ window: AXUIElement
     ) -> CachedConversation? {
-        guard axBool(window, kAXMinimizedAttribute) != true,
-              let webArea = findWebArea(window) else { return nil }
-
+        // Opt-in diagnostic only. Never emit a conversation title, URL,
+        // message body, window hash, or other owner-identifying value.
+        let reasonProbe = ProcessInfo.processInfo.environment[
+            "TITLEHELPER_SAFE_TITLE_READ_REASON"] == "1"
+        func fail(_ reason: String) -> CachedConversation? {
+            if reasonProbe {
+                let native = axString(window, kAXTitleAttribute)
+                let kind = native.isEmpty ? "empty" :
+                    (native == "ChatGPT" ? "generic" : "named")
+                TitleHelperDiagnostics.shared.record(
+                    "ax-title-read-reason reason=\(reason) native=\(kind)")
+            }
+            return nil
+        }
+        guard axBool(window, kAXMinimizedAttribute) != true else {
+            return fail("minimized")
+        }
+        guard let webArea = findWebArea(window) else {
+            return fail("no-webarea")
+        }
         let title = axString(webArea, kAXTitleAttribute)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty, title != "ChatGPT",
-              let position = axPoint(window), let size = axSize(window),
-              size.width > 100, size.height > 100 else { return nil }
+        guard !title.isEmpty, title != "ChatGPT" else {
+            return fail(title.isEmpty ? "empty-webarea-title" : "generic-webarea-title")
+        }
+        guard let position = axPoint(window), let size = axSize(window),
+              size.width > 100, size.height > 100 else {
+            return fail("invalid-window-geometry")
+        }
 
         let v = ConversationWindow(
             title: title, x: position.x, y: position.y,
