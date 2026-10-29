@@ -184,7 +184,8 @@ private func boundedGenericWebAreaShape(
       webMetadata: Int, webURL: Int, webDocument: Int,
       webIdentifier: Int, webDOMIdentifier: Int,
       webRepeatStable: Int, webRepeatChanged: Int,
-      conversationRoutes: Int, limited: Bool) {
+      conversationRoutes: Int, urlKinds: [Int],
+      urlForEquality: String?, limited: Bool) {
     let started = ProcessInfo.processInfo.systemUptime
     var queue = [window]
     var seen: Set<String> = []
@@ -205,6 +206,22 @@ private func boundedGenericWebAreaShape(
     var webRepeatStable = 0
     var webRepeatChanged = 0
     var conversationRoutes = 0
+    // Transient URL is used only for within-run equality, never logged/stored.
+    var urlForEquality: String?
+    // [unparsed, nonHTTP, ChatGPT root, ChatGPT conversation,
+    //  ChatGPT other path, other HTTP(S) host]. Fixed categories only.
+    var urlKinds = [Int](repeating: 0, count: 6)
+    func classifyURL(_ value: String) -> Int {
+        guard let parts = URLComponents(string: value),
+              let scheme = parts.scheme?.lowercased() else { return 0 }
+        guard scheme == "http" || scheme == "https" else { return 1 }
+        guard let host = parts.host?.lowercased(), !host.isEmpty else { return 0 }
+        if host == "chatgpt.com" || host == "www.chatgpt.com" {
+            if parts.path.isEmpty || parts.path == "/" { return 2 }
+            return isConversationRoute(value) ? 3 : 4
+        }
+        return 5
+    }
     func isConversationRoute(_ value: String) -> Bool {
         guard let parts = URLComponents(string: value),
               let host = parts.host?.lowercased(),
@@ -232,6 +249,10 @@ private func boundedGenericWebAreaShape(
                 if !value.isEmpty {
                     webMetadata += 1
                     webKeyCounts[keyIndex] += 1
+                    if key == "AXURL" {
+                        urlKinds[classifyURL(value)] += 1
+                        if urlForEquality == nil { urlForEquality = value }
+                    }
                     // A repeated read only checks immediate consistency,
                     // not durability across app sessions or window identity.
                     if axWindowMetadataText(element, key) == value {
@@ -278,7 +299,7 @@ private func boundedGenericWebAreaShape(
             windowMetadata, webMetadata,
             webKeyCounts[0], webKeyCounts[1], webKeyCounts[2], webKeyCounts[3],
             webRepeatStable, webRepeatChanged, conversationRoutes,
-            index < queue.count || index >= 220)
+            urlKinds, urlForEquality, index < queue.count || index >= 220)
 }
 
 // Diagnostic only: bounded, read-only AXWebArea discovery for minimized windows.
@@ -2813,8 +2834,19 @@ final class OverlayController:
                     return (index, window)
                 }
             DispatchQueue.global(qos: .utility).async {
+                var firstURL: String?
+                var urlPairsCompared = 0
+                var urlPairsEqual = 0
                 for (index, window) in samples.prefix(4) {
                     let shape = boundedGenericWebAreaShape(window)
+                    if let value = shape.urlForEquality {
+                        if let firstURL {
+                            urlPairsCompared += 1
+                            if firstURL == value { urlPairsEqual += 1 }
+                        } else {
+                            firstURL = value
+                        }
+                    }
                     TitleHelperDiagnostics.shared.record(
                         "ax-generic-shape pid=\(pid) index=\(index) " +
                         "visited=\(shape.visited) webareas=\(shape.webAreas) " +
@@ -2829,10 +2861,17 @@ final class OverlayController:
                         "webRepeatStable=\(shape.webRepeatStable) " +
                         "webRepeatChanged=\(shape.webRepeatChanged) " +
                         "conversationRoutes=\(shape.conversationRoutes) " +
+                        "urlUnparsed=\(shape.urlKinds[0]) " +
+                        "urlNonHTTP=\(shape.urlKinds[1]) " +
+                        "urlChatGPTRoot=\(shape.urlKinds[2]) " +
+                        "urlChatGPTConversation=\(shape.urlKinds[3]) " +
+                        "urlChatGPTOther=\(shape.urlKinds[4]) " +
+                        "urlOtherHTTP=\(shape.urlKinds[5]) " +
                         "limited=\(shape.limited)")
                 }
                 TitleHelperDiagnostics.shared.record(
-                    "ax-generic-shape-complete pid=\(pid) sampled=\(min(samples.count, 4))")
+                    "ax-generic-shape-complete pid=\(pid) sampled=\(min(samples.count, 4)) " +
+                    "urlPairsCompared=\(urlPairsCompared) urlPairsEqual=\(urlPairsEqual)")
             }
         }
         // One bounded background census per ChatGPT PID. The normal refresh
