@@ -1768,7 +1768,7 @@ final class DockRecentWindowRestorer {
         }
         let raise = AXUIElementPerformAction(target, kAXRaiseAction as CFString)
         guard raise == .success else {
-            completed(false, "focus-contrast-isolated-raise-failed status=\\(raise.rawValue)")
+            completed(false, "focus-contrast-isolated-raise-failed status=\(raise.rawValue)")
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
@@ -1795,10 +1795,10 @@ final class DockRecentWindowRestorer {
                     completed(contrastOK && mayRestoreFocus &&
                         restoreStatus == .success &&
                         finalPreserved && originalFocusRestored,
-                        "contrastOK=\\(contrastOK) " +
-                        "originalFocusRestored=\\(originalFocusRestored) " +
-                        "restoreAXSuccess=\\(restoreStatus == .success) " +
-                        "originalsPreserved=\\(finalPreserved) " + detail)
+                        "contrastOK=\(contrastOK) " +
+                        "originalFocusRestored=\(originalFocusRestored) " +
+                        "restoreAXSuccess=\(restoreStatus == .success) " +
+                        "originalsPreserved=\(finalPreserved) " + detail)
                 }
             }
         }
