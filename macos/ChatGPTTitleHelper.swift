@@ -359,7 +359,9 @@ private func boundedShareControlCensus(
       shareMenuRole: Int, copyLinkEnabled: Int, copyLinkPressable: Int,
       openOnChatGPTControls: Int, openOnChatGPTConversationURLs: Int,
       sharePositionKnown: Int, shareTopBand: Int, shareLowerBand: Int,
-      shareExactLabel: Int, elapsedMs: Int, remaining: Int, limited: Bool) {
+      shareExactLabel: Int, shareParentGroup: Int,
+      shareAncestorToolbar: Int, shareAncestorNavigation: Int,
+      shareExactToolbar: Int, elapsedMs: Int, remaining: Int, limited: Bool) {
     let started = ProcessInfo.processInfo.systemUptime
     var queue = [root]
     var seen: Set<String> = []
@@ -383,6 +385,12 @@ private func boundedShareControlCensus(
     var shareTopBand = 0
     var shareLowerBand = 0
     var shareExactLabel = 0
+    // Explicitly opt-in, read-only AXParent role census; no names or content.
+    let ancestorsEnabled = ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_SHARE_ANCESTORS"] == "1"
+    var shareParentGroup = 0
+    var shareAncestorToolbar = 0
+    var shareAncestorNavigation = 0
+    var shareExactToolbar = 0
     while index < queue.count &&
           ProcessInfo.processInfo.systemUptime - started < 2.0 {
         let element = queue[index]
@@ -436,8 +444,30 @@ private func boundedShareControlCensus(
                         axString(element, kAXDescriptionAttribute),
                         axString(element, kAXHelpAttribute)
                     ].map { $0.trimmingCharacters(in: .whitespacesAndNewlines).localizedLowercase }
-                    if exactLabels.contains("share") || exactLabels.contains("공유") {
-                        shareExactLabel += 1
+                    let exactShare = exactLabels.contains("share") || exactLabels.contains("공유")
+                    if exactShare { shareExactLabel += 1 }
+                    if ancestorsEnabled {
+                        // Bound AXParent traversal to four hops. Inspect roles only;
+                        // never collect parent titles, labels, URLs or message text.
+                        var cursor = element
+                        var toolbarFound = false
+                        var navigationFound = false
+                        for depth in 0..<4 {
+                            guard let parent = axGet(cursor, kAXParentAttribute) as? AXUIElement else { break }
+                            _ = AXUIElementSetMessagingTimeout(parent, 0.15)
+                            let parentRole = axString(parent, kAXRoleAttribute)
+                            if depth == 0 && parentRole == "AXGroup" { shareParentGroup += 1 }
+                            if parentRole == "AXToolbar" { toolbarFound = true }
+                            if parentRole == "AXNavigation" || parentRole == "AXNavigationBar" {
+                                navigationFound = true
+                            }
+                            cursor = parent
+                        }
+                        if toolbarFound {
+                            shareAncestorToolbar += 1
+                            if exactShare { shareExactToolbar += 1 }
+                        }
+                        if navigationFound { shareAncestorNavigation += 1 }
                     }
                     if geometryEnabled, let top = rootTop, let height = rootHeight,
                        height > 0, let point = axPoint(element) {
@@ -477,6 +507,8 @@ private func boundedShareControlCensus(
             shareMenuRole, copyLinkEnabled, copyLinkPressable,
             openOnChatGPTControls, openOnChatGPTConversationURLs,
             sharePositionKnown, shareTopBand, shareLowerBand, shareExactLabel,
+            shareParentGroup, shareAncestorToolbar, shareAncestorNavigation,
+            shareExactToolbar,
             Int((ProcessInfo.processInfo.systemUptime - started) * 1000),
             queue.count - index, index < queue.count)
 }
@@ -3041,6 +3073,10 @@ final class OverlayController:
                 var shareTopBand = 0
                 var shareLowerBand = 0
                 var shareExactLabel = 0
+                var shareParentGroup = 0
+                var shareAncestorToolbar = 0
+                var shareAncestorNavigation = 0
+                var shareExactToolbar = 0
                 var shareNodesVisited = 0
                 var shareScanLimited = 0
                 var shareScanElapsedMs = 0
@@ -3081,6 +3117,18 @@ final class OverlayController:
                     shareTopBand += controls.shareTopBand
                     shareLowerBand += controls.shareLowerBand
                     shareExactLabel += controls.shareExactLabel
+                    shareParentGroup += controls.shareParentGroup
+                    shareAncestorToolbar += controls.shareAncestorToolbar
+                    shareAncestorNavigation += controls.shareAncestorNavigation
+                    shareExactToolbar += controls.shareExactToolbar
+                    if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_SHARE_ANCESTORS"] == "1" {
+                        TitleHelperDiagnostics.shared.record(
+                            "ax-share-ancestor sampleShare=\(controls.share) " +
+                            "parentGroup=\(controls.shareParentGroup) " +
+                            "toolbar=\(controls.shareAncestorToolbar) " +
+                            "navigation=\(controls.shareAncestorNavigation) " +
+                            "exactToolbar=\(controls.shareExactToolbar)")
+                    }
                     shareNodesVisited += controls.visited
                     if controls.limited { shareScanLimited += 1 }
                     shareScanElapsedMs += controls.elapsedMs
@@ -3164,6 +3212,10 @@ final class OverlayController:
                     "shareTopBand=\(shareTopBand) " +
                     "shareLowerBand=\(shareLowerBand) " +
                     "shareExactLabel=\(shareExactLabel) " +
+                    "shareParentGroup=\(shareParentGroup) " +
+                    "shareAncestorToolbar=\(shareAncestorToolbar) " +
+                    "shareAncestorNavigation=\(shareAncestorNavigation) " +
+                    "shareExactToolbar=\(shareExactToolbar) " +
                     "shareNodesVisited=\(shareNodesVisited) " +
                     "shareScanLimited=\(shareScanLimited) " +
                     "shareScanElapsedMs=\(shareScanElapsedMs) " +
