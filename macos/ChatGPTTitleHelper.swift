@@ -1736,6 +1736,7 @@ final class OverlayController:
         // Reversible Search query contrast on the guarded isolated eighth window.
         // Never presses a result or navigates a user conversation.
         if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_QUERY_CONTRAST"] == "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOCUS_CONTRAST"] != "1",
            ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_RESULT_ACTIONS"] != "1",
            let isolatedID = ProcessInfo.processInfo.environment[
                "TITLEHELPER_SAFE_ISOLATED_WINDOW_ID"],
@@ -1778,9 +1779,34 @@ final class OverlayController:
                 }
             }
         }
+        // Opt-in, single-process raise -> contrast -> query restore -> owner focus restore.
+        if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOCUS_CONTRAST"] == "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_QUERY_CONTRAST"] != "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOCUS_PREFLIGHT"] != "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_SEARCH_PRESS"] != "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOREGROUND_SEARCH"] != "1",
+           let isolatedID = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_WINDOW_ID"],
+           let baseline = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_WINDOW_BASELINE"],
+           let pidText = ProcessInfo.processInfo.environment[
+               "TITLEHELPER_SAFE_ISOLATED_SEARCH_PID"],
+           let expectedPID = Int32(pidText), expectedPID > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self else { return }
+                self.recentRestorer.probeIsolatedFocusAndSearchContrast(
+                    expectedID: isolatedID, expectedSnapshot: baseline,
+                    expectedPID: expectedPID
+                ) { success, detail in
+                    TitleHelperDiagnostics.shared.record(
+                        "isolated-focus-contrast success=\\(success) \\(detail)")
+                }
+            }
+        }
         // Explicit opt-in, one-shot AXRaise of the isolated eighth window.
         // Restore the previously focused owner window; no Search mutation.
         if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOCUS_PREFLIGHT"] == "1",
+           ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOCUS_CONTRAST"] != "1",
            ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_QUERY_CONTRAST"] != "1",
            ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_SEARCH_PRESS"] != "1",
            ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_ISOLATED_FOREGROUND_SEARCH"] != "1",
