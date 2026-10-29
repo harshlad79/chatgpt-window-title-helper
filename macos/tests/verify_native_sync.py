@@ -376,6 +376,33 @@ assert 'fileNewWindow(' not in focus_diag
 assert 'press(' not in focus_diag
 assert 'app.activate()' not in focus_diag
 
+# Combined isolated focus + Search contrast: no owner navigation or new window.
+assert 'TITLEHELPER_SAFE_ISOLATED_FOCUS_CONTRAST' in new
+assert 'self.recentRestorer.probeIsolatedFocusAndSearchContrast(' in new
+assert 'isolated-focus-contrast success=' in new
+combined_probe = restorer.split('    func probeIsolatedFocusAndSearchContrast(', 1)[1].split(
+    '    // One-shot isolated-window AXRaise/restore preflight', 1)[0]
+for required in [
+    'expected.count == 8', 'expected[expectedID] == false',
+    'expected.values.filter({ $0 }).count == 3',
+    'before == expected', 'title(target) == "ChatGPT"',
+    'originalID != expectedID', 'expected[originalID] == false',
+    'kAXRaiseAction', 'probeIsolatedSearchContrast(',
+    'mayRestoreFocus', 'originalFocusRestored', 'originalsPreserved=',
+    'NSWorkspace.shared.frontmostApplication'
+]:
+    assert required in combined_probe, required
+for forbidden in [
+    'fileNewWindow(', 'dockRecentMatches(', 'app.activate(',
+    'sendMessage(', 'typeText(', 'press(', 'AXUIElementSetAttributeValue',
+    'NSLog(', 'print('
+]:
+    assert forbidden not in combined_probe, forbidden
+assert 'func targetIdentitySafe() -> Bool' in contrast_probe
+assert '(self.read(input, kAXValueAttribute) as? String) == noMatch' in contrast_probe
+assert 'guard targetIdentitySafe(),' in contrast_probe
+assert 'guard targetSafe(), noMatchReadback' not in contrast_probe
+
 # Opt-in focus preflight may raise ONLY the known isolated generic window,
 # then restore the original focus. It never types, navigates or closes windows.
 assert 'TITLEHELPER_SAFE_ISOLATED_FOCUS_PREFLIGHT' in new
