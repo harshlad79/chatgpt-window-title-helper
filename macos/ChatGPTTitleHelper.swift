@@ -359,7 +359,9 @@ private func boundedShareControlCensus(
       shareMenuRole: Int, copyLinkEnabled: Int, copyLinkPressable: Int,
       openOnChatGPTControls: Int, openOnChatGPTConversationURLs: Int,
       sharePositionKnown: Int, shareTopBand: Int, shareLowerBand: Int,
-      shareExactLabel: Int, shareParentGroup: Int,
+      shareExactLabel: Int, shareExactTitle: Int, shareExactDescription: Int,
+      shareExactHelp: Int, shareExactTitleActionable: Int,
+      shareParentGroup: Int,
       shareAncestorToolbar: Int, shareAncestorNavigation: Int,
       shareExactToolbar: Int, elapsedMs: Int, remaining: Int, limited: Bool) {
     let started = ProcessInfo.processInfo.systemUptime
@@ -385,6 +387,12 @@ private func boundedShareControlCensus(
     var shareTopBand = 0
     var shareLowerBand = 0
     var shareExactLabel = 0
+    // Distinguish exact Share text by AX attribute source; do not log labels.
+    let labelSourcesEnabled = ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_SHARE_LABEL_SOURCES"] == "1"
+    var shareExactTitle = 0
+    var shareExactDescription = 0
+    var shareExactHelp = 0
+    var shareExactTitleActionable = 0
     // Explicitly opt-in, read-only AXParent role census; no names or content.
     let ancestorsEnabled = ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_SHARE_ANCESTORS"] == "1"
     var shareParentGroup = 0
@@ -446,6 +454,13 @@ private func boundedShareControlCensus(
                     ].map { $0.trimmingCharacters(in: .whitespacesAndNewlines).localizedLowercase }
                     let exactShare = exactLabels.contains("share") || exactLabels.contains("공유")
                     if exactShare { shareExactLabel += 1 }
+                    if labelSourcesEnabled {
+                        let exactTitle = exactLabels[0] == "share" || exactLabels[0] == "공유"
+                        if exactTitle { shareExactTitle += 1 }
+                        if exactLabels[1] == "share" || exactLabels[1] == "공유" { shareExactDescription += 1 }
+                        if exactLabels[2] == "share" || exactLabels[2] == "공유" { shareExactHelp += 1 }
+                        if exactTitle && enabled && hasPress { shareExactTitleActionable += 1 }
+                    }
                     if ancestorsEnabled {
                         // Bound AXParent traversal to four hops. Inspect roles only;
                         // never collect parent titles, labels, URLs or message text.
@@ -508,6 +523,7 @@ private func boundedShareControlCensus(
             shareMenuRole, copyLinkEnabled, copyLinkPressable,
             openOnChatGPTControls, openOnChatGPTConversationURLs,
             sharePositionKnown, shareTopBand, shareLowerBand, shareExactLabel,
+            shareExactTitle, shareExactDescription, shareExactHelp, shareExactTitleActionable,
             shareParentGroup, shareAncestorToolbar, shareAncestorNavigation,
             shareExactToolbar,
             Int((ProcessInfo.processInfo.systemUptime - started) * 1000),
@@ -3074,6 +3090,10 @@ final class OverlayController:
                 var shareTopBand = 0
                 var shareLowerBand = 0
                 var shareExactLabel = 0
+                var shareExactTitle = 0
+                var shareExactDescription = 0
+                var shareExactHelp = 0
+                var shareExactTitleActionable = 0
                 var shareParentGroup = 0
                 var shareAncestorToolbar = 0
                 var shareAncestorNavigation = 0
@@ -3118,6 +3138,17 @@ final class OverlayController:
                     shareTopBand += controls.shareTopBand
                     shareLowerBand += controls.shareLowerBand
                     shareExactLabel += controls.shareExactLabel
+                    shareExactTitle += controls.shareExactTitle
+                    shareExactDescription += controls.shareExactDescription
+                    shareExactHelp += controls.shareExactHelp
+                    shareExactTitleActionable += controls.shareExactTitleActionable
+                    if ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_SHARE_LABEL_SOURCES"] == "1" {
+                        TitleHelperDiagnostics.shared.record(
+                            "ax-share-label-source sampleShare=\(controls.share) " +
+                            "exact=\(controls.shareExactLabel) title=\(controls.shareExactTitle) " +
+                            "description=\(controls.shareExactDescription) help=\(controls.shareExactHelp) " +
+                            "titleActionable=\(controls.shareExactTitleActionable)")
+                    }
                     shareParentGroup += controls.shareParentGroup
                     shareAncestorToolbar += controls.shareAncestorToolbar
                     shareAncestorNavigation += controls.shareAncestorNavigation
