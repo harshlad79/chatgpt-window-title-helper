@@ -453,7 +453,8 @@ private func boundedShareControlCensus(
                         var toolbarFound = false
                         var navigationFound = false
                         for depth in 0..<4 {
-                            guard let parent = axGet(cursor, kAXParentAttribute) as? AXUIElement else { break }
+                            guard let rawParent = axGet(cursor, kAXParentAttribute) else { break }
+                            let parent = rawParent as! AXUIElement
                             _ = AXUIElementSetMessagingTimeout(parent, 0.15)
                             let parentRole = axString(parent, kAXRoleAttribute)
                             if depth == 0 && parentRole == "AXGroup" { shareParentGroup += 1 }
