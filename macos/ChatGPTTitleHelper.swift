@@ -1799,7 +1799,7 @@ final class OverlayController:
                     expectedPID: expectedPID
                 ) { success, detail in
                     TitleHelperDiagnostics.shared.record(
-                        "isolated-focus-contrast success=\\(success) \\(detail)")
+                        "isolated-focus-contrast success=\(success) \(detail)")
                 }
             }
         }
