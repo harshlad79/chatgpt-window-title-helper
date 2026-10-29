@@ -2782,6 +2782,23 @@ final class OverlayController:
                     id: id, title: cached.value.title, axWindow: ax)
             }
         dockSidecar.update(sidecarEntries)
+        // Independently preserve the best *partial* window evidence. This
+        // file is never read by Restore All and cannot replace the complete
+        // history manifest. Window indexes are one-census observations only.
+        if lastAXWindowCensusSucceeded {
+            let partial: [WindowSessionHistoryStore.PartialEntry] =
+                sidecarWindowOrder.enumerated().compactMap { index, id in
+                    guard let cached = titleCache[id],
+                          let ax = sidecarWindows[id] else { return nil }
+                    return WindowSessionHistoryStore.PartialEntry(
+                        windowIndex: index,
+                        title: cached.value.title,
+                        minimized: axBool(ax, kAXMinimizedAttribute))
+                }
+            _ = sessionHistory.observePartial(
+                pid: pid, windowCount: sidecarWindowOrder.count,
+                entries: partial)
+        }
         // Probe already-visible, cached conversation web areas only. This is
         // aggregate-only and never changes owner windows or reads messages.
         // A new count triggers at most one bounded background scan per PID.
