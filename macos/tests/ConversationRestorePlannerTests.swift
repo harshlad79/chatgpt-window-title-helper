@@ -21,7 +21,7 @@ struct ConversationRestorePlannerTests {
 
         // Same title, different conversation IDs: two independent windows.
         let distinct = ConversationRestorePlanner.makePlan(
-            saved: [saved("same", route(a)), saved("same", route(b))], current: [])
+            saved: [saved("same", route(a)), saved("same", route(b))], current: [], currentCensusComplete: true)
         check(distinct.currentCensusVerified, "empty current census valid")
         check(distinct.targets.count == 2, "distinct IDs with same title")
         check(distinct.targets.map(\.savedIndex) == [0, 1], "stable order")
@@ -29,30 +29,30 @@ struct ConversationRestorePlannerTests {
         // Same conversation in two windows: subtract only ONE existing window.
         let repeated = ConversationRestorePlanner.makePlan(
             saved: [saved("first", route(a)), saved("second", route(a))],
-            current: [current(route(a))])
+            current: [current(route(a))], currentCensusComplete: true)
         check(repeated.targets.count == 1, "preserve window multiplicity")
         check(repeated.targets.first?.savedIndex == 1, "second occurrence missing")
         check(repeated.alreadyPresentIndices == [0], "consume one occurrence")
         let noneOpen = ConversationRestorePlanner.makePlan(
-            saved: [saved("first", route(a)), saved("second", route(a))], current: [])
+            saved: [saved("first", route(a)), saved("second", route(a))], current: [], currentCensusComplete: true)
         check(noneOpen.targets.count == 2, "two windows same ID both absent")
         let bothOpen = ConversationRestorePlanner.makePlan(
             saved: [saved("first", route(a)), saved("second", route(a))],
-            current: [current(route(a)), current(route(a))])
+            current: [current(route(a)), current(route(a))], currentCensusComplete: true)
         check(bothOpen.targets.isEmpty, "both occurrences present")
         check(bothOpen.alreadyPresentIndices == [0, 1], "both indices consumed")
 
         // Same UUID with a project route is still one conversation identity.
         let project = "https://chatgpt.com/g/g-p-test/c/\(a)"
         let projectMatch = ConversationRestorePlanner.makePlan(
-            saved: [saved("project", project)], current: [current(route(a))])
+            saved: [saved("project", project)], current: [current(route(a))], currentCensusComplete: true)
         check(projectMatch.targets.isEmpty, "project alias same conversation")
         check(projectMatch.alreadyPresentIndices == [0], "project alias consumed")
 
         // Missing/invalid saved identity is reported, never guessed from title.
         let partial = ConversationRestorePlanner.makePlan(
             saved: [saved("missing", nil), saved("bad", "http://chatgpt.com/c/\(a)"),
-                    saved("valid", route(b))], current: [])
+                    saved("valid", route(b))], current: [], currentCensusComplete: true)
         check(partial.targets.count == 1, "valid target remains")
         check(partial.targets.first?.savedIndex == 2, "valid index retained")
         check(partial.blocked.map(\.reason) ==
@@ -61,27 +61,35 @@ struct ConversationRestorePlannerTests {
         // One unidentified currently open native window blocks ALL restoration.
         let unknown = ConversationRestorePlanner.makePlan(
             saved: [saved("A", route(a)), saved("B", route(b))],
-            current: [current(route(c)), current(nil)])
+            current: [current(route(c)), current(nil)], currentCensusComplete: true)
         check(!unknown.currentCensusVerified, "missing current ID unsafe")
         check(unknown.targets.isEmpty, "no actions on unsafe census")
         check(unknown.blocked.count == 2, "all saved blocked on unsafe census")
         check(unknown.blocked.allSatisfy { $0.reason == .unverifiedCurrentWindow },
               "unsafe census reason")
         let invalidCurrent = ConversationRestorePlanner.makePlan(
-            saved: [saved("A", route(a))], current: [current("not a URL")])
+            saved: [saved("A", route(a))], current: [current("not a URL")], currentCensusComplete: true)
         check(!invalidCurrent.currentCensusVerified, "invalid current ID unsafe")
 
         // Explicit target cap, never silently drop remaining window occurrences.
         let limited = ConversationRestorePlanner.makePlan(
             saved: [saved("A", route(a)), saved("B", route(b)),
-                    saved("C", route(c))], current: [], maxTargets: 2)
+                    saved("C", route(c))], current: [], currentCensusComplete: true, maxTargets: 2)
         check(limited.targets.count == 2, "limit enforced")
         check(limited.blocked.count == 1, "limit overflow reported")
         check(limited.blocked.first?.reason == .targetLimitExceeded, "limit reason")
         let zero = ConversationRestorePlanner.makePlan(
-            saved: [saved("A", route(a))], current: [], maxTargets: -1)
+            saved: [saved("A", route(a))], current: [], currentCensusComplete: true, maxTargets: -1)
         check(zero.targets.isEmpty && zero.blocked.count == 1, "negative limit safe")
 
-        print("ConversationRestorePlanner: \(passed) assertions PASS")
+        // An empty AX scan is NOT proof that the native window census is complete.
+        let incomplete = ConversationRestorePlanner.makePlan(
+            saved: [saved("A", route(a))], current: [],
+            currentCensusComplete: false)
+        check(!incomplete.currentCensusVerified, "incomplete empty census unsafe")
+        check(incomplete.targets.isEmpty, "incomplete census no restore")
+        check(incomplete.blocked.count == 1, "incomplete census reported")
+
+        print("ConversationRestorePlanner: \\(passed) assertions PASS")
     }
 }
