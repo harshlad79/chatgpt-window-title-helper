@@ -358,7 +358,8 @@ private func boundedShareControlCensus(
       shareEnabled: Int, sharePressable: Int, shareActionable: Int,
       shareMenuRole: Int, copyLinkEnabled: Int, copyLinkPressable: Int,
       openOnChatGPTControls: Int, openOnChatGPTConversationURLs: Int,
-      elapsedMs: Int, remaining: Int, limited: Bool) {
+      sharePositionKnown: Int, shareTopBand: Int, shareLowerBand: Int,
+      shareExactLabel: Int, elapsedMs: Int, remaining: Int, limited: Bool) {
     let started = ProcessInfo.processInfo.systemUptime
     var queue = [root]
     var seen: Set<String> = []
@@ -373,6 +374,15 @@ private func boundedShareControlCensus(
     var copyLinkPressable = 0
     var openOnChatGPTControls = 0
     var openOnChatGPTConversationURLs = 0
+    // Geometry is read only on an explicit diagnostic run. No window moves,
+    // focus changes, clicks, or per-control coordinates are logged.
+    let geometryEnabled = ProcessInfo.processInfo.environment["TITLEHELPER_SAFE_SHARE_GEOMETRY"] == "1"
+    let rootTop = geometryEnabled ? axPoint(root)?.y : nil
+    let rootHeight = geometryEnabled ? axSize(root)?.height : nil
+    var sharePositionKnown = 0
+    var shareTopBand = 0
+    var shareLowerBand = 0
+    var shareExactLabel = 0
     while index < queue.count &&
           ProcessInfo.processInfo.systemUptime - started < 2.0 {
         let element = queue[index]
@@ -421,6 +431,23 @@ private func boundedShareControlCensus(
                 let enabled = axBool(element, kAXEnabledAttribute) == true
                 if isShare {
                     share += 1
+                    let exactLabels = [
+                        axString(element, kAXTitleAttribute),
+                        axString(element, kAXDescriptionAttribute),
+                        axString(element, kAXHelpAttribute)
+                    ].map { $0.trimmingCharacters(in: .whitespacesAndNewlines).localizedLowercase }
+                    if exactLabels.contains("share") || exactLabels.contains("공유") {
+                        shareExactLabel += 1
+                    }
+                    if geometryEnabled, let top = rootTop, let height = rootHeight,
+                       height > 0, let point = axPoint(element) {
+                        let offset = point.y - top
+                        if offset >= -10 && offset <= height + 10 {
+                            sharePositionKnown += 1
+                            if offset <= height * 0.20 { shareTopBand += 1 }
+                            else { shareLowerBand += 1 }
+                        }
+                    }
                     if enabled { shareEnabled += 1 }
                     if hasPress { sharePressable += 1 }
                     if enabled && hasPress { shareActionable += 1 }
@@ -449,6 +476,7 @@ private func boundedShareControlCensus(
             shareEnabled, sharePressable, shareActionable,
             shareMenuRole, copyLinkEnabled, copyLinkPressable,
             openOnChatGPTControls, openOnChatGPTConversationURLs,
+            sharePositionKnown, shareTopBand, shareLowerBand, shareExactLabel,
             Int((ProcessInfo.processInfo.systemUptime - started) * 1000),
             queue.count - index, index < queue.count)
 }
@@ -3009,6 +3037,10 @@ final class OverlayController:
                 var copyLinkPressable = 0
                 var openOnChatGPTControls = 0
                 var openOnChatGPTConversationURLs = 0
+                var sharePositionKnown = 0
+                var shareTopBand = 0
+                var shareLowerBand = 0
+                var shareExactLabel = 0
                 var shareNodesVisited = 0
                 var shareScanLimited = 0
                 var shareScanElapsedMs = 0
@@ -3045,6 +3077,10 @@ final class OverlayController:
                     copyLinkPressable += controls.copyLinkPressable
                     openOnChatGPTControls += controls.openOnChatGPTControls
                     openOnChatGPTConversationURLs += controls.openOnChatGPTConversationURLs
+                    sharePositionKnown += controls.sharePositionKnown
+                    shareTopBand += controls.shareTopBand
+                    shareLowerBand += controls.shareLowerBand
+                    shareExactLabel += controls.shareExactLabel
                     shareNodesVisited += controls.visited
                     if controls.limited { shareScanLimited += 1 }
                     shareScanElapsedMs += controls.elapsedMs
@@ -3124,6 +3160,10 @@ final class OverlayController:
                     "copyLinkPressable=\(copyLinkPressable) " +
                     "openOnChatGPTControls=\(openOnChatGPTControls) " +
                     "openOnChatGPTConversationURLs=\(openOnChatGPTConversationURLs) " +
+                    "sharePositionKnown=\(sharePositionKnown) " +
+                    "shareTopBand=\(shareTopBand) " +
+                    "shareLowerBand=\(shareLowerBand) " +
+                    "shareExactLabel=\(shareExactLabel) " +
                     "shareNodesVisited=\(shareNodesVisited) " +
                     "shareScanLimited=\(shareScanLimited) " +
                     "shareScanElapsedMs=\(shareScanElapsedMs) " +
