@@ -90,6 +90,6 @@ struct ConversationRestorePlannerTests {
         check(incomplete.targets.isEmpty, "incomplete census no restore")
         check(incomplete.blocked.count == 1, "incomplete census reported")
 
-        print("ConversationRestorePlanner: \\(passed) assertions PASS")
+        print("ConversationRestorePlanner: \(passed) assertions PASS")
     }
 }
