@@ -481,8 +481,8 @@ final class DockRecentWindowRestorer {
         }
         // Track fixed AX roles, per-list ancestry and aggregate query-match counts.
         // Never emit any text, IDs, URLs, hashes, or raw accessibility values.
-        var queue: [(element: AXUIElement, parentRole: String, listIndex: Int?)] = [
-            (element: target, parentRole: "root", listIndex: nil)
+        var queue: [(element: AXUIElement, parentRole: String, listIndex: Int?, candidateAncestors: [Int])] = [
+            (element: target, parentRole: "root", listIndex: nil, candidateAncestors: [])
         ]
         var seen: Set<String> = []
         var index = 0
@@ -514,6 +514,13 @@ final class DockRecentWindowRestorer {
         var menuGroupsInsideList = 0
         var pressRoles: [String: Int] = [:]
         var menuRoles: [String: Int] = [:]
+        // Per-AXPress Group structural census. Never collect titles, text or IDs.
+        var candidateParents: [String] = []
+        var candidateChildCounts: [Int] = []
+        var candidateTextCounts: [Int] = []
+        var candidateQueryCounts: [Int] = []
+        var candidateGroupCounts: [Int] = []
+        var candidateHasMenu: [Bool] = []
         let started = ProcessInfo.processInfo.systemUptime
         while index < queue.count &&
             ProcessInfo.processInfo.systemUptime - started < 5.0 {
@@ -526,6 +533,17 @@ final class DockRecentWindowRestorer {
             roleCounts[safeRole, default: 0] += 1
             if role == "AXList" {
                 listParentRoles[node.parentRole, default: 0] += 1
+            }
+            // Aggregate only counts under pressable result candidates, never values.
+            for candidate in node.candidateAncestors {
+                if role == "AXGroup" { candidateGroupCounts[candidate] += 1 }
+                if role == "AXStaticText {
+                    candidateTextCounts[candidate] += 1
+                    if let value = read(element, kAXValueAttribute) as? String,
+                       value.range(of: "ChatGPT", options: .caseInsensitive) != nil {
+                        candidateQueryCounts[candidate] += 1
+                    }
+                }
             }
             if let listIndex = node.listIndex {
                 if node.parentRole == "AXList" {
@@ -555,6 +573,8 @@ final class DockRecentWindowRestorer {
             if role == "AXButton" { buttons += 1 }
             if role == "AXLink" { links += 1 }
             if role == "AXGroup" { groups += 1 }
+            var isCandidate = false
+            var candidateMenu = false
             if ["AXRow", "AXCell", "AXMenuItem", "AXButton", "AXLink", "AXGroup", "AXOption", "AXList", "AXListBox"].contains(role) {
                 var rawActions: CFArray?
                 if AXUIElementCopyActionNames(element, &rawActions) == .success,
@@ -565,6 +585,7 @@ final class DockRecentWindowRestorer {
                         if role == "AXGroup" {
                             groupParentRoles[node.parentRole, default: 0] += 1
                             if let listIndex = node.listIndex {
+                                isCandidate = true
                                 pressGroupsInsideList += 1
                                 listPressGroups[listIndex, default: 0] += 1
                                 listPressParentRoles[listIndex, default: [:]][node.parentRole, default: 0] += 1
@@ -572,6 +593,7 @@ final class DockRecentWindowRestorer {
                         }
                     }
                     if actions.contains("AXShowMenu") {
+                        if isCandidate { candidateMenu = true }
                         menuActions += 1
                         menuRoles[safeRole, default: 0] += 1
                         if role == "AXGroup" && node.listIndex != nil {
@@ -602,8 +624,20 @@ final class DockRecentWindowRestorer {
             } else {
                 childListIndex = node.listIndex
             }
+            var childAncestors = node.candidateAncestors
+            if isCandidate {
+                let candidate = candidateParents.count
+                candidateParents.append(node.parentRole)
+                candidateChildCounts.append(next.count)
+                candidateTextCounts.append(0)
+                candidateQueryCounts.append(0)
+                candidateGroupCounts.append(0)
+                candidateHasMenu.append(candidateMenu)
+                childAncestors.append(candidate)
+            }
             queue.append(contentsOf: next.map {
-                (element: $0, parentRole: safeRole, listIndex: childListIndex)
+                (element: $0, parentRole: safeRole, listIndex: childListIndex,
+                 candidateAncestors: childAncestors)
             })
         }
         let limited = index < queue.count
@@ -621,6 +655,14 @@ final class DockRecentWindowRestorer {
             ":directRoles=\(summary(listDirectRoles[listIndex, default: [:]]))" +
             ":pressParents=\(summary(listPressParentRoles[listIndex, default: [:]]))"
         }.joined(separator: ";")
+        let candidateDetails = candidateParents.indices.prefix(20).map { candidate in
+            "\(candidate):parent=\(candidateParents[candidate])" +
+            ":children=\(candidateChildCounts[candidate])" +
+            ":groups=\(candidateGroupCounts[candidate])" +
+            ":text=\(candidateTextCounts[candidate])" +
+            ":queryText=\(candidateQueryCounts[candidate])" +
+            ":menu=\(candidateHasMenu[candidate] ? 1 : 0)"
+        }.joined(separator: ";")
         completed(preserved && !limited && queryValid,
             "count=8 minimized=3 queryValid=\(queryValid) " +
             "rows=\(rows) cells=\(cells) menuItems=\(menuItems) " +
@@ -634,6 +676,7 @@ final class DockRecentWindowRestorer {
             "menuGroupsInsideList=\(menuGroupsInsideList) " +
             "pressGroupParents=\(summary(groupParentRoles)) " +
             "listDetails=\(listDetails) " +
+            "candidateCount=\(candidateParents.count) candidateDetails=\(candidateDetails) " +
             "roleCounts=\(summary(roleCounts)) " +
             "pressRoles=\(summary(pressRoles)) menuRoles=\(summary(menuRoles)) " +
             "visited=\(seen.count) limited=\(limited) " +
