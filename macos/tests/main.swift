@@ -91,6 +91,22 @@ let testDirectory = FileManager.default.temporaryDirectory
 try! FileManager.default.createDirectory(
     at: testDirectory, withIntermediateDirectories: true)
 let file = testDirectory.appendingPathComponent("state.json")
+// Native captions of minimized windows are only diagnostic evidence.
+expect(WindowSessionHistoryStore.partialEvidenceTitle(
+    cached: "Loaded chat", native: "Old caption", minimized: true) == "Loaded chat",
+    "cached web title takes precedence over minimized native caption")
+expect(WindowSessionHistoryStore.partialEvidenceTitle(
+    cached: nil, native: "Minimized chat", minimized: true) == "Minimized chat",
+    "named minimized AXWindow contributes partial evidence")
+expect(WindowSessionHistoryStore.partialEvidenceTitle(
+    cached: nil, native: "ChatGPT", minimized: true) == nil,
+    "generic minimized window is not a conversation identity")
+expect(WindowSessionHistoryStore.partialEvidenceTitle(
+    cached: nil, native: "Visible chat", minimized: false) == nil,
+    "unknown visible window is not inferred from its native caption")
+expect(WindowSessionHistoryStore.partialEvidenceTitle(
+    cached: nil, native: "  ", minimized: true) == nil,
+    "blank native caption cannot enter partial evidence")
 let history = WindowSessionHistoryStore(file: file)
 expect(history.snapshot.appPID == 0, "empty state starts without PID")
 expect(!history.observe(pid: 100, titles: [], windowCount: 0),
