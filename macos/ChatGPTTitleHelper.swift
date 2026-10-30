@@ -2620,6 +2620,11 @@ final class OverlayController:
         // At most one generic initial window is acceptable. If multiple
         // unknown native windows exist, refuse rather than duplicate them.
         guard unresolved <= 1 else { return nil }
+        guard !WindowRestorePreflightPolicy.hasAmbiguousOpenTitles(result) else {
+            TitleHelperDiagnostics.shared.record(
+                "history-restore-blocked reason=duplicate-open-title")
+            return nil
+        }
         return result
     }
 
