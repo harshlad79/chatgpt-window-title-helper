@@ -44,6 +44,9 @@ enum FocusedMenuURLProbe {
         let menuItems: Int
         let labeledItems: Int
         let validConversationURLs: Int
+        // Read-only candidates, independent of localized menu labels.
+        // NOT verified as the currently selected conversation identity.
+        let routeCandidates: Int
         let invalidURLs: Int
         let limited: Bool
         let elapsedMilliseconds: Int
@@ -62,6 +65,11 @@ enum FocusedMenuURLProbe {
         guard let url, !url.isEmpty else { return .missingURL }
         return ConversationRouteIdentity.parse(url) == nil
             ? .invalidURL : .conversationURL
+    }
+
+    static func isConversationRouteCandidate(_ url: String?) -> Bool {
+        guard let url else { return false }
+        return ConversationRouteIdentity.parse(url) != nil
     }
 
     private static func read(_ element: AXUIElement, _ key: String) -> CFTypeRef? {
@@ -84,19 +92,20 @@ enum FocusedMenuURLProbe {
     static func inspect(app: AXUIElement) -> Result {
         let start = ProcessInfo.processInfo.systemUptime
         func result(_ found: Bool, _ items: Int, _ labels: Int,
-                    _ valid: Int, _ invalid: Int, _ limited: Bool,
-                    _ focusAvailable: Bool) -> Result {
+                    _ valid: Int, _ candidates: Int, _ invalid: Int,
+                    _ limited: Bool, _ focusAvailable: Bool) -> Result {
             Result(menuFound: found, focusAvailable: focusAvailable,
                    menuItems: items,
                    labeledItems: labels, validConversationURLs: valid,
-                   invalidURLs: invalid, limited: limited,
+                   routeCandidates: candidates, invalidURLs: invalid,
+                   limited: limited,
                    elapsedMilliseconds: Int(
                        (ProcessInfo.processInfo.systemUptime - start) * 1000))
         }
         _ = AXUIElementSetMessagingTimeout(app, 0.12)
         guard let focusedRaw = read(app, kAXFocusedUIElementAttribute),
               CFGetTypeID(focusedRaw) == AXUIElementGetTypeID()
-        else { return result(false, 0, 0, 0, 0, false, false) }
+        else { return result(false, 0, 0, 0, 0, 0, false, false) }
         let focused = focusedRaw as! AXUIElement
 
         // The focused item may be nested inside an AXMenu. Inspect ancestors,
@@ -116,7 +125,7 @@ enum FocusedMenuURLProbe {
             else { break }
             current = parentRaw as! AXUIElement
         }
-        guard let menu else { return result(false, 0, 0, 0, 0, false, true) }
+        guard let menu else { return result(false, 0, 0, 0, 0, 0, false, true) }
 
         var queue: [(AXUIElement, Int)] = [(menu, 0)]
         var seen = Set<String>()
@@ -124,6 +133,7 @@ enum FocusedMenuURLProbe {
         var items = 0
         var labeled = 0
         var valid = 0
+        var candidates = 0
         var invalid = 0
         while index < queue.count && index < 160 &&
               ProcessInfo.processInfo.systemUptime - start < 0.9 {
@@ -141,6 +151,9 @@ enum FocusedMenuURLProbe {
                 ]
                 // Attributes can differ by host; count the same element once.
                 let candidateURL = url(node)
+                // Candidate telemetry only. Never bind an unlabeled URL to a
+                // window or use it for restore, and never log the raw route.
+                if isConversationRouteCandidate(candidateURL) { candidates += 1 }
                 let evidence = label.map { classify(label: $0, url: candidateURL) }
                 if evidence.contains(where: { $0 != .unrelated }) {
                     labeled += 1
@@ -156,7 +169,7 @@ enum FocusedMenuURLProbe {
                 }
             }
         }
-        return result(true, items, labeled, valid, invalid,
+        return result(true, items, labeled, valid, candidates, invalid,
                       index < queue.count || index >= 160, true)
     }
 }
