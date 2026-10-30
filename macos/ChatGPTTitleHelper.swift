@@ -1651,6 +1651,7 @@ final class OverlayController:
     private var focusedMenuURLProbeInFlight = false
 
     private var timer: Timer?
+    private var focusedMenuURLProbeTimer: Timer?
 
     // TitleProbe-derived event subscriptions + one-window priority queue.
     // The legacy NativeTitleSync implementation below is unchanged.
@@ -1836,6 +1837,20 @@ final class OverlayController:
                 timer,
                 forMode: .common
             )
+        }
+
+        // Fast, independent diagnostic tick. The regular 2-second refresh and
+        // window/title/restore paths are unchanged. Default off.
+        if ProcessInfo.processInfo.environment[
+                "TITLEHELPER_SAFE_FOCUSED_MENU_URL_PROBE"] == "1" {
+            let menuTimer = Timer(
+                timeInterval: FocusedMenuProbeCadence.timerInterval,
+                repeats: true
+            ) { [weak self] _ in
+                self?.sampleFocusedMenuURL()
+            }
+            focusedMenuURLProbeTimer = menuTimer
+            RunLoop.main.add(menuTimer, forMode: .common)
         }
 
         refresh()
@@ -2721,6 +2736,43 @@ final class OverlayController:
     // Refresh
     // ========================================================
 
+    // Opt-in and read-only. Does not change focus, open a menu or inspect
+    // messages. Short-lived menus are sampled independently of full refresh.
+    private func sampleFocusedMenuURL() {
+        guard ProcessInfo.processInfo.environment[
+                "TITLEHELPER_SAFE_FOCUSED_MENU_URL_PROBE"] == "1" else { return }
+        let pid = targetPID
+        guard FocusedMenuProbeCadence.shouldSample(
+                trusted: AXIsProcessTrusted(),
+                frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier,
+                targetPID: pid,
+                inFlight: focusedMenuURLProbeInFlight,
+                elapsed: Date().timeIntervalSince(lastFocusedMenuURLProbeAt)
+            ),
+            currentChatGPTPID() == pid,
+            let appAX = targetAX else { return }
+
+        lastFocusedMenuURLProbeAt = Date()
+        focusedMenuURLProbeInFlight = true
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let evidence = FocusedMenuURLProbe.inspect(app: appAX)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.focusedMenuURLProbeInFlight = false
+                guard self.targetPID == pid else { return }
+                if evidence.menuFound {
+                    TitleHelperDiagnostics.shared.record(
+                        "ax-focused-menu-url items=\(evidence.menuItems) " +
+                        "labeled=\(evidence.labeledItems) " +
+                        "conversationURLs=\(evidence.validConversationURLs) " +
+                        "invalidURLs=\(evidence.invalidURLs) " +
+                        "limited=\(evidence.limited) " +
+                        "elapsedMs=\(evidence.elapsedMilliseconds)")
+                }
+            }
+        }
+    }
+
     private func refresh(allowBackgroundFallback: Bool = true) {
         // Protect against re-entrancy from AppKit / AX runloop events.
         guard !processingRefresh else {
@@ -3046,34 +3098,6 @@ final class OverlayController:
                     id: id, title: cached.value.title, axWindow: ax)
             }
         dockSidecar.update(sidecarEntries)
-        // Diagnostic only: sample an ALREADY OPEN focused ChatGPT context
-        // menu through the Accessibility-approved Helper process. This is
-        // disabled by default and never navigates, presses or exposes URLs.
-        if ProcessInfo.processInfo.environment[
-                "TITLEHELPER_SAFE_FOCUSED_MENU_URL_PROBE"] == "1",
-           !focusedMenuURLProbeInFlight,
-           Date().timeIntervalSince(lastFocusedMenuURLProbeAt) >= 2.5,
-           NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
-           let appAX = targetAX {
-            lastFocusedMenuURLProbeAt = Date()
-            focusedMenuURLProbeInFlight = true
-            DispatchQueue.global(qos: .utility).async { [weak self] in
-                let evidence = FocusedMenuURLProbe.inspect(app: appAX)
-                DispatchQueue.main.async {
-                    guard let self else { return }
-                    self.focusedMenuURLProbeInFlight = false
-                    if evidence.menuFound {
-                        TitleHelperDiagnostics.shared.record(
-                            "ax-focused-menu-url items=\(evidence.menuItems) " +
-                            "labeled=\(evidence.labeledItems) " +
-                            "conversationURLs=\(evidence.validConversationURLs) " +
-                            "invalidURLs=\(evidence.invalidURLs) " +
-                            "limited=\(evidence.limited) " +
-                            "elapsedMs=\(evidence.elapsedMilliseconds)")
-                    }
-                }
-            }
-        }
         // Independently preserve the best *partial* window evidence. This
         // file is never read by Restore All and cannot replace the complete
         // history manifest. Window indexes are one-census observations only.
