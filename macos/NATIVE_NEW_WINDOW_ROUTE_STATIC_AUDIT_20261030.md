@@ -75,7 +75,7 @@ All Dev outer/nested calls completed, including the two Worker assertion failure
 **Decision / next:** Stop treating `open-in-new-window("/c/<UUID>")` as a candidate for this installed version. Investigate **supported OS open-url / deep-link handling and native ChatGPT UI** read-only, especially whether exact conversation routes can be consumed through a legitimate user-facing action. Only if a disposable test chat and full AX baseline exist, perform one non-destructive UI navigation and verify independent AXWindow identity, title, body, original-window preservation and bounded asynchronous completion. Otherwise retain the guarded Dock Recent fallback with explicit missing/duplicate failures. PR #3 remains Draft/unmerged; Windows and NativeTitleSync unchanged. No OpenAI pre-dispatch safety block, so no `tool_boundary` Experience event.
 
 
-## 84차 — macOS OS open-url routes HTTPS into existing-window browser panel (2026-10-30 12:21–12:30 KST)
+## 84차 — macOS OS open-url routes HTTPS into existing-window browser panel (2026-10-30 12:21–12:24 KST)
 
 **New read-only static finding, installed version only:** The app bundle `com.openai.codex` advertises URL schemes `codex`, `http`, `https` in `Contents/Info.plist`. This registration **does not prove** that LaunchServices routes arbitrary ChatGPT conversation links to this app on the current machine.
 
