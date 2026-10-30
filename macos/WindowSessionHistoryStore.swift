@@ -77,7 +77,11 @@ final class WindowSessionHistoryStore {
     @discardableResult
     func observe(pid: pid_t, titles: [String], windowCount: Int,
                  now: Date = Date()) -> Bool {
+        // Titles are not conversation identities. A duplicate title is an
+        // ambiguous native-window census, never a complete restore manifest.
+        // Preserve the last known complete set until stable route IDs exist.
         guard pid > 0, windowCount > 0, titles.count == windowCount,
+              Set(titles).count == windowCount,
               titles.allSatisfy({
                 !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
                     $0.count <= 512
