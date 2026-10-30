@@ -51,5 +51,15 @@ check(!FocusedMenuProbeCadence.shouldSample(trusted: true, frontmostPID: 12,
 check(FocusedMenuProbeCadence.shouldSample(trusted: true, frontmostPID: 12,
     targetPID: 12, inFlight: false, elapsed: 0.31), "foreground sample allowed")
 check(FocusedMenuProbeCadence.timerInterval < 2.0, "faster than refresh")
+check(!FocusedMenuProbeCadence.shouldReport(elapsed: 59, interval:
+    FocusedMenuProbeCadence.heartbeatInterval), "heartbeat throttled")
+check(FocusedMenuProbeCadence.shouldReport(elapsed: 60, interval:
+    FocusedMenuProbeCadence.heartbeatInterval), "heartbeat due")
+check(!FocusedMenuProbeCadence.shouldReport(elapsed: 29, interval:
+    FocusedMenuProbeCadence.noMenuReportInterval), "no-menu report throttled")
+check(FocusedMenuProbeCadence.shouldReport(elapsed: 30, interval:
+    FocusedMenuProbeCadence.noMenuReportInterval), "no-menu report due")
+check(!FocusedMenuProbeCadence.shouldReport(elapsed: 99, interval: 0),
+    "invalid telemetry interval disabled")
 print("PASS focused menu URL policy \(passes) assertions")
 print("LIVE_AX_MENU_URL=NOT_TESTED")
