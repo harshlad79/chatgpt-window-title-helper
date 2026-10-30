@@ -2358,3 +2358,24 @@ Mac Worker 4건 모두 TheCompany **core_dev** `thecompany_call_tool(operation=i
 **5. 미완료·다음:** 실제 비민감 테스트 대화의 공식 메뉴가 열릴 때 AXURL 후보와 네이티브 AXWindow 고유 연결 검증. 대화 ID 저장 → 개별 독립 창/제목·본문·원본 보존 검증 → 전체 E2E. 현재 AX raw8 중 완전 인식3, 부분 관측5, 미식별3. **전체 Restore All 강제 실행 금지**.
 
 **6. 사용자 조치:** 현재 없음. 정상 진행 Windows-only 알림 등록 확인, Telegram 미발송. E2E 미완료이므로 예약작업 유지.
+
+
+## 101차 — 2026-10-31 05:27–05:34 KST — 대화 고유 URL 파서의 fail-closed 테스트 강화, Mac 실기기 PASS
+
+**1. 제목·일시:** ChatGPT Window Title Helper macOS / 마지막 창 모두 복원 / 101차 / 2026-10-31 05:27–05:34 KST.
+
+**2. 전체 상태:** 정확한 GitHub 테스트 소스 `9c19a4f9aa05b58e506e2ba6a4b5484d89d0ce67` MacMini2 Swift 전체 테스트/ARM64 빌드 **exit0**. 대화 URL 파서에 **합성 경로 17 assertions** 추가해 www/프로젝트 URL round-trip 및 위조 호스트·userinfo·port·fragment·query·traversal·잘못된 UUID 거절 검증. **실제 AXURL·대화 ID·독립 native 새 창·전체 Quit→relaunch→Restore All E2E 미검증**. 테스트 전용 변경이며 Helper 미배포.
+
+**3. 수행·근거:** canonical `harshlad79/chatgpt-window-title-helper`, `feat/macos-adaptive-title-helper`, 시작 HEAD `da5f0665`; PR #3 **Open/Draft → master**, 미병합. 필수 CURRENT/normal Quit/Dock bulk 3문서와 공통 Rulebook 원문 조회. 원격 브랜치 6+0 전수, master/dev 제외, 미병합 기능 브랜치 1개 (feature ahead374/behind1, app-icon PR #4 merged, 다른 두 브랜치 ahead0). 테스트 커밋 `3591ed34`의 합성 문자열 interpolation 이중 이스케이프를 **Mac 실행 전에** `9c19a4f9`에서 수정. 정확한 SHA clean detached worktree에서 `macos/tests/run.sh` exit0, NativeTitleSync byte identity PASS, scheduler14/history59/batch91/async100/focused-menu **46** assertions PASS(총310), ARM64 optimized BUILT, SHA256 `0429e11e0ad0455f2acaec987a63b9ff1e4488e0f29ebb50d1ab62ffb6b4086a`. 빌드는 **미설치/미실행**. `LIVE_AX_MENU_URL=NOT_TESTED`.
+
+Mac 실측 ChatGPT PID27828, Helper PID15201, 서명 PASS, 세션 SHA `78772da2...`/부분 SHA `56e9cf97...` 불변, partial AX raw8/entries5/minimized2. 마지막 메뉴 sampler `foreground=false trusted=true targetValid=true inFlight=false`; 메뉴 이벤트0은 **메뉴 미개방**, URL 부재를 뜻하지 않음. Dev 화면 캡처 Terminal 전면, UI 조작 없음. 이전 정적 조사상 일반 `/c/<UUID>`는 앱의 native new-window IPC guard가 거절하고 OS HTTPS는 기존 브라우저 패널을 변경할 수 있으므로 임의 URL 열기 실험 금지.
+
+**오류 분류:** `thecompany_call_tool`의 잘못된 `tool` 인자 → functions.exec 스키마 사전 거절(실제 Dev 요청 미도달, request_id/mcp_path/mcp_elapsed/exit_code 미발급); `operation`으로 수정 성공. GitHub 테스트 파일 추정 경로 `fetch_file` 404 → `macos/tests/run.sh`에서 정확한 `macos/tests/menu_probe/main.swift` 확인 후 성공. 합성 fixture 이중 이스케이프 수정 후 실제 테스트 PASS. **OpenAI 사전 안전검사 차단0, Dev Control 거절0, Mac Worker 실패0**, tool_boundary Experience 필수 기록 조건 미발생. 운영 MCP/Work/Codex/TCC 우회/인젝션 없음.
+
+**도구 호출·실행 경로:** GitHub connector `fetch_file/get_pr_info/search_branches/compare_commits/update_file/create_file` (Control/Worker 미경유, 실행 PID/request_id/mcp_path 미제공). Dev core_dev `status/describe_control_operation/capture_screen`, `thecompany_call_tool(operation=get_latest_success)` request `7be3e1d3`/2ms, `operation=invoke` → `node_id=macos-main,project=chatgpt-window-title-helper,backend=python:subprocess,worker_tool=run_command,program=/bin/bash,args=[-lc,<읽기전용 상태/격리 SHA 테스트/빌드 진행·결과>],timeout15–28`, read-only `procedure_key=macos-title-helper-live-readonly`. 공통 실제 `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=772807) -> control.invoke -> macos-main/thecompany-node-agent:python(pid=5070) -> python:subprocess/run_command -> bash(pid=<각 PID>)`, 모든 12회 outer/nested completed, Worker exit0, timed_out=false. 시작 `d58215b5` bash88007, 테스트 `4ce3c81b` bash90208/background PID90270, 최종 `0c2dd797` bash93526, 보존 `97155f0a` bash93664, 시각 `515053a4` date94277. **전체 요청 ID/PID/elapsed/argv/오류·수정·결과는 [101차 상세 원장](../../macos/CONVERSATION_ROUTE_IDENTITY_PARSER_TEST_20261031.md)**.
+
+**4. 최종 상태·기존 영향:** 소스 기능 변경 없음. Helper PID15201, ChatGPT PID27828, 원본 세션·창 보존. Windows/NativeTitleSync/PR #3 변경 없음. 롤백 불필요. 상세 문서 커밋 `53f1b394`, 본 CURRENT 후속 문서-only 커밋은 별도 HEAD.
+
+**5. 미완료·다음:** 자연스럽게 열린 비민감 공식 대화 메뉴에서 passive sampler의 실제 URL 후보 측정 → AXWindow 고유 결합 검증 → 안전한 별도 native 창 경로/제목·본문 검증 → 실제 전체 Restore All E2E. 현재 Terminal 전면이므로 사용자 포커스 강제 변경/복원 강행 금지. 더 많은 합성 테스트보다 실제 메뉴 실측 우선.
+
+**6. 사용자 조치:** 현재 없음. 이번 회차 커넥터 인자·경로 오류를 복구했으므로 **Telegram 우선 → Windows 후속** 알림. 발송/독립 조회 영수증은 다음 CURRENT 후속 단락에 기록. 큐 접수와 화면 표시 구분.
