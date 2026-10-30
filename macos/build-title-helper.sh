@@ -5,6 +5,8 @@ mkdir -p "$ROOT/artifacts/macos"
 cd "$ROOT"
 xcrun swiftc -O \
   macos/ChatGPTTitleHelper.swift \
+  macos/ConversationRouteIdentity.swift \
+  macos/FocusedMenuURLProbe.swift \
   macos/MacAXTitleObserver.swift \
   macos/DockMenuSidecar.swift \
   macos/DockRecentWindowRestorer.swift \
