@@ -3135,12 +3135,15 @@ final class OverlayController:
         if lastAXWindowCensusSucceeded {
             let partial: [WindowSessionHistoryStore.PartialEntry] =
                 sidecarWindowOrder.enumerated().compactMap { index, id in
-                    guard let cached = titleCache[id],
-                          let ax = sidecarWindows[id] else { return nil }
+                    guard let ax = sidecarWindows[id] else { return nil }
+                    let minimized = axBool(ax, kAXMinimizedAttribute)
+                    guard let title = WindowSessionHistoryStore.partialEvidenceTitle(
+                        cached: titleCache[id]?.value.title,
+                        native: axString(ax, kAXTitleAttribute),
+                        minimized: minimized == true
+                    ) else { return nil }
                     return WindowSessionHistoryStore.PartialEntry(
-                        windowIndex: index,
-                        title: cached.value.title,
-                        minimized: axBool(ax, kAXMinimizedAttribute))
+                        windowIndex: index, title: title, minimized: minimized)
                 }
             _ = sessionHistory.observePartial(
                 pid: pid, windowCount: sidecarWindowOrder.count,
