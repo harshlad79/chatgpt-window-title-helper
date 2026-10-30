@@ -2283,3 +2283,40 @@ Mac Worker 4건 모두 TheCompany **core_dev** `thecompany_call_tool(operation=i
 
 
 **98차 Windows-only 알림 실제 접수·독립 조회 (2026-10-31 02:25 KST):** 정상 진행·사용자 개입 및 오류 없음. Telegram **미발송**. TheCompany **core_dev** Control-only `thecompany_call_tool(operation=enqueue_notification)` request `79edb031-1476-4c3f-b3e8-5ede43e8cb34`, notification `5e7de767-6493-4639-9e87-6d8c40502813`, outer/nested completed, queued, elapsed15ms, 실제 `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=772807) -> control.enqueue_notification`. 인자 `notification_destination=windows-main`, `session_ref=macos-title-helper-restore-hourly`, `source_node=macos-main`, `project=chatgpt-window-title-helper`, `task_label=마지막 창 모두 복원`, title `[ChatGPT Window Title Helper] · [macos-main]`, body 첫 줄 `[실제 대화 제목 미확인] ChatGPT Window Title Helper macOS — 마지막 창 모두 복원` + 6개 번호 섹션, 실제 LF(U+000A) 사용, 리터럴 백슬래시+n 없음. 당시 GH 문서 HEAD `d488eff6`, 배포 소스 `ddd036f1` 구분. 독립 `thecompany_call_tool(operation=get_notification)` request `c3c57699-01f4-4340-af27-a58e6d7205d9`, outer/nested completed/elapsed1ms, 실제 `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=772807) -> control.get_notification`, **state=registered**, attempt1, `windows-main` agent `pythonw.exe(pid=11848)` → `powershell.exe(pid=33740)`, exit0, `WINDOWS_NOTIFICATION_REGISTERED`. task_id 미발급. **알림 접수 오류 없음**; Windows 실제 화면 표시·사용자 열람 **미검증**. 이 후속 문서 커밋은 설치 Helper·ChatGPT 원본·세션·Windows 소스 변경 없음.
+
+
+## 99차 — 2026-10-31 03:23–03:28 KST — 최소화 창의 native AX 제목을 부분 증거로만 보존
+
+**1. 제목·일시:** ChatGPT Window Title Helper macOS / 마지막 창 모두 복원 / 99차 / 2026-10-31 03:23–03:28 KST.
+
+**2. 전체 상태:** 정확한 GitHub SHA `a29a9e2dd653edc627826a572b55ba08bae72b2f`에서 **소스 2파일·테스트 1파일 수정, MacMini2 Swift 테스트 및 ARM64 optimized build exit0**. 실제 사용자 Helper **미배포**. 전체 Quit→relaunch→Restore All **E2E 미완료**.
+
+**3. 수행·근거:**
+- Canonical `harshlad79/chatgpt-window-title-helper`, branch `feat/macos-adaptive-title-helper`, 시작 HEAD `3e56afb17a2a640798d7c46977364e82cf1ce268`, PR #3 **Open/Draft → master**, 미병합. 필수 CURRENT, `macos/NORMAL_QUIT_RELAUNCH_OVERLAY_RECOVERY.md`, `macos/DOCK_LAST_SESSION_BULK_RESTORE.md`, 공유 Rulebook 원문 조회. 6개 원격 브랜치(REST per_page100 page1=6, page2=0), master/dev 기반 제외. master 비교: feature ahead370/behind1; app-icon ahead1/behind1이나 PR #4 merged; title-change-event-probe ahead0/behind2; fix/chatgpt-2026-title-ui ahead0/behind7. **검증된 미병합 기능 브랜치 1개**.
+- **실제 로그의 새로운 근거:** ChatGPT PID27828, Helper PID79851. AX raw8, nativeNamed5, nativeGeneric3, minimized3, cached recognized3. 실제 창별 로그에는 최소화된 3개 중 **native 비일반 제목 2개가 cache known=0**; 현재 `observePartial`은 cache 있는 3개만 기록하므로 안전하게 확보 가능한 제목 2개도 부분 증거에서 빠짐. 현재 durable history appPID501/lastComplete3/previous5; 현재 partial appPID27828/raw8/entries3. `history-restart-pending saved=3`가 2초마다 반복되는 이유는 **현재 PID의 완전한 census 부재**. 세션을 억지로 완성시키거나 이전 3개를 덮어쓰지 않음.
+- **변경 커밋** `c511bf57e917eb7522c1fb28737aaf5a74b0d523`(`WindowSessionHistoryStore.partialEvidenceTitle`), `c30d9092a63ed4bafc3cc9bc3f06dccd4790f44e`(`ChatGPTTitleHelper.swift`의 부분 관측 생성), `a29a9e2dd653edc627826a572b55ba08bae72b2f`(5개 테스트). cache 제목 우선, cache 없고 **최소화된 AXWindow**에 유효한 native 비일반 제목이 있는 경우에만 부분 스냅샷 후보로 추가. 빈/일반 `ChatGPT`/512자 초과 제목 제외. **부분 파일은 Restore All에 사용되지 않음**, 대화 ID/완전한 세션으로 승격하지 않음. 보이는 미식별 창을 native 제목만으로 복원하지 않음.
+- **Mac 격리 테스트:** 정확한 `a29a9e2d` detached clean worktree `~/_Project/titlehelper-99-a29a9e2d`; `bash macos/tests/run.sh` exit0. NativeTitleSync byte identity PASS; scheduler14, history/session59(기존54+5), batch91, asynchronous restore100, focused-menu29 assertions PASS. ARM64 optimized build PASS, unsigned binary SHA256 `0429e11e0ad0455f2acaec987a63b9ff1e4488e0f29ebb50d1ab62ffb6b4086a`; deprecated activation 경고만. `LIVE_AX_MENU_URL=NOT_TESTED`. **실제 부분 snapshot entries3→5 변화는 미배포이므로 아직 미검증**.
+- **비파괴 런타임 재검증:** ChatGPT PID27828, 설치 Helper PID79851, 설치 codesign PASS, full session SHA256 `78772da251d30948b688b4c33f58b1d9d63da609b45098276b289552bf974159`, partial SHA256 `ed981c6b1ab2b49e58b79a3f1116d7148983600bb49c2e1eacfdc3b65448154d` 불변. Dev 화면 캡처에서 Terminal 전면, ChatGPT 공식 메뉴 미개방. 기존 앱·창·세션·포커스 변경 없음. 롤백 불필요. Windows 소스/NativeTitleSync/PR #3 미변경.
+- **오류 분류:** 최초 읽기 전용 Mac 로그 검사에서 `rg -h`를 파일명 숨김 옵션으로 오해하여 `rg` 도움말만 출력(Worker exit0, 로그 판독 **실패**). `rg --no-filename`으로 수정해 실제 로그/세션 metadata 확인. **OpenAI 사전 안전검사 차단0, Dev Control 거절0, Mac Worker 비정상 종료0**. 초기 진단 오류는 Mac Worker 자체 실패가 아닌 **진단 명령 인자 오류**. `type=tool_boundary` 사전 안전검사 차단 기록 조건 미발생.
+
+**도구 호출·실행 경로 (원본 시도별 ID, 목적·실패·수정):**
+1. GitHub connector `fetch_file`(필수 3문서/Rulebook/Swift·테스트·빌드 스크립트·CURRENT), `fetch`(원격 브랜치 2페이지/소스 트리), `get_pr_info`(#3/#4), `compare_commits`(4개), `update_file`(위 3개 코드·테스트, 본 CURRENT). GitHub Control/Worker 미경유, request_id/mcp_path/PID/elapsed/exit_code 미제공. 동일 파일 순차 업데이트.
+2. Dev `thecompany_describe_control_operation(execute/enqueue_notification/get_notification)` read-only 계약 조회, `thecompany_capture_screen(node_id=macos-main,mode=desktop,max_width=1000)` 1회 이미지 수신(사용자 Terminal 전면). capture request_id/mcp_path/PID/elapsed 미제공.
+3. Dev `thecompany_call_tool(operation=execute)`, `node_id=macos-main`, `project=chatgpt-window-title-helper`, `backend=python:subprocess`, `worker_tool=run_command`, `program=/bin/bash`, `args=[-lc,<읽기전용 PID/AX 로그/세션·서명, 정확한 SHA worktree 준비, 백그라운드 Swift 테스트 실행·진행 조회·최종 보존 검증>]`, `timeout_seconds=15–28`, cwd=[비공개], task_id 미발급. 읽기전용 요청에 `procedure_key=macos-title-helper-live-readonly`. **실제 공통 mcp_path** `control-n150/thecompany-chatgpt-mcp:python(pid=772807) -> control.execute -> macos-main/thecompany-node-agent:python(pid=5070) -> python:subprocess/run_command -> bash(pid=<각 실행>)`. 모든 아래 요청 outer/nested completed, Worker exit0, timed_out=false:
+   - `f98907c9` bash47364/643ms: 최초 로그 검사 `rg -h` 도움말 출력(진단 실패, exit0).
+   - `df6b7816` bash47445/400ms: `--no-filename` 수정, 세션 metadata·로그 확인.
+   - `82803723` bash47480/404ms: AX window identity 원문 로그 조사.
+   - `06eff218` bash48224/404ms: AX native/minimized/webarea/URL 후보 집계.
+   - `eec7372f` bash49591/741ms: 기존 격리 worktree 및 PID 확인(화면 capture와 병행).
+   - `ab253679` bash49667/3677ms: 정확한 SHA fetch/detached worktree, 테스트 PID49724 시작.
+   - `7c57d758` bash49812/120ms; `193d84ab` bash49900/183ms; `adf0103e` bash49939/8390ms: 테스트 진행, NativeTitleSync PASS 및 Swift assertions PASS.
+   - `b72b26f0` bash50689/12461ms; `54e78a4b` bash50840/10427ms; `c39966af` bash50949/12377ms; `40511558` bash51520/1082ms; `89275843` bash51918/14756ms; `3a2d182f` bash52071/15415ms; `1fb61c47` bash52226/415ms; `dbe82d4b` bash52265/12462ms: 중복 빌드 없이 Swift optimized compile 진행/CPU 확인.
+   - `91397b13` bash53093/10668ms: 전체 테스트·빌드 최종 **exit0**, binary SHA 확인.
+   - `88c87398` bash53210/485ms: 원본 PID·세션 2개 SHA·설치 서명·정확한 테스트 SHA 재확인.
+4. Dev 알림 `enqueue_notification/get_notification`은 아래 후속 영수증에 기록. 운영 MCP/Work/Codex/TCC 우회/코드 인젝션 사용 없음.
+
+**4. 최종 상태·기존 영향:** 개발·검증 소스 `a29a9e2d` **미배포**. 설치 Helper는 이전 98차 검증 소스 `ddd036f1`, PID79851 유지. ChatGPT PID27828, 기존 AX raw8/recognized3/min3 및 세션 SHA 불변. 기존 사용자 앱·대화·창·Windows 코드 영향 없음. 롤백 불필요.
+
+**5. 미완료·다음:** 안전한 시점에 Helper-only 백업/서명 배포 후 **부분 스냅샷 3→최대 5개 증거 개선** 실제 확인(중복/제목 변화 가능성으로 결과 미단정). 기존 완전 세션 JSON 불변 보장. 이어서 **공식 대화 메뉴 AXURL/고유 ID와 AXWindow 연결**, 독립 새 native 창·제목/본문 검증, 실제 Quit→relaunch→Restore All E2E. 현재 raw8 중 generic3과 미식별5 때문에 강제 복원 금지. 사용자 Terminal 전면 상태를 방해하지 않음.
+
+**6. 사용자 조치:** 없음. 진단 인자 오류가 있었으므로 정책에 따라 **Telegram 우선 → Windows 후속** 알림. 접수·실패 영수증은 후속 기록. 화면 표시 성공은 독립 검증 전까지 미확인.
