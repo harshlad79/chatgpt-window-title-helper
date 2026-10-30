@@ -86,6 +86,14 @@ final class WindowSessionRestoreQueue {
 }
 
 
+// Title-only evidence cannot distinguish two open conversations sharing a title.
+// Refuse restore preflight rather than silently skip an unknown native window.
+struct WindowRestorePreflightPolicy {
+    static func hasAmbiguousOpenTitles(_ titles: [String]) -> Bool {
+        Set(titles).count != titles.count
+    }
+}
+
 // The ChatGPT renderer updates the native AXWindow caption asynchronously.
 // A one-shot check at 1.4 seconds incorrectly classified restored conversations
 // as failures even though their titles appeared 5-10 seconds later.
