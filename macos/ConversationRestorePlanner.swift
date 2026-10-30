@@ -10,8 +10,12 @@ enum ConversationRestorePlanner {
         let routeURL: String?
     }
 
-    struct CurrentWindow {
-        let routeURL: String?
+    // Generic titles do not establish a non-conversation window.
+    // Classification requires independent positive AX evidence.
+    enum CurrentWindow {
+        case conversation(routeURL: String?)
+        case verifiedNonConversation
+        case unknown
     }
 
     struct Target {
@@ -39,33 +43,40 @@ enum ConversationRestorePlanner {
         let blocked: [Blocked]
     }
 
-    // Fail closed if ANY current native window lacks a verified conversation
-    // identity: otherwise a missing title/URL could cause duplicate restoration.
-    // For a verified census, subtract already-open multiplicity by conversation
-    // UUID, not by title or ephemeral AX hash. Preserve saved window order.
+    // Fail closed on unknown windows or unverified conversation identities.
+    // Include verified non-conversation windows in the complete native AX count
+    // but exclude them from conversation UUID counts. Never infer from title.
     static func makePlan(saved: [SavedWindow], current: [CurrentWindow],
                          currentCensusComplete: Bool,
+                         observedNativeWindowCount: Int,
                          maxTargets: Int = 100) -> Plan {
-        guard currentCensusComplete else {
-            return Plan(
-                currentCensusVerified: false, targets: [],
-                alreadyPresentIndices: [],
-                blocked: saved.indices.map {
-                    Blocked(savedIndex: $0, reason: .unverifiedCurrentWindow)
-                })
+        func unsafePlan() -> Plan {
+            Plan(currentCensusVerified: false, targets: [],
+                 alreadyPresentIndices: [],
+                 blocked: saved.indices.map {
+                     Blocked(savedIndex: $0, reason: .unverifiedCurrentWindow)
+                 })
+        }
+        // An AX scan reporting 8 windows cannot pass just 3 recognized ones.
+        // Include minimized, generic, and unclassified windows in this count.
+        guard currentCensusComplete, observedNativeWindowCount >= 0,
+              current.count == observedNativeWindowCount else {
+            return unsafePlan()
         }
         var openCounts: [UUID: Int] = [:]
         for window in current {
-            guard let raw = window.routeURL,
-                  let identity = ConversationRouteIdentity.parse(raw) else {
-                return Plan(
-                    currentCensusVerified: false, targets: [],
-                    alreadyPresentIndices: [],
-                    blocked: saved.indices.map {
-                        Blocked(savedIndex: $0, reason: .unverifiedCurrentWindow)
-                    })
+            switch window {
+            case .verifiedNonConversation:
+                continue
+            case .unknown:
+                return unsafePlan()
+            case .conversation(let routeURL):
+                guard let raw = routeURL,
+                      let identity = ConversationRouteIdentity.parse(raw) else {
+                    return unsafePlan()
+                }
+                openCounts[identity.conversationID, default: 0] += 1
             }
-            openCounts[identity.conversationID, default: 0] += 1
         }
 
         var targets: [Target] = []
