@@ -63,6 +63,22 @@ final class WindowSessionHistoryStore {
         }
     }
 
+    // A minimized AXWindow can retain its native caption after its AXWebArea
+    // becomes inaccessible. Keep that caption as PARTIAL evidence only:
+    // never promote it to a complete restore manifest or a conversation ID.
+    static func partialEvidenceTitle(cached: String?, native: String,
+                                     minimized: Bool) -> String? {
+        func valid(_ value: String?) -> String? {
+            guard let title = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !title.isEmpty, title != "ChatGPT", title.count <= 512 else {
+                return nil
+            }
+            return title
+        }
+        if let title = valid(cached) { return title }
+        return minimized ? valid(native) : nil
+    }
+
     private func uniqueTitles(_ titles: [String]) -> [String] {
         var seen = Set<String>()
         return titles.filter {
