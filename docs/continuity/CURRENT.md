@@ -2184,3 +2184,37 @@ Mac Worker 4건 모두 TheCompany **core_dev** `thecompany_call_tool(operation=i
 
 
 **95차 최종 독립 재검증 (2026-10-30 23:36 KST):** TheCompany core_dev `thecompany_call_tool(operation=invoke)` request `203ea8d3-9032-44a2-8ad5-3bff75b016cc`, `node_id=macos-main`, `project=chatgpt-window-title-helper`, `procedure_key=macos-title-helper-live-readonly`, `backend=python:subprocess`, `worker_tool=run_command`, `program=/bin/bash`, `args=[-lc,<PID/서명/세션/로그 read-only>]`, timeout18, outer/nested completed, Worker bash(pid5536) exit0, 522ms, `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=772807) -> control.invoke -> macos-main/thecompany-node-agent:python(pid=5070) -> python:subprocess/run_command -> bash(pid=5536)`. ChatGPT PID27828, Helper PID2124, session SHA256 `78772da2...` 유지, AX observer=true, sampler `foreground=false trusted=true targetValid=true inFlight=false`, 실제 메뉴 URL 이벤트0, bulk 이벤트0, codesign PASS. GitHub `get_pr_info`로 PR #3 open/Draft→master, HEAD `2a0a0f0031126a288008a1d1fb34bcd0f04d8845` 확인; `fetch_file`로 CURRENT 95차 본문·알림 영수증 재조회 확인. **전체 창 복원 E2E 미완료, 자동화 유지.** 본 기록은 문서-only 변경.
+
+
+## 96차 — 2026-10-31 00:20–00:23 KST — 동일 제목 창의 잘못된 '완전 복원 목록' 저장 차단, Mac 테스트/빌드 검증
+
+**1. 제목·일시:** ChatGPT Window Title Helper macOS — 마지막 창 모두 복원 / 96차 / 2026-10-31 00:20–00:23 KST.
+
+**2. 전체 상태:** 전체 정상 Quit→relaunch→Restore All **E2E 미완료**. 95차의 AXURL 후보 진단 Helper는 그대로 실행 중. 이번 회차는 제목만 저장하는 현행 구조의 **데이터 손실 가능성**을 수정하고 Mac 실기기에서 격리 테스트했다. 새 빌드는 **미배포**.
+
+**3. 수행·근거:**
+- GitHub canonical `harshlad79/chatgpt-window-title-helper`, branch `feat/macos-adaptive-title-helper`, 시작 HEAD `614317f9d4af845bd1311cdd4dadb8d3dd71872e`; PR #3 **Open/Draft**, base `master`, 미병합. 필수 `docs/continuity/CURRENT.md`, `macos/NORMAL_QUIT_RELAUNCH_OVERLAY_RECOVERY.md`, `macos/DOCK_LAST_SESSION_BULK_RESTORE.md`, 공통 Rulebook 원문 조회. 원격 브랜치 6개 전수(첫 페이지 6, cursor Ng 다음 페이지 0): `master`/`dev` 기반 제외. `feat/macos-adaptive-title-helper` master 대비 ahead357/behind1, PR #3 Draft; `feat/approved-app-icon-20261016` ahead1/behind1이나 PR #4 **merged**; `feat/title-change-event-probe` ahead0/behind2; `fix/chatgpt-2026-title-ui` ahead0/behind7. **검증된 미병합 기능 브랜치 1개**.
+- **확정된 코드 결함:** `WindowSessionHistoryStore.observe`가 `titles.count == windowCount`만 확인하고 `uniqueTitles`에서 같은 제목을 제거하므로, 서로 다른 두 네이티브 창의 제목이 같을 때 **2개 창을 1개짜리 완전한 세션으로 저장**할 수 있었다. 대화 ID가 없는 상태에서 제목은 고유 식별자가 아니므로, 동일 제목이 포함된 census는 완전하다고 볼 수 없다.
+- **수정 커밋 `383275db4f79a729e05b0e93e0d2f70563ab7198`:** `macos/WindowSessionHistoryStore.swift`의 완전 census 진입 조건에 `Set(titles).count == windowCount` 추가. 동일 제목 발견 시 새 JSON 쓰기/세션 PID 전환을 하지 않고 마지막 유효 snapshot 유지. 중복 제목의 자동 복원 자체는 **미지원**이며 정확한 URL/ID 필요.
+- **테스트 커밋 `485956247f7441c76953b13525748b15e728ddc1`:** `macos/tests/main.swift`에 4 assertions 추가. 중복 제목 census 거절, 이전 2창 목록 보존, 중복 제목 PID 전환 거절, 이전 PID/previousSessionOpen 보존.
+- **MacMini2 격리 실측:** 정확한 GitHub SHA `485956247f7441c76953b13525748b15e728ddc1`를 `~/_Project/titlehelper-96-48595624` clean worktree로 checkout, `bash macos/tests/run.sh` **exit0**. NativeTitleSync identity PASS, scheduler14, session54(기존50+4), batch86, async92, focused-menu29 assertions PASS. ARM64 optimized build PASS, 965,920 bytes, SHA256 `d93d4758050d90d96f223ada1c604d77ac3b6770e1fbebe68dc28ffdde44c8d6`. macOS 14+ deprecated activation warning만 존재. `LIVE_AX_MENU_URL=NOT_TESTED`.
+- **실제 런타임 보존:** ChatGPT PID27828, 기존 Helper PID2124, 설치 Helper codesign PASS. 세션 파일 0600, 553 bytes, SHA256 `78772da251d30948b688b4c33f58b1d9d63da609b45098276b289552bf974159` 불변. 저장 current3/previous5/recent6, appPID501로 **현재 PID와 불일치**; 기존 8개 AX 창 중 3개만 제목 인식되어 완전 census 미확보라는 사실과 일치하나 appPID 불일치의 인과는 이번 회차 미확정. 현재 기록을 강제 갱신하지 않음. Helper 로그 2026-10-31 00:20 KST까지 `foreground=false trusted=true targetValid=true inFlight=false`; 실제 `ax-focused-menu-url` 이벤트 없음. Dev 화면 캡처는 Terminal 전면, 공식 ChatGPT 메뉴 미개방. 스크린샷은 개인 작업 화면이므로 GitHub 비첨부. 기존 창·대화·포커스 조작 없음.
+- **실패 분류:** OpenAI 사전 안전검사 차단 0, Dev Control 거절 0, Mac Worker 실패 0. GitHub connector 오류 0. `type=tool_boundary` 기록 조건 미발생. 운영 MCP/Work/Codex quota/TCC 우회/인젝션 사용 없음.
+
+**도구 호출·실행 경로:**
+1. GitHub connector `fetch_file`(필수 3문서, Rulebook, 소스·테스트), `fetch`(HEAD ref, tests tree), `fetch_pr`(#3/#4), `search_branches`(6+0), `compare_commits`(4), `update_file`(소스·테스트·CURRENT). GitHub는 Control/Worker 미경유, request_id/mcp_path/PID/elapsed **미제공**.
+2. Dev `thecompany_describe_control_operation(execute/enqueue_notification)` 및 `thecompany_call_tool(operation=execute)` → `macos-main`, `project=chatgpt-window-title-helper`, `backend=python:subprocess`, `worker_tool=run_command`, `program=/bin/bash`, `args=[-lc,<각각 읽기전용 PID/서명/세션/로그, Git SHA 격리 checkout+테스트 시작, 테스트 진행·종료·해시 조회>]`, `timeout_seconds=15–30`, 읽기 전용 조회 `procedure_key=macos-title-helper-live-readonly`. 공통 실제 `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=772807) -> control.execute -> macos-main/thecompany-node-agent:python(pid=5070) -> python:subprocess/run_command -> bash(pid=<개별>)`. 모든 요청 outer/nested **completed**, Worker **exit0**, timed_out=false, task_id 미발급:
+   - `ed15aecc-7ecf-4f5a-9f24-f7c061403661` bash94838, 829ms: 설치 런타임·세션·메뉴 로그 읽기.
+   - `e728e215-a20f-4d79-b6bb-3270a21db4e6` bash97263, 4378ms: 격리 checkout, background 테스트 PID97413 시작.
+   - `0eedb1ef-7e3c-43fa-9751-0d19f843e528` bash98693, 245ms: 테스트 진행 중 session54/async92 확인.
+   - `6e00469f-899b-4349-ab59-c2038b9400b5` bash1633, 474ms: focused-menu29 PASS, 빌드 진행.
+   - `2b25767e-7925-4efc-b3da-4211195158b5` bash3640, 262ms: Swift deprecated warning, 빌드 진행.
+   - `1c9cfcc3-1602-428e-b015-c10499903edd` bash4123, 190ms: 테스트 스크립트 최종 exit0, BUILT 확인.
+   - `d3f55d7a-05a6-489b-b10d-87d9d495be49` bash4554, 825ms: 산출물 SHA/clean source/원본 PID·세션·서명 재확인.
+3. Dev `thecompany_capture_screen(node_id=macos-main,mode=desktop,max_width=1000)`: 이미지 수신, 사용자 Terminal 전면 확인. request_id/mcp_path/PID/elapsed 미제공. UI 조작 없음.
+
+**4. 최종 상태·기존 영향:** 수정은 canonical feature branch의 소스·테스트에만 반영. **설치 Helper는 95차 소스 `4d69eab4` 유지**. 사용자 창·ChatGPT PID·기존 Helper·세션 SHA·Windows 소스·NativeTitleSync·PR #3 상태 변경 없음. 미배포이므로 롤백 불필요.
+
+**5. 미완료·다음:** (a) 실제 공식 메뉴가 열리는 안전한 시점에만 AXURL 후보 측정. (b) 동일 제목/미식별 AX 창의 정확한 URL/ID 수집·창 연결을 설계/검증. (c) 별도 비민감 테스트 대화로 새 native 창/본문/기존 창 보존 확인. (d) 실제 Quit→relaunch→Restore All 전체 E2E. 사용자 앱을 강제 종료하거나 기존 창을 닫지 않음. 새 guard의 실기기 Helper 배포는 필요성·백업을 확인한 다음 회차에 판단.
+
+**6. 사용자 조치:** 없음. 정상 진행이므로 **Windows-only** 알림, Telegram 미발송. 발송·독립 조회 영수증은 후속 CURRENT 기록. 실제 Windows 화면 표시 성공은 별도 확인 전까지 미검증.
