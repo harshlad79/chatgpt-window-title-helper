@@ -50,7 +50,7 @@ def verify(modules):
         "sn recognizes local and remote": b"ln(e,Mt)" in validator and b"ln(e,It)" in validator,
         "sn has no /c route": b"/c/" not in validator,
         "m.f resolves to s": b'Object.defineProperty(exports,"f",{enumerable:!0,get:function(){return s}})' in queue,
-        "s only parses browser handoff": b"function s(e){let t=`\${i}?`;" in queue and b'i=`/browser/handoff`' in queue,
+        "s only parses browser handoff": b"function s(e){let t=`${i}?`;" in queue and b'i=`/browser/handoff`' in queue,
         "Y_t recognizes o/dots": b"function Y_t(e){let t=/^\\/(?:o|dots)\\/" in main,
     }
     for name, ok in checks.items():
