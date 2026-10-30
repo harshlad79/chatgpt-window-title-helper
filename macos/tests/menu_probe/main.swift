@@ -37,6 +37,18 @@ check(FocusedMenuURLProbe.classify(label: "Open on chatgpt.com",
       "script URL rejected")
 check(FocusedMenuURLProbe.classify(label: "chatgpt.com에서 열기…",
                                    url: direct) == .conversationURL, "localized ellipsis")
+// A valid route with an unknown localized label is counted as a diagnostic
+// candidate only; it never becomes a verified current-window identity.
+check(FocusedMenuURLProbe.isConversationRouteCandidate(direct),
+      "route candidate independent of menu label")
+check(FocusedMenuURLProbe.isConversationRouteCandidate(project),
+      "project route candidate")
+check(!FocusedMenuURLProbe.isConversationRouteCandidate(nil),
+      "nil candidate rejected")
+check(!FocusedMenuURLProbe.isConversationRouteCandidate("https://evil.example/c/\(id)"),
+      "foreign candidate rejected")
+check(!FocusedMenuURLProbe.isConversationRouteCandidate("https://chatgpt.com/c/\(id)?token=x"),
+      "query candidate rejected")
 // The fast sampler is opt-in, foreground-only and serialized.
 check(!FocusedMenuProbeCadence.shouldSample(trusted: false, frontmostPID: 12,
     targetPID: 12, inFlight: false, elapsed: 1), "AX trust required")
