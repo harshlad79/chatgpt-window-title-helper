@@ -104,6 +104,15 @@ expect(!history.observe(pid: 100, titles: ["대화 A"], windowCount: 2),
        "incomplete AX cache cannot overwrite a two-window manifest")
 expect(history.snapshot.lastCompleteOpen.count == 2,
        "incomplete refresh leaves saved complete state untouched")
+expect(!history.observe(pid: 100, titles: ["대화 A", "대화 A"], windowCount: 2),
+       "duplicate titles cannot be treated as two uniquely identified windows")
+expect(history.snapshot.lastCompleteOpen == ["대화 A", "대화 B"],
+       "ambiguous duplicate-title census preserves last complete snapshot")
+expect(!history.observe(pid: 101, titles: ["같은 제목", "같은 제목"], windowCount: 2),
+       "duplicate-title restart cannot replace last complete snapshot")
+expect(history.snapshot.appPID == 100 &&
+       history.snapshot.previousSessionOpen.isEmpty,
+       "ambiguous restart cannot advance session PID or previous manifest")
 let restartedHelper = WindowSessionHistoryStore(file: file)
 expect(restartedHelper.snapshot.lastCompleteOpen.count == 2,
        "separate helper restart reloads full state")
