@@ -276,6 +276,14 @@ expect(!cancelQueue.isRunning, "cancelled queue reaches terminal state")
 print("PASS native last-session + batch restore \(passes) assertions")
 
 
+// Two native windows with identical titles are not the same conversation.
+expect(!WindowRestorePreflightPolicy.hasAmbiguousOpenTitles(["A", "B"]),
+       "distinct open titles allow guarded restore preflight")
+expect(WindowRestorePreflightPolicy.hasAmbiguousOpenTitles(["A", "B", "A"]),
+       "duplicate open titles block title-only restore preflight")
+expect(!WindowRestorePreflightPolicy.hasAmbiguousOpenTitles([]),
+       "empty title list is not a duplicate-title ambiguity")
+
 // Late Chromium/AX title updates must not generate a false restore failure.
 expect(WindowRestoreVerificationPolicy.decide(
     elapsed: 1.4, expectedCount: 3, actualCount: 3,
