@@ -73,5 +73,44 @@ check(FocusedMenuProbeCadence.shouldReport(elapsed: 30, interval:
     FocusedMenuProbeCadence.noMenuReportInterval), "no-menu report due")
 check(!FocusedMenuProbeCadence.shouldReport(elapsed: 99, interval: 0),
     "invalid telemetry interval disabled")
+// Fail-closed identity parsing: candidate URLs must not become restore IDs
+// unless they are exact private conversation routes. All IDs below are
+// synthetic; no owner conversation URL or clipboard is inspected.
+let parsedDirect = ConversationRouteIdentity.parse(direct)
+let parsedProject = ConversationRouteIdentity.parse(project)
+check(parsedDirect?.conversationID.uuidString.lowercased() == id,
+      "exact direct conversation UUID")
+check(parsedDirect?.gptSlug == nil, "direct route has no project")
+check(parsedDirect?.canonicalURL.absoluteString == direct,
+      "direct route canonical round trip")
+check(parsedProject?.gptSlug == "g-test",
+      "project slug preserved")
+check(parsedProject?.canonicalURL.absoluteString == project,
+      "project route canonical round trip")
+check(ConversationRouteIdentity.parse("https://www.chatgpt.com/c/\\(id)")?
+      .canonicalURL.absoluteString == direct,
+      "approved www host normalizes to canonical host")
+check(ConversationRouteIdentity.parse("http://chatgpt.com/c/\\(id)") == nil,
+      "plaintext HTTP rejected")
+check(ConversationRouteIdentity.parse("https://chatgpt.com.evil.test/c/\\(id)") == nil,
+      "host suffix spoof rejected")
+check(ConversationRouteIdentity.parse("https://user@chatgpt.com/c/\\(id)") == nil,
+      "userinfo rejected")
+check(ConversationRouteIdentity.parse("https://chatgpt.com:443/c/\\(id)") == nil,
+      "explicit port rejected")
+check(ConversationRouteIdentity.parse("https://chatgpt.com/c/\\(id)#frag") == nil,
+      "fragment rejected")
+check(ConversationRouteIdentity.parse("https://chatgpt.com/c/\\(id)/") == nil,
+      "trailing slash rejected")
+check(ConversationRouteIdentity.parse("https://chatgpt.com/g/%2e%2e/c/\\(id)") == nil,
+      "encoded project path rejected")
+check(ConversationRouteIdentity.parse("https://chatgpt.com/g/../../c/\\(id)") == nil,
+      "path traversal rejected")
+check(ConversationRouteIdentity.parse("https://chatgpt.com/g/bad.slug/c/\\(id)") == nil,
+      "unapproved project slug rejected")
+check(ConversationRouteIdentity.parse("https://chatgpt.com/c/\\(id)?model=auto") == nil,
+      "query parameters rejected")
+check(ConversationRouteIdentity.parse("https://chatgpt.com/c/not-a-uuid") == nil,
+      "non-UUID route rejected")
 print("PASS focused menu URL policy \(passes) assertions")
 print("LIVE_AX_MENU_URL=NOT_TESTED")
