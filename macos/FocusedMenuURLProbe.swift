@@ -8,6 +8,12 @@ import Foundation
 enum FocusedMenuProbeCadence {
     static let timerInterval: TimeInterval = 0.35
     static let minimumSpacing: TimeInterval = 0.30
+    static let heartbeatInterval: TimeInterval = 60
+    static let noMenuReportInterval: TimeInterval = 30
+
+    static func shouldReport(elapsed: TimeInterval, interval: TimeInterval) -> Bool {
+        interval > 0 && elapsed >= interval
+    }
 
     static func shouldSample(
         trusted: Bool,
@@ -34,6 +40,7 @@ enum FocusedMenuURLProbe {
 
     struct Result {
         let menuFound: Bool
+        let focusAvailable: Bool
         let menuItems: Int
         let labeledItems: Int
         let validConversationURLs: Int
@@ -77,8 +84,10 @@ enum FocusedMenuURLProbe {
     static func inspect(app: AXUIElement) -> Result {
         let start = ProcessInfo.processInfo.systemUptime
         func result(_ found: Bool, _ items: Int, _ labels: Int,
-                    _ valid: Int, _ invalid: Int, _ limited: Bool) -> Result {
-            Result(menuFound: found, menuItems: items,
+                    _ valid: Int, _ invalid: Int, _ limited: Bool,
+                    _ focusAvailable: Bool) -> Result {
+            Result(menuFound: found, focusAvailable: focusAvailable,
+                   menuItems: items,
                    labeledItems: labels, validConversationURLs: valid,
                    invalidURLs: invalid, limited: limited,
                    elapsedMilliseconds: Int(
@@ -87,7 +96,7 @@ enum FocusedMenuURLProbe {
         _ = AXUIElementSetMessagingTimeout(app, 0.12)
         guard let focusedRaw = read(app, kAXFocusedUIElementAttribute),
               CFGetTypeID(focusedRaw) == AXUIElementGetTypeID()
-        else { return result(false, 0, 0, 0, 0, false) }
+        else { return result(false, 0, 0, 0, 0, false, false) }
         let focused = focusedRaw as! AXUIElement
 
         // The focused item may be nested inside an AXMenu. Inspect ancestors,
@@ -107,7 +116,7 @@ enum FocusedMenuURLProbe {
             else { break }
             current = parentRaw as! AXUIElement
         }
-        guard let menu else { return result(false, 0, 0, 0, 0, false) }
+        guard let menu else { return result(false, 0, 0, 0, 0, false, true) }
 
         var queue: [(AXUIElement, Int)] = [(menu, 0)]
         var seen = Set<String>()
@@ -148,6 +157,6 @@ enum FocusedMenuURLProbe {
             }
         }
         return result(true, items, labeled, valid, invalid,
-                      index < queue.count || index >= 160)
+                      index < queue.count || index >= 160, true)
     }
 }
