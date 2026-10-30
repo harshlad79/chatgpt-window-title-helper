@@ -66,8 +66,10 @@ enum FocusedMenuURLProbe {
                        (ProcessInfo.processInfo.systemUptime - start) * 1000))
         }
         _ = AXUIElementSetMessagingTimeout(app, 0.12)
-        guard let focused = read(app, kAXFocusedUIElementAttribute) as? AXUIElement
+        guard let focusedRaw = read(app, kAXFocusedUIElementAttribute),
+              CFGetTypeID(focusedRaw) == AXUIElementGetTypeID()
         else { return result(false, 0, 0, 0, 0, false) }
+        let focused = focusedRaw as! AXUIElement
 
         // The focused item may be nested inside an AXMenu. Inspect ancestors,
         // not unrelated conversation content or the entire application tree.
@@ -81,9 +83,10 @@ enum FocusedMenuURLProbe {
                 menu = current
                 break
             }
-            guard let parent = read(current, kAXParentAttribute) as? AXUIElement
+            guard let parentRaw = read(current, kAXParentAttribute),
+                  CFGetTypeID(parentRaw) == AXUIElementGetTypeID()
             else { break }
-            current = parent
+            current = parentRaw as! AXUIElement
         }
         guard let menu else { return result(false, 0, 0, 0, 0, false) }
 
@@ -109,7 +112,8 @@ enum FocusedMenuURLProbe {
                     string(node, kAXHelpAttribute)
                 ]
                 // Attributes can differ by host; count the same element once.
-                let evidence = label.map { classify(label: $0, url: url(node)) }
+                let candidateURL = url(node)
+                let evidence = label.map { classify(label: $0, url: candidateURL) }
                 if evidence.contains(where: { $0 != .unrelated }) {
                     labeled += 1
                     if evidence.contains(.conversationURL) { valid += 1 }
