@@ -1646,6 +1646,9 @@ final class OverlayController:
     private var genericAXProbePID: pid_t = 0
     // One bounded read-only identity census per visible conversation count.
     private var lastVisibleIdentityProbeCount = 0
+    // Explicit opt-in only. No menu opens, AXPress or raw link logging.
+    private var lastFocusedMenuURLProbeAt = Date.distantPast
+    private var focusedMenuURLProbeInFlight = false
 
     private var timer: Timer?
 
@@ -3043,6 +3046,34 @@ final class OverlayController:
                     id: id, title: cached.value.title, axWindow: ax)
             }
         dockSidecar.update(sidecarEntries)
+        // Diagnostic only: sample an ALREADY OPEN focused ChatGPT context
+        // menu through the Accessibility-approved Helper process. This is
+        // disabled by default and never navigates, presses or exposes URLs.
+        if ProcessInfo.processInfo.environment[
+                "TITLEHELPER_SAFE_FOCUSED_MENU_URL_PROBE"] == "1",
+           !focusedMenuURLProbeInFlight,
+           Date().timeIntervalSince(lastFocusedMenuURLProbeAt) >= 2.5,
+           NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+           let appAX = targetAX {
+            lastFocusedMenuURLProbeAt = Date()
+            focusedMenuURLProbeInFlight = true
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                let evidence = FocusedMenuURLProbe.inspect(app: appAX)
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.focusedMenuURLProbeInFlight = false
+                    if evidence.menuFound {
+                        TitleHelperDiagnostics.shared.record(
+                            "ax-focused-menu-url items=\(evidence.menuItems) " +
+                            "labeled=\(evidence.labeledItems) " +
+                            "conversationURLs=\(evidence.validConversationURLs) " +
+                            "invalidURLs=\(evidence.invalidURLs) " +
+                            "limited=\(evidence.limited) " +
+                            "elapsedMs=\(evidence.elapsedMilliseconds)")
+                    }
+                }
+            }
+        }
         // Independently preserve the best *partial* window evidence. This
         // file is never read by Restore All and cannot replace the complete
         // history manifest. Window indexes are one-census observations only.
