@@ -2221,3 +2221,24 @@ Mac Worker 4건 모두 TheCompany **core_dev** `thecompany_call_tool(operation=i
 
 
 **96차 Windows-only 알림·독립 접수 검증 (2026-10-31 00:25 KST):** 정상 진행, 사용자 개입·오류 없음 → `notification_destination=windows-main` **1회만 발송**, Telegram **미발송**. `thecompany_call_tool(operation=enqueue_notification)` request `697cd50f-1e1d-42cf-a899-322ba40e7739`, notification `c12b6ddd-c230-4c5e-ba4d-9cecccb8a4b6`, outer/nested completed, queued, elapsed3ms, `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=772807) -> control.enqueue_notification`. 독립 `thecompany_call_tool(operation=get_notification)` request `bb744388-7657-4231-99d0-ef74d1b9c73d`, outer/nested completed, elapsed1ms, `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=772807) -> control.get_notification`: **registered**, attempt1, `windows-main` agent `pythonw.exe(pid=11848)` → `powershell.exe(pid=31704)`, Worker exit0, `WINDOWS_NOTIFICATION_REGISTERED`. `session_ref=macos-title-helper-restore-hourly`, `source_node=macos-main`, `project=chatgpt-window-title-helper`, `task_label=마지막 창 모두 복원`, task_id 미발급. title `[ChatGPT Window Title Helper] · [macos-main]`; body 첫 줄 `[실제 대화 제목 미확인] ChatGPT Window Title Helper macOS — 마지막 창 모두 복원`, 실제 LF(U+000A), 번호 섹션 사이 LF 2개, 문자 그대로 백슬래시+n 없음. **알림 접수 오류 없음**. 기기 실제 화면 표시·사용자 열람은 **미검증**. 이 문서-only 커밋은 설치 앱·세션·Windows 소스 변경 없음.
+
+
+## 97차 — 2026-10-31 01:19–01:25 KST — 동일 제목의 서로 다른 열린 AX 창에 대한 복원 사전검사 차단
+
+**1. 제목·일시:** ChatGPT Window Title Helper macOS / 마지막 창 모두 복원 / 97차 / 2026-10-31 01:19–01:25 KST.
+
+**2. 전체 상태:** GitHub 소스 안전 가드 3파일 수정, MacMini2 격리 Swift 전체 테스트/ARM64 빌드 **PASS**. **실제 전체 창 복원 E2E 미완료**. 설치 Helper는 교체하지 않음.
+
+**3. 이번 회차 수행·근거:** canonical `harshlad79/chatgpt-window-title-helper`, branch `feat/macos-adaptive-title-helper`, 시작 HEAD `66d94e85`, PR #3 **Open/Draft → master**, 미병합. 필수 CURRENT/normal Quit/Dock bulk 3문서 및 공통 Rulebook 원문 조회. `freshOpenConversationTitles`에서 같은 제목을 가진 **서로 다른 열린 창**을 기존 복원 큐가 `Set(alreadyOpen)`으로 하나로 오판해 복원 성공으로 누락할 위험 확인. `WindowRestorePreflightPolicy.hasAmbiguousOpenTitles` 및 복원 사전검사 fail-closed 적용, 새 테스트 3건 추가. 소스 커밋 `c7166d76` → `34bd2991` → **검증 소스 `ddd036f1`**. 격리 clean worktree에서 `macos/tests/run.sh` exit0, NativeTitleSync 보존 PASS, scheduler14/session54/bulk86/async95/focused-menu29 assertions PASS, ARM64 optimized build PASS, binary SHA256 `28dfcc3c886e296d06d2db301d0393abcc08166aa0707422f91f5e6e7d32cc8f`. Swift deprecated 경고만. 실제 AXURL·본문·Restore All E2E **미실행**.
+
+**MacMini2 실제 런타임:** ChatGPT PID27828, 기존 Helper PID2124, 서명 PASS, 세션 SHA256 `78772da2...`/mode0600 불변. history appPID501/lastComplete3/previous5, partial appPID27828/raw8/known3, **5개 창 미식별**. 화면 캡처에서 Terminal 전면, ChatGPT 공식 메뉴 없음. 기존 Helper 로그 `history-restart-pending saved=3` 및 `foreground=false`. URL 부재 판정 불가. 기존 창·세션·포커스 미변경.
+
+**도구 호출·실행 경로:** GitHub connector `fetch_file/get_pr_info/search_branches/compare_commits/update_file/create_file` (Control/Worker 미경유, request_id/mcp_path/PID/elapsed 미제공). TheCompany **core_dev** `status/describe_control_operation/capture_screen` 및 `thecompany_call_tool(operation=execute)` → `macos-main`, `project=chatgpt-window-title-helper`, `backend=python:subprocess`, `worker_tool=run_command`, `program=/bin/bash`, `args=[-lc,<read-only PID/서명/세션/로그, SHA worktree/Swift tests, 진행 조회>]`, timeout18–28, cwd=[비공개], task_id 미발급. 실제 `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=772807) -> control.execute -> macos-main/thecompany-node-agent:python(pid=5070) -> python:subprocess/run_command -> bash(pid=<각 실행>)`. 최초 격리 작업 준비 요청 `58ca44bc`, bash75635, **Worker exit1**: bash `set -u`에서 정의되지 않은 `sha` 참조, git fetch까지만 수행(테스트 미실행). SHA literal 수정 후 `cc7c1a19`, bash75805, exit0, 실제 격리 작업 시작. `7d5bb153`, bash78554, exit0에서 background 테스트 **최종 exit0** 확인; `f85ca2b1`, bash79373, exit0에서 소스 SHA·원본 PID·세션 보존 확인. 모든 Dev 호출 outer/nested completed, OpenAI 사전 안전검사 차단0, Dev Control 거절0, Mac Worker 오류1(복구). **각 19건의 request_id/PID/elapsed/exit_code/프로그램·목적·오류 수정·결과 및 GitHub 원격 브랜치 비교는 [97차 상세 원장](../../macos/RESTORE_PREFLIGHT_DUPLICATE_OPEN_TITLES_20261031.md)에 보존.**
+
+**원격 브랜치:** 전체 6개(2페이지 소진), master/dev 장기 기반 제외. 현재 작업 브랜치 master 대비 ahead362/behind1 PR #3 Draft/Open. app-icon 브랜치는 PR #4 merged, 나머지 2개는 master 대비 ahead0. **검증된 미병합 기능 브랜치 1개.**
+
+**4. 최종 상태·기존 영향:** 소스 `ddd036f1` 테스트 PASS, 문서 커밋 `c44d2025` 추가. 설치 Helper는 95차 소스 `4d69eab4` 그대로, 새 코드 미배포. 원본 ChatGPT·열린 창·세션·Windows·NativeTitleSync·Draft PR #3 미변경. 롤백 불필요.
+
+**5. 미완료·다음:** 비민감 테스트 대화의 공식 메뉴에서 AXURL/고유 ID 확보, PID501 history와 PID27828 partial의 불완전한 식별·신선도 해소, 독립 native 창/제목/본문 보존 및 실제 Quit→relaunch→Restore All E2E 검증. 미식별 5개 창이 있는 상태에서 강제 복원 금지.
+
+**6. 사용자 조치:** 현재 없음. Worker 명령 오류가 있었으므로 **Telegram 우선 → Windows 후속** 알림. 알림 접수/독립 조회 영수증은 아래 후속 기록. 운영 MCP/Work/Codex/TCC 우회/인젝션 없음.
