@@ -2781,6 +2781,7 @@ final class OverlayController:
                         "ax-focused-menu-url items=\(evidence.menuItems) " +
                         "labeled=\(evidence.labeledItems) " +
                         "conversationURLs=\(evidence.validConversationURLs) " +
+                        "routeCandidates=\(evidence.routeCandidates) " +
                         "invalidURLs=\(evidence.invalidURLs) " +
                         "limited=\(evidence.limited) " +
                         "elapsedMs=\(evidence.elapsedMilliseconds)")
