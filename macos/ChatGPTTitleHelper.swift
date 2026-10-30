@@ -1648,6 +1648,8 @@ final class OverlayController:
     private var lastVisibleIdentityProbeCount = 0
     // Explicit opt-in only. No menu opens, AXPress or raw link logging.
     private var lastFocusedMenuURLProbeAt = Date.distantPast
+    private var lastFocusedMenuHeartbeatAt = Date.distantPast
+    private var lastFocusedMenuNoMenuAt = Date.distantPast
     private var focusedMenuURLProbeInFlight = false
 
     private var timer: Timer?
@@ -2742,17 +2744,31 @@ final class OverlayController:
         guard ProcessInfo.processInfo.environment[
                 "TITLEHELPER_SAFE_FOCUSED_MENU_URL_PROBE"] == "1" else { return }
         let pid = targetPID
+        let now = Date()
+        let trusted = AXIsProcessTrusted()
+        let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        if FocusedMenuProbeCadence.shouldReport(
+                elapsed: now.timeIntervalSince(lastFocusedMenuHeartbeatAt),
+                interval: FocusedMenuProbeCadence.heartbeatInterval) {
+            lastFocusedMenuHeartbeatAt = now
+            // Aggregate gate status only. Never log foreground app names or IDs.
+            TitleHelperDiagnostics.shared.record(
+                "ax-focused-menu-sampler heartbeat=1 " +
+                "foreground=\(frontmostPID == pid && pid > 0) " +
+                "trusted=\(trusted) targetValid=\(pid > 0) " +
+                "inFlight=\(focusedMenuURLProbeInFlight)")
+        }
         guard FocusedMenuProbeCadence.shouldSample(
-                trusted: AXIsProcessTrusted(),
-                frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier,
+                trusted: trusted,
+                frontmostPID: frontmostPID,
                 targetPID: pid,
                 inFlight: focusedMenuURLProbeInFlight,
-                elapsed: Date().timeIntervalSince(lastFocusedMenuURLProbeAt)
+                elapsed: now.timeIntervalSince(lastFocusedMenuURLProbeAt)
             ),
             currentChatGPTPID() == pid,
             let appAX = targetAX else { return }
 
-        lastFocusedMenuURLProbeAt = Date()
+        lastFocusedMenuURLProbeAt = now
         focusedMenuURLProbeInFlight = true
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let evidence = FocusedMenuURLProbe.inspect(app: appAX)
@@ -2767,6 +2783,15 @@ final class OverlayController:
                         "conversationURLs=\(evidence.validConversationURLs) " +
                         "invalidURLs=\(evidence.invalidURLs) " +
                         "limited=\(evidence.limited) " +
+                        "elapsedMs=\(evidence.elapsedMilliseconds)")
+                } else if FocusedMenuProbeCadence.shouldReport(
+                    elapsed: Date().timeIntervalSince(self.lastFocusedMenuNoMenuAt),
+                    interval: FocusedMenuProbeCadence.noMenuReportInterval) {
+                    self.lastFocusedMenuNoMenuAt = Date()
+                    // Distinguish missing AX focus from a focused non-menu.
+                    TitleHelperDiagnostics.shared.record(
+                        "ax-focused-menu-sampler noMenu=1 " +
+                        "focusAvailable=\(evidence.focusAvailable) " +
                         "elapsedMs=\(evidence.elapsedMilliseconds)")
                 }
             }
