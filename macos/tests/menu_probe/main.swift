@@ -37,5 +37,19 @@ check(FocusedMenuURLProbe.classify(label: "Open on chatgpt.com",
       "script URL rejected")
 check(FocusedMenuURLProbe.classify(label: "chatgpt.com에서 열기…",
                                    url: direct) == .conversationURL, "localized ellipsis")
+// The fast sampler is opt-in, foreground-only and serialized.
+check(!FocusedMenuProbeCadence.shouldSample(trusted: false, frontmostPID: 12,
+    targetPID: 12, inFlight: false, elapsed: 1), "AX trust required")
+check(!FocusedMenuProbeCadence.shouldSample(trusted: true, frontmostPID: 13,
+    targetPID: 12, inFlight: false, elapsed: 1), "foreground PID required")
+check(!FocusedMenuProbeCadence.shouldSample(trusted: true, frontmostPID: 12,
+    targetPID: 0, inFlight: false, elapsed: 1), "valid PID required")
+check(!FocusedMenuProbeCadence.shouldSample(trusted: true, frontmostPID: 12,
+    targetPID: 12, inFlight: true, elapsed: 1), "single flight")
+check(!FocusedMenuProbeCadence.shouldSample(trusted: true, frontmostPID: 12,
+    targetPID: 12, inFlight: false, elapsed: 0.1), "minimum spacing")
+check(FocusedMenuProbeCadence.shouldSample(trusted: true, frontmostPID: 12,
+    targetPID: 12, inFlight: false, elapsed: 0.31), "foreground sample allowed")
+check(FocusedMenuProbeCadence.timerInterval < 2.0, "faster than refresh")
 print("PASS focused menu URL policy \(passes) assertions")
 print("LIVE_AX_MENU_URL=NOT_TESTED")
