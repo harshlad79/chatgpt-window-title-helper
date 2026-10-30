@@ -2,6 +2,25 @@ import AppKit
 import ApplicationServices
 import Foundation
 
+// Independent, opt-in sampling cadence: short-lived menus must not depend
+// on the 2-second full-window refresh or its 2.5-second diagnostic throttle.
+// Only inspect when the target ChatGPT app is foreground and AX is trusted.
+enum FocusedMenuProbeCadence {
+    static let timerInterval: TimeInterval = 0.35
+    static let minimumSpacing: TimeInterval = 0.30
+
+    static func shouldSample(
+        trusted: Bool,
+        frontmostPID: pid_t?,
+        targetPID: pid_t,
+        inFlight: Bool,
+        elapsed: TimeInterval
+    ) -> Bool {
+        trusted && targetPID > 0 && frontmostPID == targetPID &&
+            !inFlight && elapsed >= minimumSpacing
+    }
+}
+
 // Opt-in, read-only diagnostic for an ALREADY OPEN ChatGPT context menu.
 // Never opens a menu, invokes AXPress, changes focus, or logs titles/URLs/IDs.
 // It is not a conversation restorer and is not enabled in the installed Helper.
