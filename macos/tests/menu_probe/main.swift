@@ -1,0 +1,41 @@
+import Foundation
+
+private var passes = 0
+func check(_ value: @autoclosure () -> Bool, _ name: String) {
+    guard value() else { fatalError("FAIL: \(name)") }
+    passes += 1
+}
+typealias E = FocusedMenuURLProbe.LinkEvidence
+let id = "123e4567-e89b-12d3-a456-426614174000"
+let direct = "https://chatgpt.com/c/\(id)"
+let project = "https://chatgpt.com/g/g-test/c/\(id)"
+check(FocusedMenuURLProbe.classify(label: "Open on chatgpt.com",
+                                   url: direct) == .conversationURL, "direct URL")
+check(FocusedMenuURLProbe.classify(label: "chatgpt.com에서 열기",
+                                   url: project) == .conversationURL, "project URL")
+check(FocusedMenuURLProbe.classify(label: " OPEN ON CHATGPT.COM ",
+                                   url: direct) == .conversationURL, "normalized label")
+check(FocusedMenuURLProbe.classify(label: "Open on chatgpt.com",
+                                   url: nil) == .missingURL, "nil URL")
+check(FocusedMenuURLProbe.classify(label: "Open on chatgpt.com",
+                                   url: "") == .missingURL, "empty URL")
+check(FocusedMenuURLProbe.classify(label: "Open on chatgpt.com",
+                                   url: "https://example.com/c/\(id)") == .invalidURL,
+      "external host")
+check(FocusedMenuURLProbe.classify(label: "Open on chatgpt.com",
+                                   url: "https://chatgpt.com/c/not-an-id") == .invalidURL,
+      "invalid ID")
+check(FocusedMenuURLProbe.classify(label: "Open on chatgpt.com",
+                                   url: "https://chatgpt.com/c/\(id)?token=x") == .invalidURL,
+      "query rejected")
+check(FocusedMenuURLProbe.classify(label: "Share",
+                                   url: direct) == .unrelated, "not a navigation item")
+check(FocusedMenuURLProbe.classify(label: "Delete",
+                                   url: direct) == .unrelated, "no destructive item")
+check(FocusedMenuURLProbe.classify(label: "Open on chatgpt.com",
+                                   url: "javascript:alert(1)") == .invalidURL,
+      "script URL rejected")
+check(FocusedMenuURLProbe.classify(label: "chatgpt.com에서 열기…",
+                                   url: direct) == .conversationURL, "localized ellipsis")
+print("PASS focused menu URL policy \(passes) assertions")
+print("LIVE_AX_MENU_URL=NOT_TESTED")
