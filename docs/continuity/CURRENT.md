@@ -1806,3 +1806,34 @@ All four were Control-only, `mcp_path=control-n150/thecompany-chatgpt-mcp:python
 - **Telegram** `enqueue_notification` request `c4c5548e-8dc1-443a-886f-749dd550ca8d`, notification `4a32ad96-5198-4655-8e0d-b7bb98b9df58`, queued→독립 `get_notification` request `214cbe56-e769-4051-b8e0-8c8d3172a301`, **registered**, accepted=true, attempt 1, exit 0, **message_id=91**.
 - **Windows** `enqueue_notification` request `9ae2a554-434d-4a2a-b90c-2dd7455c0fea`, notification `9ece8234-8d16-4435-b8d2-e2e9286ea7ee`, queued→독립 `get_notification` request `986d75da-1775-41c7-8839-9ae35a959f3d`, **registered**, attempt 1, exit 0, node agent `pythonw.exe(pid=11848)`, worker `powershell.exe(pid=18088)`, `WINDOWS_NOTIFICATION_REGISTERED`.
 - 네 호출 모두 **Control-only**, outer/nested completed, `mcp_elapsed_ms` 3/1/3/1, `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=754214) -> control.enqueue_notification/get_notification`, task_id 미발급. 알림 접수 오류 없음. **등록 성공과 Windows 실제 확장 토스트 화면 표시·열람 성공은 별개이며 후자는 미검증.** Telegram 중복 발송 없음. 이후 문서-only 커밋으로 HEAD는 전진하나 설치 Helper는 동일.
+
+## 85차 — 2026-10-30 13:31:26 KST — ChatGPT 대화 메뉴의 고유 URL 전달 계약 버전 고정 (실제 AXURL·네이티브 E2E 미검증)
+
+**전체 상태:** 일반 대화 메뉴의 **고유 URL 생성 및 메뉴 액션 전달 경로**를 설치된 공식 ChatGPT 앱의 원본 바이트에서 검증하고 회귀 테스트로 고정. **마지막 창 모두 복원 E2E 미완료.** 이번 회차는 읽기 전용 정적·런타임 보존 검증만 수행했다. 기존 ChatGPT 창·대화·Dock 메뉴·포커스·세션 파일을 조작하지 않았다. 실제 AXURL, 새 네이티브 창, 대화 본문 E2E는 수행하지 않았으며 성공이라고 주장하지 않는다.
+
+**GitHub authority:** 저장소 `harshlad79/chatgpt-window-title-helper`, 브랜치 `feat/macos-adaptive-title-helper`; 시작 HEAD `dca4ab67d1b49daf3f3eebf54e9bb8a2ab0bee73`; PR #3 **Open/Draft**, base `master`, 미병합. `docs/continuity/CURRENT.md`, `macos/NORMAL_QUIT_RELAUNCH_OVERLAY_RECOVERY.md`, `macos/DOCK_LAST_SESSION_BULK_RESTORE.md` 원문 전체와 기존 연구·Swift 소스 및 공통 Rulebook 원문 재확인. 신규 **연구용 테스트 소스 커밋 `f5bcee79a5a07a4abb5b826cfbd541a8d37e6a0f`**, 파일 `macos/tests/verify_chatgpt_menu_href_contract.py`. 실제 Mac에서 테스트한 GitHub blob SHA `3bf05b0a2f86cb21c4ed36409712a9f7f55f34bb`. 설치된 Helper 소스·바이너리는 변경하지 않았고 Windows/NativeTitleSync 변경·PR 병합 없음. 문서 커밋은 테스트 검증 SHA와 구분.
+
+**새 증거 (공식 설치 앱 버전 한정):**
+- `/Applications/ChatGPT.app/Contents/Resources/app.asar` 인덱스에서 `webview/assets/app-primary-7d7313419f84.js`의 실제 오프셋 `69477681`, 크기 `5060009`, SHA256 `745529956e303674c268a6871e6f5aad49eca7ef5af899952bf0379d829821b6` 확인.
+- ChatGPT 메뉴 생성기 `yer`는 `conversationId`가 있을 때 `https://chatgpt.com/c/${encodeURIComponent(t.conversationId)}`를 만들고 `open-in-chatgpt` 항목에 `href:s`를 전달한다. 메뉴 빌더 `ver`는 `Xq`로 항목을 매핑하고 `Xq`는 `{...t,...}` 형태로 `href`를 보존한다. 이는 **UI 메뉴 객체에 URL이 실린다는 정적 증거**다.
+- 메뉴 항목의 `onClick` 및 `onSelect`는 모두 `open_in_browser_bridge`로 이어진다. 따라서 **URL을 얻을 잠재 경로**이지 네이티브 새 창 생성 증거가 아니다. 렌더링된 AXMenuItem/AXLink의 실제 `AXURL` 노출 여부는 **미검증**. 기존 83·84차의 private IPC 및 OS URL 네이티브 복원 부적합 결론은 유지.
+- 신규 정확한 GitHub 소스를 Mac에서 **10/10 정적 assertions PASS**, request `84af6a41-5659-4099-8efe-f4b38f067b4b`, Worker exit 0. 이 테스트는 설치 앱 자산 SHA가 변경되면 fail-closed; AX/UI 동작을 시뮬레이션하지 않는다.
+
+**MacMini2 실제 상태 보존:** 작업 전·후 ChatGPT PID `27828`, Helper PID `36179`, signed Helper `codesign --verify --deep --strict` exit 0, 세션 파일 SHA256 `78772da251d30948b688b4c33f58b1d9d63da609b45098276b289552bf974159`, mode `0600`, bytes 553 동일. 기존 Helper 로그의 최근 `refresh-success knownWindows=3`, `history-restart-pending saved=3` 확인. **knownWindows는 전체 AX 창 개수가 아님.** 최신 AX 전체 census/스크린샷은 이번 회차 미측정; 이전 8 AX/3 minimized를 현재 값으로 재사용하지 않는다. 기존 창·사용자 대화 영향 없음. 롤백 불필요.
+
+**도구 호출·실행 경로 및 영수증:** GitHub connector `fetch_file`(원문/소스/Rulebook), `get_pr_info`, `search_branches`(cursor 끝까지), `search_prs`, `compare_commits`, `create_file`, `update_file`; GitHub 측 request_id/PID/mcp_path 미제공, Control 경유 아님. TheCompany **core_dev** `thecompany_status`, `thecompany_describe_control_operation`, `thecompany_call_tool(operation=list_nodes/get_latest_success)` Control-only, `macos-main` HEALTHY. 모든 실제 Mac 호출은 **Dev** `thecompany_call_tool(operation=invoke)` → Control `control-n150` → `node_id=macos-main`, `backend=python:subprocess`, `worker_tool=run_command`, `project=chatgpt-window-title-helper`, `procedure_key=macos-title-helper-live-readonly`, `program=/bin/bash`, `argv=[-lc,<아래 목적별 읽기 전용 Python 스크립트>]`, cwd Mac node-agent deployment [비공개], task_id 미발급. 실제 `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=754214) -> control.invoke -> macos-main/thecompany-node-agent:python(pid=5070) -> python:subprocess/run_command -> bash(pid=<각 PID>)`; `mcp_trace`는 같은 PID 계층. 아래 모두 outer/nested `completed`, exit_code `0`, timed_out `false`, 오류 없음.
+1. `99632ef2` / bash PID 60999 / 755ms / timeout 20s: 시작 프로세스·서명·세션 SHA·로그 파일 존재 확인.
+2. `3dbfa485` / PID 61062 / 15810ms / timeout 40s: ASAR 메뉴/링크/복사 기능 키워드 정적 탐색.
+3. `5d3ebd0f` / PID 62026 / 10089ms / timeout 30s: `yer` 메뉴 객체, href 생성 및 브라우저 연결 조사.
+4. `f3b9f5c1` / PID 62134 / 701ms / timeout 30s: `Xq` 속성 보존 및 `ver` 호출 연결 조사.
+5. `457bf9fb` / PID 62934 / 320ms / timeout 20s: 기존 Helper 로그의 집계 수치만 확인.
+6. `bace9130` / PID 63052 / 912ms / timeout 20s: ASAR 자산 인덱스/오프셋 확인.
+7. `263fd817` / PID 63116 / 717ms / timeout 20s: 자산 SHA256 및 함수 유일성 확인.
+8. `84af6a41` / PID 63428 / 539ms / timeout 20s: **GitHub 정확 소스 10/10 PASS**.
+9. `a092f811` / PID 64039 / 642ms / timeout 15s: 종료 시점 프로세스·서명·세션 SHA 보존 확인.
+OpenAI 사전 안전 검사 차단 **없음**, Dev MCP 거절 **없음**, Mac Worker 실패 **없음**. `type=tool_boundary` Experience 조건 미발생. 운영 MCP·Work/Codex·TCC 우회·인젝션 사용 없음.
+
+**브랜치 전수 비교:** `search_branches` 6개, cursor 종료. `master` 장기 base, `dev` 장기 base (4 ahead/8 behind), `feat/macos-adaptive-title-helper` **309 ahead/1 behind** (소스 커밋 후, PR #3 Open/Draft), `feat/approved-app-icon-20261016` 1/1이나 PR #4 merged, `feat/title-change-event-probe` 0/2, `fix/chatgpt-2026-title-ui` 0/7. **확인된 미병합 기능 브랜치 1개**. 본 CURRENT 문서 커밋으로 feature ahead 수가 추가 증가할 수 있다.
+
+**미완료·다음:** (1) 기존 AX 창 식별자/최소화 상태를 **현재 시점에 안전하게 다시 보존**하고, (2) 소유자 기존 대화가 아닌 격리된 비민감 테스트 대화의 **공식 UI 메뉴**에서 `open-in-chatgpt` 렌더링 항목이 실제 `AXURL` 또는 `AXLink`를 노출하는지 승인된 Helper의 한정된 읽기 전용 AX 경로로 조사. 메뉴를 열기 전후 기존 창 ID·포커스 보존, 별도 Probe 실행 시 Dock 메뉴가 닫히는 문제 회피. (3) 고유 URL 확보 후에도 **독립 새 네이티브 창** 생성과 제목·본문 확인을 별도로 검증하고 복원 계획기/세션 스키마 연결. 현재 Dock Recent 고유 제목 일치만 제한적 fallback. **전체 Quit→재실행→Restore All E2E 미완료.** 사용자 조치 **현재 없음**. 정상 회차 정책상 알림 대상 **Windows만**, Telegram 미발송. 알림 등록/표시 영수증은 후속 기록.
+
