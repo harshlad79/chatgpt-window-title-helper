@@ -46,11 +46,11 @@ def verify(modules):
         "main imports handoff module": b'm=require("./desktop-open-path-queue-tez0sDbS.js")' in main[:1500],
         "guard is three-way OR": b"function Z7(e){return i.ao(e)||Y_t(e)||m.f(e)!=null}" in main,
         "i.ao resolves to sn": b'Object.defineProperty(exports,"ao",{enumerable:!0,get:function(){return sn}})' in src,
-        "sn recognizes space": b"e===\`/space\`" in validator,
+        "sn recognizes space": b"e===`/space`" in validator,
         "sn recognizes local and remote": b"ln(e,Mt)" in validator and b"ln(e,It)" in validator,
         "sn has no /c route": b"/c/" not in validator,
         "m.f resolves to s": b'Object.defineProperty(exports,"f",{enumerable:!0,get:function(){return s}})' in queue,
-        "s only parses browser handoff": b"function s(e){let t=\`\${i}?\`;" in queue and b'i=\`/browser/handoff\`' in queue,
+        "s only parses browser handoff": b"function s(e){let t=`\${i}?`;" in queue and b'i=`/browser/handoff`' in queue,
         "Y_t recognizes o/dots": b"function Y_t(e){let t=/^\\/(?:o|dots)\\/" in main,
     }
     for name, ok in checks.items():
