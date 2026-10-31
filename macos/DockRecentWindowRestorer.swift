@@ -646,6 +646,138 @@ final class DockRecentWindowRestorer {
             " originalsPreserved=" + String(preserved))
     }
 
+    // One-shot read-only AX metadata census for an ALREADY OPEN Search palette
+    // in the sole generic native ChatGPT window (2-12 windows). No query, AXPress,
+    // navigation, focus change, or raw user text/URL/identifier logging.
+    func probeUniqueGenericSearchResultMetadata(
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }) else {
+            completed(false, "unique-result-metadata-no-AX-or-app"); return
+        }
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        func census() -> (
+            states: [String: Bool], generic: Set<String>,
+            named: Set<String>, windows: [AXUIElement]
+        )? {
+            let windows = winList(root)
+            guard (2...12).contains(windows.count) else { return nil }
+            var states: [String: Bool] = [:]
+            var generic: Set<String> = []
+            var named: Set<String> = []
+            for window in windows {
+                let id = String(CFHash(window))
+                guard states[id] == nil,
+                      str(window, kAXRoleAttribute) == "AXWindow",
+                      let minimized = (read(window, kAXMinimizedAttribute)
+                          as? NSNumber)?.boolValue else { return nil }
+                let caption = title(window)
+                guard !caption.isEmpty else { return nil }
+                states[id] = minimized
+                if caption == "ChatGPT" { generic.insert(id) }
+                else { named.insert(id) }
+            }
+            return (states, generic, named, windows)
+        }
+        guard let before = census(),
+              let candidate = IsolatedGenericCandidatePolicy.select(
+                  minimizedByID: before.states,
+                  genericIDs: before.generic,
+                  nonGenericIDs: before.named),
+              let target = before.windows.first(where: {
+                  String(CFHash($0)) == candidate
+              }) else {
+            completed(false, "unique-result-metadata-baseline-unavailable")
+            return
+        }
+        let search = searchUIScan(target)
+        guard UniqueGenericSearchInputShapePolicy.eligible(
+                  minimizedByID: before.states,
+                  genericIDs: before.generic,
+                  nonGenericIDs: before.named,
+                  searchInputs: search.inputs,
+                  searchButtons: search.buttons.count,
+                  limited: search.limited) else {
+            completed(false, "unique-result-metadata-palette-unavailable")
+            return
+        }
+        let candidateRoles: Set<String> = [
+            "AXRow", "AXCell", "AXMenuItem", "AXButton", "AXGroup"
+        ]
+        let uuidPattern =
+            "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+        var queue: [AXUIElement] = [target]
+        var seen: Set<String> = []
+        var index = 0
+        var candidates = 0
+        var values = 0
+        var identifiers = 0
+        var urls = 0
+        var uuidShaped = 0
+        var chatURLShaped = 0
+        let started = ProcessInfo.processInfo.systemUptime
+        while index < queue.count &&
+              ProcessInfo.processInfo.systemUptime - started < 5.0 {
+            let element = queue[index]
+            index += 1
+            guard seen.insert(String(CFHash(element))).inserted else { continue }
+            if candidateRoles.contains(str(element, kAXRoleAttribute)) {
+                candidates += 1
+                var rawNames: CFArray?
+                if AXUIElementCopyAttributeNames(element, &rawNames) == .success,
+                   let names = rawNames as? [String] {
+                    for key in ["AXValue", "AXIdentifier", "AXURL"] {
+                        guard names.contains(key) else { continue }
+                        if key == "AXValue" { values += 1 }
+                        if key == "AXIdentifier" { identifiers += 1 }
+                        if key == "AXURL" { urls += 1 }
+                        // Inspect shapes in memory only; never log values.
+                        let raw = read(element, key)
+                        let value: String
+                        if let s = raw as? String {
+                            value = s
+                        } else if let u = raw as? URL {
+                            value = u.absoluteString
+                        } else {
+                            value = ""
+                        }
+                        if value.range(of: uuidPattern,
+                            options: .regularExpression) != nil {
+                            uuidShaped += 1
+                        }
+                        if value.hasPrefix("https://chatgpt.com/c/") {
+                            chatURLShaped += 1
+                        }
+                    }
+                }
+            }
+            var next = children(element)
+            if next.isEmpty {
+                next = (read(element, kAXVisibleChildrenAttribute)
+                    as? [AXUIElement]) ?? []
+            }
+            queue.append(contentsOf: next)
+        }
+        let limited = index < queue.count
+        guard let after = census() else {
+            completed(false, "unique-result-metadata-post-census-unavailable")
+            return
+        }
+        let preserved = before.states == after.states &&
+            before.generic == after.generic && before.named == after.named
+        completed(preserved && !limited,
+            "count=\(before.states.count) inputs=\(search.inputs) " +
+            "candidateElements=\(candidates) AXValuePresent=\(values) " +
+            "AXIdentifierPresent=\(identifiers) AXURLPresent=\(urls) " +
+            "uuidShaped=\(uuidShaped) chatURLShaped=\(chatURLShaped) " +
+            "visited=\(seen.count) limited=\(limited) " +
+            "originalsPreserved=\(preserved)")
+    }
+
     // One-shot privacy-safe AX attribute-shape probe for the isolated eighth window.
     // Never logs private AX values, titles, IDs, URLs, queries or message text.
     // No AXPress, focus activation, text entry, selection or window creation.
