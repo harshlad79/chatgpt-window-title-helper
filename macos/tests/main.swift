@@ -423,6 +423,44 @@ expect(!IsolatedWindowSnapshotPolicy.accepts(
     expected: tooMany, targetID: "window-12", actual: tooMany),
     "unbounded native-window census is refused")
 
+// A live two-window census must identify exactly one unminimized generic
+// candidate; ambiguous/missing/changed windows fail closed.
+let genericTwo = ["owner": false, "blank": false]
+expect(IsolatedGenericCandidatePolicy.select(
+    minimizedByID: genericTwo, genericIDs: ["blank"],
+    nonGenericIDs: ["owner"]) == "blank",
+    "one generic window with one preserved non-generic owner")
+expect(IsolatedGenericCandidatePolicy.select(
+    minimizedByID: ["owner": true, "blank": false],
+    genericIDs: ["blank"], nonGenericIDs: ["owner"]) == "blank",
+    "minimized original remains untouched")
+expect(IsolatedGenericCandidatePolicy.select(
+    minimizedByID: genericTwo, genericIDs: ["owner", "blank"],
+    nonGenericIDs: []) == nil, "two generic windows are ambiguous")
+expect(IsolatedGenericCandidatePolicy.select(
+    minimizedByID: genericTwo, genericIDs: [], nonGenericIDs: ["owner", "blank"]
+    ) == nil, "no generic window is not a blank candidate")
+expect(IsolatedGenericCandidatePolicy.select(
+    minimizedByID: ["owner": false, "blank": true],
+    genericIDs: ["blank"], nonGenericIDs: ["owner"]) == nil,
+    "minimized generic candidate rejected")
+expect(IsolatedGenericCandidatePolicy.select(
+    minimizedByID: genericTwo, genericIDs: ["blank"],
+    nonGenericIDs: []) == nil, "missing owner classification rejected")
+expect(IsolatedGenericCandidatePolicy.select(
+    minimizedByID: genericTwo, genericIDs: ["blank"],
+    nonGenericIDs: ["owner", "phantom"]) == nil,
+    "unexpected phantom classification rejected")
+expect(IsolatedGenericCandidatePolicy.select(
+    minimizedByID: ["blank": false], genericIDs: ["blank"],
+    nonGenericIDs: []) == nil, "one window is not isolated")
+expect(IsolatedGenericCandidatePolicy.select(
+    minimizedByID: Dictionary(uniqueKeysWithValues:
+        (0..<13).map { ("w\\($0)", false) }),
+    genericIDs: ["w12"],
+    nonGenericIDs: Set((0..<12).map { "w\\($0)" })) == nil,
+    "more than twelve windows refused")
+
 // Two native windows with identical titles are not the same conversation.
 expect(!WindowRestorePreflightPolicy.hasAmbiguousOpenTitles(["A", "B"]),
        "distinct open titles allow guarded restore preflight")
