@@ -116,6 +116,26 @@ struct IsolatedGenericCandidatePolicy {
     }
 }
 
+// A Search AXPress is permitted only for the uniquely identified generic
+// window that is ALREADY the ChatGPT AX focused window. The owner window is
+// never raised or navigated to satisfy this preflight.
+struct UniqueGenericSearchPressPolicy {
+    static func eligible(minimizedByID: [String: Bool],
+                         genericIDs: Set<String>,
+                         nonGenericIDs: Set<String>,
+                         focusedID: String?,
+                         searchButtons: Int, inputs: Int, dialogs: Int,
+                         limited: Bool) -> Bool {
+        guard let candidate = IsolatedGenericCandidatePolicy.select(
+            minimizedByID: minimizedByID,
+            genericIDs: genericIDs,
+            nonGenericIDs: nonGenericIDs
+        ) else { return false }
+        return focusedID == candidate && searchButtons == 1 &&
+            inputs == 0 && dialogs == 0 && !limited
+    }
+}
+
 // Title-only evidence cannot distinguish two open conversations sharing a title.
 // Refuse restore preflight rather than silently skip an unknown native window.
 struct WindowRestorePreflightPolicy {
