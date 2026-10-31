@@ -10,6 +10,9 @@ final class WindowSessionHistoryStore {
         // Optional for compatibility with schema-1 manifests written before this guard.
         var lastCompleteObservedAt: Date? = nil
         var previousSessionOpen: [String] = []
+        // Explicit provenance for last-session targets. Older files without
+        // this field cannot prove that previousSessionOpen is immediately prior.
+        var previousSessionSourcePID: Int32? = nil
         var recentTitles: [String] = []
     }
 
@@ -137,8 +140,13 @@ final class WindowSessionHistoryStore {
                 // A later PID had an incomplete census. The old complete set
                 // is NOT the immediately preceding session: never promote it.
                 next.previousSessionOpen = []
+                next.previousSessionSourcePID = nil
             } else if !next.lastCompleteOpen.isEmpty {
                 next.previousSessionOpen = next.lastCompleteOpen
+                next.previousSessionSourcePID = next.appPID
+            } else {
+                next.previousSessionOpen = []
+                next.previousSessionSourcePID = nil
             }
             next.appPID = Int32(pid)
         }
@@ -154,6 +162,7 @@ final class WindowSessionHistoryStore {
         guard next.appPID != snapshot.appPID ||
               next.lastCompleteOpen != snapshot.lastCompleteOpen ||
               next.previousSessionOpen != snapshot.previousSessionOpen ||
+              next.previousSessionSourcePID != snapshot.previousSessionSourcePID ||
               next.recentTitles != snapshot.recentTitles else { return true }
         let old = snapshot
         snapshot = next
@@ -274,8 +283,13 @@ final class WindowSessionHistoryStore {
         if pid > 0 && snapshot.appPID > 0 && snapshot.appPID != Int32(pid) {
             return snapshot.lastCompleteOpen
         }
-        return snapshot.previousSessionOpen.isEmpty
-            ? snapshot.lastCompleteOpen : snapshot.previousSessionOpen
+        // For the running PID, only an explicitly sourced previous-process
+        // manifest is safe. Legacy unsourced previousSessionOpen (including
+        // an already-promoted stale manifest) must not be offered as Restore All.
+        guard !snapshot.previousSessionOpen.isEmpty,
+              let sourcePID = snapshot.previousSessionSourcePID,
+              sourcePID > 0, sourcePID != snapshot.appPID else { return [] }
+        return snapshot.previousSessionOpen
     }
 
     func recoverable(excluding open: [String], pid: pid_t,
