@@ -524,6 +524,128 @@ final class DockRecentWindowRestorer {
         }
     }
 
+    // One-shot read-only shape inspection of the Search palette opened by the
+    // previous verified Search AXPress. Never logs the value of any AX attribute.
+    // Never activates, presses, types, navigates or closes a native window.
+    func probeUniqueGenericSearchInputShape(
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }) else {
+            completed(false, "input-shape-no-AX-or-app"); return
+        }
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        func census() -> (
+            states: [String: Bool], generic: Set<String>,
+            named: Set<String>, windows: [AXUIElement]
+        )? {
+            let windows = winList(root)
+            guard (2...12).contains(windows.count) else { return nil }
+            var states: [String: Bool] = [:]
+            var generic: Set<String> = []
+            var named: Set<String> = []
+            for window in windows {
+                let id = String(CFHash(window))
+                guard states[id] == nil,
+                      str(window, kAXRoleAttribute) == "AXWindow",
+                      let minimized = (read(window, kAXMinimizedAttribute)
+                          as? NSNumber)?.boolValue else { return nil }
+                let caption = title(window)
+                guard !caption.isEmpty else { return nil }
+                states[id] = minimized
+                if caption == "ChatGPT" { generic.insert(id) }
+                else { named.insert(id) }
+            }
+            return (states, generic, named, windows)
+        }
+        guard let before = census(),
+              let candidate = IsolatedGenericCandidatePolicy.select(
+                  minimizedByID: before.states,
+                  genericIDs: before.generic,
+                  nonGenericIDs: before.named),
+              let target = before.windows.first(where: {
+                  String(CFHash($0)) == candidate
+              }) else {
+            completed(false, "input-shape-unique-generic-unavailable"); return
+        }
+        let initial = searchUIScan(target)
+        guard UniqueGenericSearchInputShapePolicy.eligible(
+                  minimizedByID: before.states,
+                  genericIDs: before.generic,
+                  nonGenericIDs: before.named,
+                  searchInputs: initial.inputs,
+                  searchButtons: initial.buttons.count,
+                  limited: initial.limited) else {
+            completed(false, "input-shape-search-palette-not-unique"); return
+        }
+        var queue: [AXUIElement] = [target]
+        var seen: Set<String> = []
+        var inputs: [AXUIElement] = []
+        var index = 0
+        let started = ProcessInfo.processInfo.systemUptime
+        while index < queue.count &&
+              ProcessInfo.processInfo.systemUptime - started < 5.0 {
+            let element = queue[index]
+            index += 1
+            guard seen.insert(String(CFHash(element))).inserted else { continue }
+            let role = str(element, kAXRoleAttribute)
+            if role == "AXTextField" || role == "AXSearchField" ||
+               role == "AXComboBox" { inputs.append(element) }
+            var next = children(element)
+            if next.isEmpty {
+                next = (read(element, kAXVisibleChildrenAttribute)
+                    as? [AXUIElement]) ?? []
+            }
+            queue.append(contentsOf: next)
+        }
+        let limited = index < queue.count
+        guard !limited, inputs.count == 1 else {
+            completed(false, "input-shape-scan-incomplete-or-ambiguous"); return
+        }
+        let input = inputs[0]
+        let role = str(input, kAXRoleAttribute)
+        let rawValue = read(input, kAXValueAttribute)
+        let valueEmpty = (rawValue as? String) == ""
+        var settable = DarwinBoolean(false)
+        let settableOK = AXUIElementIsAttributeSettable(
+            input, kAXValueAttribute as CFString, &settable) == .success
+        let identifierPresent = read(input, "AXIdentifier") != nil
+        let urlPresent = read(input, "AXURL") != nil
+        let placeholderPresent = read(input, "AXPlaceholderValue") != nil
+        var actionNames: CFArray?
+        let actionsAvailable = AXUIElementCopyActionNames(
+            input, &actionNames) == .success
+        guard let after = census() else {
+            completed(false, "input-shape-post-census-unavailable"); return
+        }
+        let preserved = before.states == after.states &&
+            before.generic == after.generic && before.named == after.named
+        let roleAllowed = ["AXTextField", "AXSearchField",
+                           "AXComboBox"].contains(role)
+        let success = preserved && roleAllowed && settableOK
+        // Booleans and counts only: no title, query, identifier or URL values.
+        completed(success,
+            "count=" + String(before.states.count) +
+            " inputs=" + String(inputs.count) +
+            " roleSearchField=" + String(role == "AXSearchField") +
+            " roleTextField=" + String(role == "AXTextField") +
+            " roleComboBox=" + String(role == "AXComboBox") +
+            " valuePresent=" + String(rawValue != nil) +
+            " valueEmpty=" + String(valueEmpty) +
+            " settableKnown=" + String(settableOK) +
+            " valueSettable=" + String(settable.boolValue) +
+            " identifierPresent=" + String(identifierPresent) +
+            " urlPresent=" + String(urlPresent) +
+            " placeholderPresent=" + String(placeholderPresent) +
+            " actionsAvailable=" + String(actionsAvailable) +
+            " visited=" + String(seen.count) +
+            " limited=" + String(limited) +
+            " originalsPreserved=" + String(preserved))
+    }
+
     // One-shot privacy-safe AX attribute-shape probe for the isolated eighth window.
     // Never logs private AX values, titles, IDs, URLs, queries or message text.
     // No AXPress, focus activation, text entry, selection or window creation.
