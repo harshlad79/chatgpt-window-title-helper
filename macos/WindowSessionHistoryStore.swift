@@ -223,8 +223,10 @@ final class WindowSessionHistoryStore {
     // The partial file is evidence of a process, NOT a restore target.
     // Older schema-1 manifests have no observedAt; use their file mtime.
     func hasInterveningPartialSession(pid: pid_t) -> Bool {
-        guard pid > 0, let partial = partialSnapshot,
-              partial.appPID > 0,
+        // Once the current PID has a complete census, the transition was
+        // already reconciled by observe(); never invalidate its prior manifest.
+        guard pid > 0, snapshot.appPID != Int32(pid),
+              let partial = partialSnapshot, partial.appPID > 0,
               partial.appPID != snapshot.appPID,
               partial.appPID != Int32(pid) else { return false }
         let completeAt = snapshot.lastCompleteObservedAt ??
