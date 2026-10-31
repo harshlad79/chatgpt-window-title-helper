@@ -2385,3 +2385,45 @@ Mac 실측 ChatGPT PID27828, Helper PID15201, 서명 PASS, 세션 SHA `78772da2.
 - **Telegram:** enqueue request `241c1c46-c62e-474e-99c3-46a77cd74c26`, notification `eebd7970-9cae-488f-8edd-21f13f183eef`, outer/nested completed/queued/4ms. 독립 get request `3fd89e98-b178-4828-a5c8-6e43f9d8b45c`, completed/1ms, **registered** attempt1, accepted=true, exit0, **message_id=125**.
 - **Windows:** enqueue request `50bb193e-2515-43e0-a2eb-bd9beccc8236`, notification `e47ec9d2-5e0a-4421-a27a-176075b5c067`, outer/nested completed/queued/3ms. 독립 get request `8a9539e5-9f0f-4a81-a56f-bf7c1e191e96`, completed/1ms, **registered** attempt1, `windows-main` agent `pythonw.exe(pid=11848)` → `powershell.exe(pid=15816)`, exit0, `WINDOWS_NOTIFICATION_REGISTERED`.
 - **알림 접수 실패 없음.** Windows 실제 화면 표시·사용자 열람 미검증. 후속 문서-only 커밋은 설치 Helper/ChatGPT/세션/Windows 소스 변경 없음.
+
+
+## 102차 사후 증거 정리 — 2026-10-31 12:25 KST (103차에서 보충)
+
+**상태:** 102차 OpenAI 사전 안전검사 차단 2건은 Dev Control/Worker 및 GitHub API에 전달되지 않았다. Mac 런타임 검사와 CURRENT.md 기록 **모두 미수행**. 이전 101차 HEAD `45d53b944ef853e4ea67cdf5e325d45b22b12f77` 그대로였음. OpenAI 차단을 Dev MCP 거절이나 Mac Worker 실패로 오분류하지 말 것.
+- Mac 읽기 전용 `mcp__TheCompany_core_dev__thecompany_call_tool(operation=invoke)` 사전 차단: 요청/시각 2026-10-31T03:25:03.396Z, `node_id=macos-main`, `backend=python:subprocess`, `worker_tool=run_command`, `program=/usr/bin/python3`, `procedure_key=macos-title-helper-live-readonly`, `timeout_seconds=25`; request_id/mcp_elapsed_ms/mcp_path/exit_code **미발급**. durable Experience `9f2ecd41-048d-425c-9c4b-8ac10ccc023d`.
+- `mcp__GitHub__update_file(docs/continuity/CURRENT.md)` 사전 차단: 요청/시각 2026-10-31T03:25:39.825Z, GitHub 커밋·blob SHA **미발급**, 실제 쓰기 **없음**. durable Experience `323de90c-e243-496e-89d3-2f32fb9a868c`. 두 Experience는 당시 별도 재조회 확인. 102차 Telegram message_id=136 접수 보고, Windows 알림 미발송(당시 원장 기록 미완료); 화면 표시 미검증. 이 단락은 **103차의 사후 원장 보충**이며 102차 당시 기록 성공을 뜻하지 않음.
+
+## 103차 — 2026-10-31 13:18–13:22 KST — 앱 재시작 후 비파괴 AX/CG 기준선 확보
+
+**1. 제목·일시:** ChatGPT Window Title Helper macOS / 마지막 창 모두 복원 / 103차 / 2026-10-31 13:18–13:22 KST.
+
+**2. 전체 상태:** **MacMini2 앱 재시작 후 런타임 재확인 성공. 실제 Restore All E2E 미완료.** 기존 ChatGPT 앱/창을 종료·닫기·전환·덮어쓰기 하지 않았음. 전면 Mission Control 상태를 존중하고 AX 메뉴 클릭/창 생성/복원은 하지 않음.
+
+**3. 이번 회차 수행·근거:**
+- canonical GitHub `harshlad79/chatgpt-window-title-helper`, `feat/macos-adaptive-title-helper`, 시작 HEAD `45d53b944ef853e4ea67cdf5e325d45b22b12f77`, PR #3 **Open/Draft → master**, 미병합. `CURRENT.md`, `macos/NORMAL_QUIT_RELAUNCH_OVERLAY_RECOVERY.md`, `macos/DOCK_LAST_SESSION_BULK_RESTORE.md` 원문과 공통 Rulebook 원문 확인. 원격 브랜치 6개(첫 페이지 6, cursor Ng 다음 페이지 0), master/dev 제외, feature ahead379/behind1, app-icon PR #4 merged, 다른 두 브랜치 ahead0. **검증된 미병합 기능 브랜치 1개.**
+- 관련 Dev Experience 성공 `066b5ad6`, `80bef335`, 실패/차단 `9f2ecd41`, `323de90c`, `a5ebbd9a` 등을 확인한 뒤 Dev Control 계약/최근 성공 조회. 설치 스킬 목록은 이 대화에서 비어 있어 해당 스킬 원문을 새로 확인할 수 없었음; 현재 Dev Control `describe_control_operation` 계약과 실제 응답에 한정하여 읽기 전용 수행.
+- **재시작 후 실제 PID:** ChatGPT **10411**(이전 27828), Helper **15201 유지**. 서명 재검증/설치 재배포 **미수행**. 전체 세션 `window-session-history.json` mode 0600, SHA256 `78772da251d30948b688b4c33f58b1d9d63da609b45098276b289552bf974159` **불변**, appPID **501**, `lastCompleteOpen=3`, `previousSessionOpen=5`, recentTitles6. 부분 증거 `window-session-partial.json` mode0600, appPID **27828**, entries **6**, SHA256 `f1f0318456a5ba6ad7604cbc926ce9260b4b4ce52df7eb1aaf813f3297a754b9`. 두 파일 모두 **읽기 전용**.
+- Helper 로그 `ax-subscriptions active=10 desired=10`, `refresh-success knownWindows=0`, `history-restart-pending pid=10411 saved=3`, `ax-focused-menu-sampler foreground=false trusted=true targetValid=true`. 별도 **AXWindow identity snapshot**은 04:11–04:21 UTC 동안 안정적으로 **raw=1**, hash **1668255450**, `min=0 generic=0 known=0`. 즉 새 앱에 **제목이 아직 식별되지 않은 비일반 네이티브 창 1개**가 있으며 `knownWindows=0`를 창 0개로 오해하면 안 됨.
+- Swift CoreGraphics `CGWindowListCopyWindowInfo` 읽기 전용 검사: ChatGPT PID10411의 **CGWindow 10개/onscreen1**, IDs `15360,15367,15368,15375,15376,15377,15496,15497,15498,15499`. 이는 AXWindow 1개와 다른 계수이며 이전 앱 PID27828의 CG 18개 ID를 현재 기준선으로 재사용하지 않음.
+- Dev 화면 캡처 1000×562 성공: **Mission Control overview**, ChatGPT 썸네일 관찰. 스크린샷만으로 대화 본문/정확한 AX 창 수는 검증 불가. UI 조작 없음.
+- **새로 확인한 위험:** 완전 세션 `appPID=501,lastCompleteOpen=3`은 직전 ChatGPT PID27828과 불일치. 직전 PID27828의 부분 증거 entries6만 존재. 따라서 화면에 보이는 `saved=3`은 **직전 세션 전체 창 3개라는 증거가 아니며**, 오래된 완전 스냅샷일 가능성이 높음. 현행 `lastSessionTargets(pid:)`는 `snapshot.appPID != pid`일 때 과거 `lastCompleteOpen`을 반환하므로 중간 PID의 불완전 세션을 건너뛴 경우에도 오래된 3개를 마지막 세션으로 제시할 수 있음. **현재 Restore All 강행 금지**; 고유 대화 ID 부재/불완전 AX census/직전 세션 불일치가 함께 존재. 부분 제목 6개는 고유 ID도 완전한 복원 대상도 아님.
+- **오류 분류:** 이번 Mac Dev 호출은 모두 Control/Worker 정상 completed/exit0. 102차 OpenAI 사전 차단은 위에서 별도 보존. 이번 GitHub branch REST `/branches/feat%2F...` 조회 400(경로 인자 오류) 후 허용된 `git/ref/heads/feat/macos-adaptive-title-helper` GET으로 HEAD 확인; GitHub 오류이지 Dev Worker 실패가 아님. 새 OpenAI 안전 차단/Dev 거절/Worker 실패 없음.
+
+**도구 호출·실행 경로:**
+1. GitHub connector `fetch_file`(필수 3문서/Rulebook/Swift 소스·테스트), `get_pr_info`(#3/#4), `search_branches`(6+0), `compare_commits`(4), `fetch`(첫 잘못된 URL 400 → git/ref GET 성공), `update_file`(본 원장). GitHub는 Dev Control/Worker 미경유; connector request_id/mcp_path/PID/elapsed/exit_code 미제공.
+2. Dev Control-only `describe_control_operation(invoke,get_latest_success,enqueue_notification)`, `list_experience`(성공·실패), `get_latest_success` request `b8ba40f7` outer/nested completed, elapsed1ms, path `control-n150/thecompany-chatgpt-mcp:python(pid=795264) -> control.get_latest_success`; 해당 과거 성공은 현행 E2E 증거가 아님.
+3. Dev `thecompany_call_tool(operation=invoke)` 공통 `node_id=macos-main, project=chatgpt-window-title-helper, backend=python:subprocess, worker_tool=run_command, procedure_key=macos-title-helper-live-readonly`. 실행 인자/요청:
+   - `1fa68f7f` `/usr/bin/pgrep -fl ChatGPT|ChatGPTTitleOverlay` timeout12, exit0, ChatGPT PID10411 확인. 응답이 긴 자식 argv를 포함하여 표시가 절단됐으므로 **해당 호출 mcp_path/elapsed 미확인**, 추정 재구성 금지.
+   - `86d7df06` `/usr/bin/python3 -c [세션 파일 JSON counts/hash/process read-only]` timeout20, exit0, elapsed541ms, path `control-n150/thecompany-chatgpt-mcp:python(pid=795264) -> control.invoke -> macos-main/thecompany-node-agent:python(pid=5070) -> python:subprocess/run_command -> python3(pid=52488)`.
+   - `a96e1e92` `/usr/bin/python3 -c [로그 파일명/크기/mtime]` timeout15, exit0, elapsed264ms, path 동일 구조 `python3(pid=52597)`.
+   - `27e866ed` `/usr/bin/python3 -c [최근 2500 로그 행에서 안전한 AX 카운트만]` timeout15, exit0, elapsed234ms, path 동일 구조 `python3(pid=53307)`.
+   - `ce8a2a6d` `/usr/bin/swift -e [CGWindowListCopyWindowInfo PID10411 필터]` timeout35, exit0, elapsed6028ms, path 동일 구조 `swift(pid=53503)`.
+   - `9bc28db5` `/usr/bin/python3 -c [전체 로그에서 AXWindow census/snapshot 안전한 행만]` timeout18, exit0, elapsed388ms, path 동일 구조 `python3(pid=53619)`.
+   - 위 6회 Worker outer/nested completed, exit0/timed_out=false, Control python PID795264, Mac agent python PID5070. cwd=[비공개], task_id 미발급.
+4. Dev `thecompany_capture_screen(node_id=macos-main,mode=desktop,max_width=1000)` 이미지 수신, request_id/mcp_path/exit_code 미제공. `thecompany_record_experience` 8건 각각 outer/nested completed, event.id 수신 후 `list_experience`로 전부 재조회 검증: `bc309b27`, `6d0b62d6`, `35a768bf`, `b5f84998`, `a6a2ebf1`, `806fa695`, `1d1083e4`, `778c7e16`. 기록은 각 시도별 증거이며 E2E 성공을 뜻하지 않음.
+
+**4. 최종 상태·기존 영향:** ChatGPT PID10411/Helper15201, AX raw1(미식별1), CG10, 세션 JSON SHA 불변, 기존 창·대화·앱·코드·설치 변경 없음. **이번 소스 커밋 없음**, 본 CURRENT 문서 커밋만 발생. NativeTitleSync/Windows/PR #3 미변경, 롤백 불필요.
+
+**5. 미완료·다음:** ① 직전 세션 PID27828의 불완전 부분 증거와 `appPID501`의 오래된 완전 스냅샷을 혼동하지 않도록 **stale-manifest fail-closed 가드 설계·회귀 테스트** (부분 파일의 관측 시각과 완전 스냅샷의 시간 관계를 확인해 잘못된 차단 방지). ② 고유 대화 URL/ID를 실제 공식 메뉴에서 확보하고 AXWindow와 결합. ③ 안전한 개별 새 native 창·제목·본문 복원 후 전체 E2E. 현재 Mission Control 상태이므로 임의 포커스 전환·복원 클릭 없음.
+
+**6. 사용자 조치:** 현재 없음. 다만 **이전 완전 스냅샷을 마지막 세션으로 오인할 위험**은 진행 차단/이상으로 판단해 Telegram 우선, Windows 후속 독립 알림을 전송하고 영수증을 별도 기록. 전송 전 상태는 미발송. 운영 MCP/Work/Codex/TCC 우회/인젝션 없음.
