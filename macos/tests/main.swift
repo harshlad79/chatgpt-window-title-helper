@@ -286,6 +286,30 @@ expect(staleReload.snapshot.previousSessionOpen.isEmpty,
        "stale old complete set not promoted to previousSessionOpen")
 expect(staleReload.recoverable(excluding: ["Current"], pid: 10411).isEmpty,
        "no old titles resurface after current complete census")
+// A complete -> B partial -> C partial -> C complete must not erase
+// B's evidence just because the current process was observed partially first.
+let chainFile = staleDir.appendingPathComponent("chain/chain.json")
+let chain = WindowSessionHistoryStore(file: chainFile)
+expect(chain.observe(pid: 501, titles: ["Older A"], windowCount: 1,
+                     now: staleBase), "chain initial complete A")
+expect(chain.observePartial(pid: 27828, windowCount: 3,
+    entries: [WindowSessionHistoryStore.PartialEntry(
+        windowIndex: 0, title: "Middle B", minimized: true)],
+    now: staleBase.addingTimeInterval(100)), "chain B partial")
+expect(chain.observePartial(pid: 10411, windowCount: 1,
+    entries: [WindowSessionHistoryStore.PartialEntry(
+        windowIndex: 0, title: "Current C", minimized: false)],
+    now: staleBase.addingTimeInterval(200)), "chain C partial")
+let chainReload = WindowSessionHistoryStore(file: chainFile)
+expect(chainReload.hasInterveningPartialSession(pid: 10411),
+       "intervening PID survives a later partial census")
+expect(chainReload.lastSessionTargets(pid: 10411).isEmpty,
+       "chain old A must not become C restore target")
+expect(chainReload.observe(pid: 10411, titles: ["Current C"], windowCount: 1,
+                           now: staleBase.addingTimeInterval(201)),
+       "chain C complete")
+expect(chainReload.snapshot.previousSessionOpen.isEmpty,
+       "chain B evidence prevents old A promotion")
 // Legacy schema-1 manifest: no embedded timestamp, so use disk mtime.
 let legacyFile = staleDir.appendingPathComponent("legacy/legacy.json")
 let legacyJSON = #"{"version":1,"appPID":501,"lastCompleteOpen":["Old A"],"previousSessionOpen":[],"recentTitles":[]}"#
