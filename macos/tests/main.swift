@@ -493,6 +493,33 @@ expect(!searchPressAllowed("blank", ["blank"], ["owner"], 1, 0, 1),
 expect(!searchPressAllowed("blank", ["blank"], ["owner"], 1, 0, 0, true),
     "incomplete AX traversal blocks Search press")
 
+// Read-only Search input shape is accepted only for a complete, isolated
+// two-window census with exactly one Search input and one Search control.
+func inputShapeAllowed(_ generic: Set<String>, _ named: Set<String>,
+                       _ inputs: Int = 1, _ buttons: Int = 1,
+                       _ limited: Bool = false) -> Bool {
+    UniqueGenericSearchInputShapePolicy.eligible(
+        minimizedByID: ["owner": false, "blank": false],
+        genericIDs: generic, nonGenericIDs: named,
+        searchInputs: inputs, searchButtons: buttons, limited: limited)
+}
+expect(inputShapeAllowed(["blank"], ["owner"]),
+    "one input in unique generic Search palette is read-only inspectable")
+expect(!inputShapeAllowed(["blank", "owner"], []),
+    "ambiguous generic windows block input shape scan")
+expect(!inputShapeAllowed([], ["owner", "blank"]),
+    "missing generic window blocks input shape scan")
+expect(!inputShapeAllowed(["blank"], ["owner"], 0),
+    "closed Search palette blocks input shape scan")
+expect(!inputShapeAllowed(["blank"], ["owner"], 2),
+    "multiple inputs block input shape scan")
+expect(!inputShapeAllowed(["blank"], ["owner"], 1, 0),
+    "missing Search control blocks input shape scan")
+expect(!inputShapeAllowed(["blank"], ["owner"], 1, 2),
+    "multiple Search controls block input shape scan")
+expect(!inputShapeAllowed(["blank"], ["owner"], 1, 1, true),
+    "incomplete AX scan blocks input shape scan")
+
 // Two native windows with identical titles are not the same conversation.
 expect(!WindowRestorePreflightPolicy.hasAmbiguousOpenTitles(["A", "B"]),
        "distinct open titles allow guarded restore preflight")
