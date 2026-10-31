@@ -531,6 +531,57 @@ expect(!UniqueGenericSearchInputShapePolicy.eligible(
 expect(!inputShapeAllowed(["blank"], ["owner"], 1, 1, true),
     "incomplete AX scan blocks input shape scan")
 
+// Reversible Search query policy: never overwrite nonempty user input,
+// ambiguous windows, changed window identity, or a modified query.
+expect(ReversibleGenericSearchQueryPolicy.canStart(
+    value: "", settable: true,
+    minimizedByID: ["owner": false, "blank": false],
+    genericIDs: ["blank"], nonGenericIDs: ["owner"],
+    searchInputs: 1, searchButtons: 0, limited: false),
+    "empty unique generic Search input allows synthetic query")
+expect(!ReversibleGenericSearchQueryPolicy.canStart(
+    value: "owner query", settable: true,
+    minimizedByID: ["owner": false, "blank": false],
+    genericIDs: ["blank"], nonGenericIDs: ["owner"],
+    searchInputs: 1, searchButtons: 0, limited: false),
+    "nonempty Search input must never be overwritten")
+expect(!ReversibleGenericSearchQueryPolicy.canStart(
+    value: "", settable: false,
+    minimizedByID: ["owner": false, "blank": false],
+    genericIDs: ["blank"], nonGenericIDs: ["owner"],
+    searchInputs: 1, searchButtons: 0, limited: false),
+    "readonly Search input blocks query")
+expect(!ReversibleGenericSearchQueryPolicy.canStart(
+    value: "", settable: true,
+    minimizedByID: ["owner": false, "blank": false],
+    genericIDs: ["blank", "owner"], nonGenericIDs: [],
+    searchInputs: 1, searchButtons: 0, limited: false),
+    "multiple generic windows block query")
+expect(ReversibleGenericSearchQueryPolicy.canRestore(
+    targetID: "blank", actualID: "blank",
+    before: ["owner": false, "blank": false],
+    after: ["owner": false, "blank": false],
+    currentValue: ReversibleGenericSearchQueryPolicy.probe),
+    "unchanged target and sentinel permit cleanup")
+expect(!ReversibleGenericSearchQueryPolicy.canRestore(
+    targetID: "blank", actualID: "blank",
+    before: ["owner": false, "blank": false],
+    after: ["owner": false, "blank": false],
+    currentValue: "user edited"),
+    "user-edited query must not be overwritten during cleanup")
+expect(!ReversibleGenericSearchQueryPolicy.canRestore(
+    targetID: "blank", actualID: "different",
+    before: ["owner": false, "blank": false],
+    after: ["owner": false, "blank": false],
+    currentValue: ReversibleGenericSearchQueryPolicy.probe),
+    "changed target identity blocks cleanup")
+expect(!ReversibleGenericSearchQueryPolicy.canRestore(
+    targetID: "blank", actualID: "blank",
+    before: ["owner": false, "blank": false],
+    after: ["owner": true, "blank": false],
+    currentValue: ReversibleGenericSearchQueryPolicy.probe),
+    "changed owner minimized state blocks cleanup")
+
 // Two native windows with identical titles are not the same conversation.
 expect(!WindowRestorePreflightPolicy.hasAmbiguousOpenTitles(["A", "B"]),
        "distinct open titles allow guarded restore preflight")
