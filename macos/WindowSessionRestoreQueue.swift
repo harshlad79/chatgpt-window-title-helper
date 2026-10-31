@@ -97,6 +97,25 @@ struct IsolatedWindowSnapshotPolicy {
     }
 }
 
+// A one-shot read-only AX probe may select the sole generic window only when
+// all other native windows are explicitly non-generic and every minimized
+// state is known. This is a *candidate*, not durable conversation identity.
+struct IsolatedGenericCandidatePolicy {
+    static func select(minimizedByID: [String: Bool],
+                       genericIDs: Set<String>,
+                       nonGenericIDs: Set<String>) -> String? {
+        let all = Set(minimizedByID.keys)
+        guard (2...12).contains(all.count),
+              genericIDs.count == 1,
+              genericIDs.isDisjoint(with: nonGenericIDs),
+              genericIDs.union(nonGenericIDs) == all,
+              nonGenericIDs.count == all.count - 1,
+              let candidate = genericIDs.first,
+              minimizedByID[candidate] == false else { return nil }
+        return candidate
+    }
+}
+
 // Title-only evidence cannot distinguish two open conversations sharing a title.
 // Refuse restore preflight rather than silently skip an unknown native window.
 struct WindowRestorePreflightPolicy {
