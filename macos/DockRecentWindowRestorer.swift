@@ -377,6 +377,153 @@ final class DockRecentWindowRestorer {
             "dialogs=\(scan.dialogs) originalsPreserved=\(preserved)")
     }
 
+    // Explicit one-shot Search AXPress on the already focused, unique generic
+    // native window. No new windows, owner-window AXRaise, typing, selection,
+    // conversation navigation, or private title/URL logging. Refuse to press
+    // unless the original owner windows and their minimized states are known.
+    func probeUniqueGenericSearchPress(
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }),
+              let prior = NSWorkspace.shared.frontmostApplication,
+              prior.processIdentifier != app.processIdentifier,
+              !prior.isTerminated else {
+            completed(false, "press-preflight-app-or-prior-focus-unavailable")
+            return
+        }
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        func census() -> (
+            states: [String: Bool], generic: Set<String>,
+            named: Set<String>, windows: [AXUIElement]
+        )? {
+            let windows = winList(root)
+            guard (2...12).contains(windows.count) else { return nil }
+            var states: [String: Bool] = [:]
+            var generic: Set<String> = []
+            var named: Set<String> = []
+            for window in windows {
+                let id = String(CFHash(window))
+                guard states[id] == nil,
+                      str(window, kAXRoleAttribute) == "AXWindow",
+                      let minimized = (read(window, kAXMinimizedAttribute)
+                          as? NSNumber)?.boolValue else { return nil }
+                let caption = title(window)
+                guard !caption.isEmpty else { return nil }
+                states[id] = minimized
+                if caption == "ChatGPT" { generic.insert(id) }
+                else { named.insert(id) }
+            }
+            return (states, generic, named, windows)
+        }
+        func focusedID() -> String? {
+            guard let raw = read(root, kAXFocusedWindowAttribute),
+                  CFGetTypeID(raw) == AXUIElementGetTypeID()
+            else { return nil }
+            return String(CFHash(raw as! AXUIElement))
+        }
+        guard let before = census(),
+              let candidate = IsolatedGenericCandidatePolicy.select(
+                  minimizedByID: before.states,
+                  genericIDs: before.generic,
+                  nonGenericIDs: before.named),
+              let target = before.windows.first(where: {
+                  String(CFHash($0)) == candidate
+              }) else {
+            completed(false, "press-unique-generic-baseline-unavailable")
+            return
+        }
+        let initial = searchUIScan(target)
+        guard UniqueGenericSearchPressPolicy.eligible(
+                  minimizedByID: before.states,
+                  genericIDs: before.generic,
+                  nonGenericIDs: before.named,
+                  focusedID: focusedID(),
+                  searchButtons: initial.buttons.count,
+                  inputs: initial.inputs, dialogs: initial.dialogs,
+                  limited: initial.limited),
+              NSWorkspace.shared.frontmostApplication?.processIdentifier ==
+                  prior.processIdentifier else {
+            completed(false, "press-target-not-focused-or-search-not-unique")
+            return
+        }
+        busy = true
+        func finish(_ success: Bool, _ detail: String) {
+            self.busy = false
+            // Do not steal focus if the user moved to another application.
+            let canRestore = NSWorkspace.shared.frontmostApplication?
+                .processIdentifier == app.processIdentifier && !prior.isTerminated
+            let restoreRequested = canRestore &&
+                prior.activate(options: [.activateIgnoringOtherApps])
+            completed(success && restoreRequested,
+                detail + " priorFocusRestoreRequested=" +
+                String(restoreRequested))
+        }
+        guard app.activate(options: [.activateIgnoringOtherApps]) else {
+            finish(false, "press-activation-rejected")
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier ==
+                      app.processIdentifier,
+                  let current = census(),
+                  current.states == before.states,
+                  current.generic == before.generic,
+                  current.named == before.named,
+                  focusedID() == candidate else {
+                finish(false, "press-postactivation-guard-failed")
+                return
+            }
+            let fresh = self.searchUIScan(target)
+            guard UniqueGenericSearchPressPolicy.eligible(
+                      minimizedByID: current.states,
+                      genericIDs: current.generic,
+                      nonGenericIDs: current.named,
+                      focusedID: focusedID(),
+                      searchButtons: fresh.buttons.count,
+                      inputs: fresh.inputs, dialogs: fresh.dialogs,
+                      limited: fresh.limited),
+                  self.press(fresh.buttons[0]) else {
+                finish(false, "press-fresh-guard-or-AXPress-failed")
+                return
+            }
+            let started = ProcessInfo.processInfo.systemUptime
+            func poll() {
+                guard let after = census(),
+                      after.states == before.states,
+                      after.generic == before.generic,
+                      after.named == before.named else {
+                    finish(false, "press-postaction-window-census-changed")
+                    return
+                }
+                let scan = self.searchUIScan(target)
+                let opened = !scan.limited &&
+                    (scan.inputs > fresh.inputs ||
+                     scan.dialogs > fresh.dialogs)
+                if !opened && !scan.limited &&
+                   ProcessInfo.processInfo.systemUptime - started < 6.0 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        poll()
+                    }
+                    return
+                }
+                finish(opened,
+                    "searchAXPress=true opened=" + String(opened) +
+                    " count=" + String(after.states.count) +
+                    " beforeInputs=" + String(fresh.inputs) +
+                    " afterInputs=" + String(scan.inputs) +
+                    " beforeDialogs=" + String(fresh.dialogs) +
+                    " afterDialogs=" + String(scan.dialogs) +
+                    " limited=" + String(scan.limited) +
+                    " originalsPreserved=true")
+            }
+            poll()
+        }
+    }
+
     // One-shot privacy-safe AX attribute-shape probe for the isolated eighth window.
     // Never logs private AX values, titles, IDs, URLs, queries or message text.
     // No AXPress, focus activation, text entry, selection or window creation.
