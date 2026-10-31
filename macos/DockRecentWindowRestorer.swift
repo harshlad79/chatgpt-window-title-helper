@@ -313,6 +313,70 @@ final class DockRecentWindowRestorer {
             "dialogs=\(scan.dialogs) originalsPreserved=\(preserved)")
     }
 
+    // One-shot, opt-in, read-only scan for the unique generic native window
+    // left by the separately verified blank-window creation test. Never
+    // creates, focuses, presses, types, navigates, or closes a window.
+    // Classification is a current-session candidate, not a conversation ID.
+    func probeUniqueGenericWindowMetrics(
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }) else { completed(false, "no-AX-or-app"); return }
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        func census() -> (
+            states: [String: Bool], generic: Set<String>,
+            nonGeneric: Set<String>, windows: [AXUIElement]
+        )? {
+            let windows = winList(root)
+            guard (2...12).contains(windows.count) else { return nil }
+            var states: [String: Bool] = [:]
+            var generic: Set<String> = []
+            var nonGeneric: Set<String> = []
+            for window in windows {
+                let id = String(CFHash(window))
+                guard states[id] == nil,
+                      str(window, kAXRoleAttribute) == "AXWindow",
+                      let minimized = (read(window, kAXMinimizedAttribute)
+                          as? NSNumber)?.boolValue else { return nil }
+                let caption = title(window)
+                guard !caption.isEmpty else { return nil }
+                states[id] = minimized
+                if caption == "ChatGPT" { generic.insert(id) }
+                else { nonGeneric.insert(id) }
+            }
+            return (states, generic, nonGeneric, windows)
+        }
+        guard let before = census(),
+              let candidateID = IsolatedGenericCandidatePolicy.select(
+                  minimizedByID: before.states,
+                  genericIDs: before.generic,
+                  nonGenericIDs: before.nonGeneric),
+              let target = before.windows.first(where: {
+                  String(CFHash($0)) == candidateID
+              }) else {
+            completed(false, "unique-generic-baseline-unavailable"); return
+        }
+        // Aggregate counts only. Never log raw window IDs, titles, links,
+        // search queries, messages, or other user content.
+        let scan = searchUIScan(target)
+        guard let after = census() else {
+            completed(false, "postscan-census-unavailable"); return
+        }
+        let preserved = before.states == after.states &&
+            before.generic == after.generic &&
+            before.nonGeneric == after.nonGeneric
+        completed(preserved && !scan.limited,
+            "uniqueGeneric=true count=\\(before.states.count) " +
+            "minimized=\\(before.states.values.filter { $0 }.count) " +
+            "visited=\\(scan.visitedCount) elapsedMs=\\(scan.elapsedMs) " +
+            "remaining=\\(scan.remainingCount) limited=\\(scan.limited) " +
+            "searchButtons=\\(scan.buttons.count) inputs=\\(scan.inputs) " +
+            "dialogs=\\(scan.dialogs) originalsPreserved=\\(preserved)")
+    }
+
     // One-shot privacy-safe AX attribute-shape probe for the isolated eighth window.
     // Never logs private AX values, titles, IDs, URLs, queries or message text.
     // No AXPress, focus activation, text entry, selection or window creation.
