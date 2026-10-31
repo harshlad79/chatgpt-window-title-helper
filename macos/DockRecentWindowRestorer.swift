@@ -940,7 +940,7 @@ final class DockRecentWindowRestorer {
             input, kAXValueAttribute as CFString, sentinel as NSString)
         guard written == .success else {
             busy = false
-            completed(false, "query-roundtrip-write-failed status=\\(written.rawValue)")
+            completed(false, "query-roundtrip-write-failed status=\(written.rawValue)")
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
@@ -963,7 +963,7 @@ final class DockRecentWindowRestorer {
                 input, kAXValueAttribute as CFString, "" as NSString)
             guard restored == .success else {
                 self.busy = false
-                completed(false, "query-roundtrip-restore-write-failed status=\\(restored.rawValue)")
+                completed(false, "query-roundtrip-restore-write-failed status=\(restored.rawValue)")
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
@@ -976,12 +976,12 @@ final class DockRecentWindowRestorer {
                 let success = empty && originalsPreserved && focusPreserved &&
                     !during.3 && !after.3
                 completed(success,
-                    "count=\\(before.states.count) syntheticReadback=\\(observed == sentinel) " +
-                    "restoredEmpty=\\(empty) baselineCandidates=\\(baseline.0) " +
-                    "duringCandidates=\\(during.0) afterCandidates=\\(after.0) " +
-                    "duringUUIDShapes=\\(during.1) duringChatURLShapes=\\(during.2) " +
-                    "limited=\\(during.3 || after.3) " +
-                    "originalsPreserved=\\(originalsPreserved) focusPreserved=\\(focusPreserved)")
+                    "count=\(before.states.count) syntheticReadback=\(observed == sentinel) " +
+                    "restoredEmpty=\(empty) baselineCandidates=\(baseline.0) " +
+                    "duringCandidates=\(during.0) afterCandidates=\(after.0) " +
+                    "duringUUIDShapes=\(during.1) duringChatURLShapes=\(during.2) " +
+                    "limited=\(during.3 || after.3) " +
+                    "originalsPreserved=\(originalsPreserved) focusPreserved=\(focusPreserved)")
             }
         }
     }
