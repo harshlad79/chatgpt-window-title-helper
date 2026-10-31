@@ -259,7 +259,7 @@ try! FileManager.default.removeItem(at: quitDir)
 // A complete manifest can be older than a more recent incomplete PID.
 // Never relabel the old complete set as the immediately previous session.
 let staleDir = FileManager.default.temporaryDirectory
-    .appendingPathComponent("title-helper-stale-\\(UUID().uuidString)")
+    .appendingPathComponent("title-helper-stale-\(UUID().uuidString)")
 let staleFile = staleDir.appendingPathComponent("state.json")
 let stale = WindowSessionHistoryStore(file: staleFile)
 let staleBase = Date(timeIntervalSince1970: 20_000)
@@ -288,7 +288,7 @@ expect(staleReload.recoverable(excluding: ["Current"], pid: 10411).isEmpty,
        "no old titles resurface after current complete census")
 // Legacy schema-1 manifest: no embedded timestamp, so use disk mtime.
 let legacyFile = staleDir.appendingPathComponent("legacy.json")
-let legacyJSON = "{\\\"version\\\":1,\\\"appPID\\\":501,\\\"lastCompleteOpen\\\":[\\\"Old A\\\"],\\\"previousSessionOpen\\\":[],\\\"recentTitles\\\":[]}"
+let legacyJSON = #"{"version":1,"appPID":501,"lastCompleteOpen":["Old A"],"previousSessionOpen":[],"recentTitles":[]}"#
 try! FileManager.default.createDirectory(at: staleDir,
                                          withIntermediateDirectories: true)
 try! legacyJSON.write(to: legacyFile, atomically: true, encoding: .utf8)
