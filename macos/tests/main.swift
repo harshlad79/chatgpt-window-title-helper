@@ -456,9 +456,9 @@ expect(IsolatedGenericCandidatePolicy.select(
     nonGenericIDs: []) == nil, "one window is not isolated")
 expect(IsolatedGenericCandidatePolicy.select(
     minimizedByID: Dictionary(uniqueKeysWithValues:
-        (0..<13).map { ("w\\($0)", false) }),
+        (0..<13).map { ("w\($0)", false) }),
     genericIDs: ["w12"],
-    nonGenericIDs: Set((0..<12).map { "w\\($0)" })) == nil,
+    nonGenericIDs: Set((0..<12).map { "w\($0)" })) == nil,
     "more than twelve windows refused")
 
 // Two native windows with identical titles are not the same conversation.
