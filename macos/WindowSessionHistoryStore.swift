@@ -7,6 +7,8 @@ final class WindowSessionHistoryStore {
         var version: Int = 1
         var appPID: Int32 = 0
         var lastCompleteOpen: [String] = []
+        // Optional for compatibility with schema-1 manifests written before this guard.
+        var lastCompleteObservedAt: Date? = nil
         var previousSessionOpen: [String] = []
         var recentTitles: [String] = []
     }
@@ -29,6 +31,7 @@ final class WindowSessionHistoryStore {
 
     private let file: URL
     private let partialFile: URL
+    private let legacyManifestModifiedAt: Date?
     private(set) var partialSnapshot: PartialSnapshot?
     private(set) var snapshot: Snapshot
     // ChatGPT normally closes windows one by one on Quit. Hold shrink
@@ -43,6 +46,8 @@ final class WindowSessionHistoryStore {
         self.file = file ?? support.appendingPathComponent("window-session-history.json")
         self.partialFile = self.file.deletingLastPathComponent()
             .appendingPathComponent("window-session-partial.json")
+        self.legacyManifestModifiedAt = (try? FileManager.default.attributesOfItem(
+            atPath: self.file.path)[.modificationDate]) as? Date
         if let data = try? Data(contentsOf: self.file),
            let loaded = try? JSONDecoder().decode(Snapshot.self, from: data),
            loaded.version == 1 {
@@ -124,10 +129,17 @@ final class WindowSessionHistoryStore {
         }
         var next = snapshot
         if next.appPID != Int32(pid) {
-            if !next.lastCompleteOpen.isEmpty {
+            if hasInterveningPartialSession(pid: pid) {
+                // A later PID had an incomplete census. The old complete set
+                // is NOT the immediately preceding session: never promote it.
+                next.previousSessionOpen = []
+            } else if !next.lastCompleteOpen.isEmpty {
                 next.previousSessionOpen = next.lastCompleteOpen
             }
             next.appPID = Int32(pid)
+        }
+        if next.appPID != snapshot.appPID || next.lastCompleteOpen != current {
+            next.lastCompleteObservedAt = now
         }
         next.lastCompleteOpen = current
         for title in current.reversed() {
@@ -206,6 +218,20 @@ final class WindowSessionHistoryStore {
         }
     }
 
+    // An incomplete census from a distinct intervening ChatGPT PID proves
+    // the saved complete titles predate the immediately preceding session.
+    // The partial file is evidence of a process, NOT a restore target.
+    // Older schema-1 manifests have no observedAt; use their file mtime.
+    func hasInterveningPartialSession(pid: pid_t) -> Bool {
+        guard pid > 0, let partial = partialSnapshot,
+              partial.appPID > 0,
+              partial.appPID != snapshot.appPID,
+              partial.appPID != Int32(pid) else { return false }
+        let completeAt = snapshot.lastCompleteObservedAt ??
+            legacyManifestModifiedAt ?? .distantPast
+        return partial.observedAt > completeAt
+    }
+
     // If the ChatGPT process restarted while AX still lacks a complete
     // title census, the saved previous process's window list is recoverable.
     // Never treat unavailable AX data as a reason to hide that durable list.
@@ -218,6 +244,9 @@ final class WindowSessionHistoryStore {
     // belongs to the immediately preceding process; previousSessionOpen
     // is older. For the same PID, recover the prior process's manifest.
     func lastSessionTargets(pid: pid_t) -> [String] {
+        // Fail closed: PID A complete -> PID B partial -> PID C current.
+        // A's title list cannot be called B's last session.
+        if hasInterveningPartialSession(pid: pid) { return [] }
         if pid > 0 && snapshot.appPID > 0 && snapshot.appPID != Int32(pid) {
             return snapshot.lastCompleteOpen
         }
