@@ -152,6 +152,34 @@ struct UniqueGenericSearchInputShapePolicy {
     }
 }
 
+// An opt-in synthetic Search query may be written only to an already empty
+// input in the sole known generic window. A delayed cleanup must never
+// overwrite a query that another actor has changed in the meantime.
+struct ReversibleGenericSearchQueryPolicy {
+    static let probe = "zzqv_noresults_20261101_generic_probe"
+    static func canStart(value: String?, settable: Bool,
+                         minimizedByID: [String: Bool],
+                         genericIDs: Set<String>,
+                         nonGenericIDs: Set<String>,
+                         searchInputs: Int, searchButtons: Int,
+                         limited: Bool) -> Bool {
+        value == "" && settable &&
+            UniqueGenericSearchInputShapePolicy.eligible(
+                minimizedByID: minimizedByID,
+                genericIDs: genericIDs,
+                nonGenericIDs: nonGenericIDs,
+                searchInputs: searchInputs,
+                searchButtons: searchButtons,
+                limited: limited)
+    }
+    static func canRestore(targetID: String, actualID: String,
+                           before: [String: Bool], after: [String: Bool],
+                           currentValue: String?) -> Bool {
+        targetID == actualID && before == after &&
+            currentValue == probe
+    }
+}
+
 // Title-only evidence cannot distinguish two open conversations sharing a title.
 // Refuse restore preflight rather than silently skip an unknown native window.
 struct WindowRestorePreflightPolicy {
