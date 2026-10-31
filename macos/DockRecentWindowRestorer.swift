@@ -241,7 +241,8 @@ final class DockRecentWindowRestorer {
     }
 
     // Opt-in read-only probe of one previously identity-verified blank window.
-    // The caller supplies the exact complete native AX census (hash:minimized).
+    // The caller supplies the current complete native AX census (hash:minimized).
+    // Do not assume an old eight-window / three-minimized fixture.
     // Fail closed on any changed window, missing identity or unexpected state.
     func probeIsolatedWindowMetrics(
         expectedID: String, expectedSnapshot: String,
@@ -261,9 +262,9 @@ final class DockRecentWindowRestorer {
             }
             expected[String(fields[0])] = fields[1] == "1"
         }
-        guard expected.count == 8, expected[expectedID] == false,
-              expected.values.filter({ $0 }).count == 3 else {
-            completed(false, "expected-baseline-not-eight-or-three"); return
+        guard expected.count >= 2 && expected.count <= 12,
+              expected[expectedID] == false else {
+            completed(false, "expected-baseline-not-isolated"); return
         }
         let root = AXUIElementCreateApplication(app.processIdentifier)
         AXUIElementSetMessagingTimeout(root, 0.35)
@@ -281,7 +282,8 @@ final class DockRecentWindowRestorer {
             }
             actual[id] = minimized
         }
-        guard actual == expected,
+        guard IsolatedWindowSnapshotPolicy.accepts(
+                  expected: expected, targetID: expectedID, actual: actual),
               let target = windows.first(where: {
                   String(CFHash($0)) == expectedID
               }),
@@ -301,9 +303,10 @@ final class DockRecentWindowRestorer {
             }
             afterStates[id] = minimized
         }
-        let preserved = afterStates == expected
+        let preserved = IsolatedWindowSnapshotPolicy.accepts(
+            expected: expected, targetID: expectedID, actual: afterStates)
         completed(preserved && !scan.limited,
-            "isolated=true count=\(windows.count) minimized=3 " +
+            "isolated=true count=\(windows.count) minimized=\(expected.values.filter { $0 }.count) " +
             "visited=\(scan.visitedCount) elapsedMs=\(scan.elapsedMs) " +
             "remaining=\(scan.remainingCount) limited=\(scan.limited) " +
             "searchButtons=\(scan.buttons.count) inputs=\(scan.inputs) " +
