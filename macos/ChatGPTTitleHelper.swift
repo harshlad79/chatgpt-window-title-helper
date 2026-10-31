@@ -1868,6 +1868,20 @@ final class OverlayController:
                 }
             }
         }
+        // Explicit one-shot aggregate AX Search scan of the sole generic
+        // native window. Fail closed unless every other window is non-generic.
+        // Never navigates, activates, edits, or creates another window.
+        if ProcessInfo.processInfo.environment[
+            "TITLEHELPER_SAFE_UNIQUE_GENERIC_METRICS"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self else { return }
+                self.recentRestorer.probeUniqueGenericWindowMetrics {
+                    success, detail in
+                    TitleHelperDiagnostics.shared.record(
+                        "unique-generic-metrics success=\\(success) \\(detail)")
+                }
+            }
+        }
         // One-shot, identity-fenced read-only scan of the eighth blank window.
         // Both environment variables must be explicitly supplied; ordinary
         // launch never scans the isolated window.
