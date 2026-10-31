@@ -461,6 +461,38 @@ expect(IsolatedGenericCandidatePolicy.select(
     nonGenericIDs: Set((0..<12).map { "w\($0)" })) == nil,
     "more than twelve windows refused")
 
+// AXPress must never target an owner window, an ambiguous blank window,
+// or a Search control when the current focused window differs.
+func searchPressAllowed(
+    _ focus: String?, _ generic: Set<String>, _ named: Set<String>,
+    _ buttons: Int = 1, _ inputs: Int = 0,
+    _ dialogs: Int = 0, _ limited: Bool = false
+) -> Bool {
+    UniqueGenericSearchPressPolicy.eligible(
+        minimizedByID: ["owner": false, "blank": false],
+        genericIDs: generic, nonGenericIDs: named,
+        focusedID: focus, searchButtons: buttons,
+        inputs: inputs, dialogs: dialogs, limited: limited)
+}
+expect(searchPressAllowed("blank", ["blank"], ["owner"]),
+    "focused unique blank with one Search control is eligible")
+expect(!searchPressAllowed("owner", ["blank"], ["owner"]),
+    "owner-focused window is never pressed")
+expect(!searchPressAllowed(nil, ["blank"], ["owner"]),
+    "missing AX focused window blocks Search press")
+expect(!searchPressAllowed("blank", ["owner", "blank"], []),
+    "multiple generic windows block Search press")
+expect(!searchPressAllowed("blank", ["blank"], ["owner"], 2),
+    "duplicate Search buttons block Search press")
+expect(!searchPressAllowed("blank", ["blank"], ["owner"], 0),
+    "missing Search button blocks Search press")
+expect(!searchPressAllowed("blank", ["blank"], ["owner"], 1, 1),
+    "existing search input blocks duplicate press")
+expect(!searchPressAllowed("blank", ["blank"], ["owner"], 1, 0, 1),
+    "existing search dialog blocks duplicate press")
+expect(!searchPressAllowed("blank", ["blank"], ["owner"], 1, 0, 0, true),
+    "incomplete AX traversal blocks Search press")
+
 // Two native windows with identical titles are not the same conversation.
 expect(!WindowRestorePreflightPolicy.hasAmbiguousOpenTitles(["A", "B"]),
        "distinct open titles allow guarded restore preflight")
