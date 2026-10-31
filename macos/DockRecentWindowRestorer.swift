@@ -778,6 +778,214 @@ final class DockRecentWindowRestorer {
             "originalsPreserved=\(preserved)")
     }
 
+    // Opt-in reversible synthetic Search query on the sole generic window.
+    // Never opens a result, navigates, sends a message, logs user content,
+    // changes focus, or touches the owner's named conversation windows.
+    func probeUniqueGenericSearchQueryRoundtrip(
+        completed: @escaping (Bool, String) -> Void
+    ) {
+        guard !busy, AXIsProcessTrusted(),
+              let app = NSWorkspace.shared.runningApplications.first(where: {
+                  $0.bundleIdentifier == "com.openai.codex"
+              }) else {
+            completed(false, "query-roundtrip-no-AX-or-app"); return
+        }
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(root, 0.35)
+        let priorFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        func census() -> (
+            states: [String: Bool], generic: Set<String>,
+            named: Set<String>, windows: [AXUIElement]
+        )? {
+            let windows = winList(root)
+            guard (2...12).contains(windows.count) else { return nil }
+            var states: [String: Bool] = [:]
+            var generic: Set<String> = []
+            var named: Set<String> = []
+            for window in windows {
+                let id = String(CFHash(window))
+                guard states[id] == nil,
+                      str(window, kAXRoleAttribute) == "AXWindow",
+                      let minimized = (read(window, kAXMinimizedAttribute)
+                          as? NSNumber)?.boolValue else { return nil }
+                let caption = title(window)
+                guard !caption.isEmpty else { return nil }
+                states[id] = minimized
+                if caption == "ChatGPT" { generic.insert(id) }
+                else { named.insert(id) }
+            }
+            return (states, generic, named, windows)
+        }
+        guard let before = census(),
+              let targetID = IsolatedGenericCandidatePolicy.select(
+                  minimizedByID: before.states,
+                  genericIDs: before.generic,
+                  nonGenericIDs: before.named),
+              let target = before.windows.first(where: {
+                  String(CFHash($0)) == targetID
+              }),
+              let focused = read(root, kAXFocusedWindowAttribute),
+              CFGetTypeID(focused) == AXUIElementGetTypeID(),
+              String(CFHash(focused as! AXUIElement)) == targetID else {
+            completed(false, "query-roundtrip-identity-or-focus-unavailable")
+            return
+        }
+        let scan = searchUIScan(target)
+        var queue: [AXUIElement] = [target]
+        var seen: Set<String> = []
+        var inputs: [AXUIElement] = []
+        var index = 0
+        let started = ProcessInfo.processInfo.systemUptime
+        while index < queue.count &&
+              ProcessInfo.processInfo.systemUptime - started < 5.0 {
+            let element = queue[index]
+            index += 1
+            guard seen.insert(String(CFHash(element))).inserted else { continue }
+            if ["AXTextField", "AXSearchField", "AXComboBox"].contains(
+                str(element, kAXRoleAttribute)
+            ) { inputs.append(element) }
+            var next = children(element)
+            if next.isEmpty {
+                next = (read(element, kAXVisibleChildrenAttribute)
+                    as? [AXUIElement]) ?? []
+            }
+            queue.append(contentsOf: next)
+        }
+        guard index == queue.count, inputs.count == 1 else {
+            completed(false, "query-roundtrip-input-not-unique"); return
+        }
+        let input = inputs[0]
+        var settable = DarwinBoolean(false)
+        let settableOK = AXUIElementIsAttributeSettable(
+            input, kAXValueAttribute as CFString, &settable) == .success
+        guard ReversibleGenericSearchQueryPolicy.canStart(
+                  value: read(input, kAXValueAttribute) as? String,
+                  settable: settableOK && settable.boolValue,
+                  minimizedByID: before.states,
+                  genericIDs: before.generic,
+                  nonGenericIDs: before.named,
+                  searchInputs: scan.inputs,
+                  searchButtons: scan.buttons.count,
+                  limited: scan.limited) else {
+            completed(false, "query-roundtrip-start-policy-rejected"); return
+        }
+        func sameTarget() -> Bool {
+            guard let now = census() else { return false }
+            return before.states == now.states &&
+                before.generic == now.generic && before.named == now.named &&
+                now.windows.contains(where: {
+                    String(CFHash($0)) == targetID
+                })
+        }
+        // Only aggregate metadata counts are emitted. Never expose the query
+        // results, user titles, AXValue, conversation IDs or URL strings.
+        func metadata() -> (Int, Int, Int, Bool) {
+            let candidateRoles: Set<String> = [
+                "AXRow", "AXCell", "AXMenuItem", "AXButton", "AXGroup"
+            ]
+            let uuidPattern =
+                "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+            var pending: [AXUIElement] = [target]
+            var visited: Set<String> = []
+            var offset = 0
+            var candidates = 0
+            var uuidShaped = 0
+            var chatURLShaped = 0
+            let start = ProcessInfo.processInfo.systemUptime
+            while offset < pending.count &&
+                  ProcessInfo.processInfo.systemUptime - start < 5.0 {
+                let element = pending[offset]
+                offset += 1
+                guard visited.insert(String(CFHash(element))).inserted else {
+                    continue
+                }
+                if candidateRoles.contains(str(element, kAXRoleAttribute)) {
+                    candidates += 1
+                    for key in ["AXValue", "AXIdentifier", "AXURL"] {
+                        let raw = read(element, key)
+                        let value: String
+                        if let s = raw as? String { value = s }
+                        else if let u = raw as? URL { value = u.absoluteString }
+                        else { value = "" }
+                        if value.range(of: uuidPattern,
+                                       options: .regularExpression) != nil {
+                            uuidShaped += 1
+                        }
+                        if value.hasPrefix("https://chatgpt.com/c/") {
+                            chatURLShaped += 1
+                        }
+                    }
+                }
+                var next = children(element)
+                if next.isEmpty {
+                    next = (read(element, kAXVisibleChildrenAttribute)
+                        as? [AXUIElement]) ?? []
+                }
+                pending.append(contentsOf: next)
+            }
+            return (candidates, uuidShaped, chatURLShaped,
+                    offset < pending.count)
+        }
+        guard sameTarget() else {
+            completed(false, "query-roundtrip-prewrite-identity-changed")
+            return
+        }
+        let baseline = metadata()
+        guard !baseline.3 else {
+            completed(false, "query-roundtrip-baseline-scan-limited"); return
+        }
+        busy = true
+        let sentinel = ReversibleGenericSearchQueryPolicy.probe
+        let written = AXUIElementSetAttributeValue(
+            input, kAXValueAttribute as CFString, sentinel as NSString)
+        guard written == .success else {
+            busy = false
+            completed(false, "query-roundtrip-write-failed status=\\(written.rawValue)")
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            guard let self else { return }
+            let observed = self.read(input, kAXValueAttribute) as? String
+            let during = metadata()
+            // Restore only our own exact sentinel in the same unchanged
+            // window. Never overwrite a user-modified input.
+            guard sameTarget(),
+                  ReversibleGenericSearchQueryPolicy.canRestore(
+                      targetID: targetID, actualID: targetID,
+                      before: before.states,
+                      after: census()?.states ?? [:],
+                      currentValue: observed) else {
+                self.busy = false
+                completed(false, "query-roundtrip-restore-fence-failed")
+                return
+            }
+            let restored = AXUIElementSetAttributeValue(
+                input, kAXValueAttribute as CFString, "" as NSString)
+            guard restored == .success else {
+                self.busy = false
+                completed(false, "query-roundtrip-restore-write-failed status=\\(restored.rawValue)")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                let empty = (self.read(input, kAXValueAttribute) as? String) == ""
+                let after = metadata()
+                let originalsPreserved = sameTarget()
+                let focusPreserved = NSWorkspace.shared.frontmostApplication?
+                    .processIdentifier == priorFrontmost
+                self.busy = false
+                let success = empty && originalsPreserved && focusPreserved &&
+                    !during.3 && !after.3
+                completed(success,
+                    "count=\\(before.states.count) syntheticReadback=\\(observed == sentinel) " +
+                    "restoredEmpty=\\(empty) baselineCandidates=\\(baseline.0) " +
+                    "duringCandidates=\\(during.0) afterCandidates=\\(after.0) " +
+                    "duringUUIDShapes=\\(during.1) duringChatURLShapes=\\(during.2) " +
+                    "limited=\\(during.3 || after.3) " +
+                    "originalsPreserved=\\(originalsPreserved) focusPreserved=\\(focusPreserved)")
+            }
+        }
+    }
+
     // One-shot privacy-safe AX attribute-shape probe for the isolated eighth window.
     // Never logs private AX values, titles, IDs, URLs, queries or message text.
     // No AXPress, focus activation, text entry, selection or window creation.
