@@ -517,6 +517,17 @@ expect(inputShapeAllowed(["blank"], ["owner"], 1, 0),
     "open Search palette may hide its launch button")
 expect(!inputShapeAllowed(["blank"], ["owner"], 1, 2),
     "multiple Search controls block input shape scan")
+// The same read-only palette guard is reused by the metadata-shape probe.
+expect(UniqueGenericSearchInputShapePolicy.eligible(
+    minimizedByID: ["owner": false, "blank": false, "other": true],
+    genericIDs: ["blank"], nonGenericIDs: ["owner", "other"],
+    searchInputs: 1, searchButtons: 0, limited: false),
+    "metadata scan supports three windows and preserved minimized owner")
+expect(!UniqueGenericSearchInputShapePolicy.eligible(
+    minimizedByID: ["owner": false, "blank": false],
+    genericIDs: ["blank", "owner"], nonGenericIDs: [],
+    searchInputs: 1, searchButtons: 0, limited: false),
+    "metadata scan rejects ambiguous generic windows")
 expect(!inputShapeAllowed(["blank"], ["owner"], 1, 1, true),
     "incomplete AX scan blocks input shape scan")
 
