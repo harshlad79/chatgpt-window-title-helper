@@ -148,7 +148,7 @@ struct UniqueGenericSearchInputShapePolicy {
             minimizedByID: minimizedByID,
             genericIDs: genericIDs,
             nonGenericIDs: nonGenericIDs
-        ) != nil && searchInputs == 1 && searchButtons == 1 && !limited
+        ) != nil && searchInputs == 1 && searchButtons <= 1 && !limited
     }
 }
 
