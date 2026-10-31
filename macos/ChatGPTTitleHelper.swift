@@ -1914,6 +1914,24 @@ final class OverlayController:
                 }
             }
         }
+        // Opt-in read-only AX attribute-shape scan of the already-open
+        // Search palette in the sole generic window. No Search AXPress,
+        // query, navigation or raw user content logging.
+        if ProcessInfo.processInfo.environment[
+            "TITLEHELPER_SAFE_UNIQUE_GENERIC_RESULT_METADATA"] == "1" &&
+           ProcessInfo.processInfo.environment[
+            "TITLEHELPER_SAFE_UNIQUE_GENERIC_INPUT_SHAPE"] != "1" &&
+           ProcessInfo.processInfo.environment[
+            "TITLEHELPER_SAFE_UNIQUE_GENERIC_SEARCH_PRESS"] != "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self else { return }
+                self.recentRestorer.probeUniqueGenericSearchResultMetadata {
+                    success, detail in
+                    TitleHelperDiagnostics.shared.record(
+                        "unique-generic-result-metadata success=\(success) \(detail)")
+                }
+            }
+        }
         // One-shot, identity-fenced read-only scan of the eighth blank window.
         // Both environment variables must be explicitly supplied; ordinary
         // launch never scans the isolated window.
