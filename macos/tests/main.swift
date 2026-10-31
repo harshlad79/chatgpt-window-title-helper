@@ -388,6 +388,41 @@ expect(!cancelQueue.isRunning, "cancelled queue reaches terminal state")
 print("PASS native last-session + batch restore \(passes) assertions")
 
 
+// Isolated Search diagnosis must use the live native-window census, not
+// the obsolete eight-window fixture. Every original window remains untouched.
+let isolatedTwo = ["owner": false, "blank": false]
+expect(IsolatedWindowSnapshotPolicy.accepts(
+    expected: isolatedTwo, targetID: "blank", actual: isolatedTwo),
+    "two-window isolated read-only baseline is accepted")
+let isolatedNine = Dictionary(uniqueKeysWithValues:
+    (0..<9).map { ("window-\($0)", $0 < 3) })
+expect(IsolatedWindowSnapshotPolicy.accepts(
+    expected: isolatedNine, targetID: "window-8", actual: isolatedNine),
+    "older nine-window census remains supported")
+expect(!IsolatedWindowSnapshotPolicy.accepts(
+    expected: ["blank": false], targetID: "blank", actual: ["blank": false]),
+    "isolated probe requires at least one preserved original")
+expect(!IsolatedWindowSnapshotPolicy.accepts(
+    expected: isolatedTwo, targetID: "owner", actual: isolatedTwo),
+    "target must be independently identified, not an owner window")
+expect(!IsolatedWindowSnapshotPolicy.accepts(
+    expected: ["owner": false, "blank": true], targetID: "blank",
+    actual: ["owner": false, "blank": true]),
+    "minimized target cannot be probed")
+expect(!IsolatedWindowSnapshotPolicy.accepts(
+    expected: isolatedTwo, targetID: "blank",
+    actual: ["owner": true, "blank": false]),
+    "owner minimized-state change fails closed")
+expect(!IsolatedWindowSnapshotPolicy.accepts(
+    expected: isolatedTwo, targetID: "blank",
+    actual: ["owner": false, "blank": false, "unexpected": false]),
+    "unexpected native window fails closed")
+let tooMany = Dictionary(uniqueKeysWithValues:
+    (0..<13).map { ("window-\($0)", false) })
+expect(!IsolatedWindowSnapshotPolicy.accepts(
+    expected: tooMany, targetID: "window-12", actual: tooMany),
+    "unbounded native-window census is refused")
+
 // Two native windows with identical titles are not the same conversation.
 expect(!WindowRestorePreflightPolicy.hasAmbiguousOpenTitles(["A", "B"]),
        "distinct open titles allow guarded restore preflight")
