@@ -1899,6 +1899,21 @@ final class OverlayController:
                 }
             }
         }
+        // One-shot read-only shape scan of an ALREADY OPEN Search palette.
+        // Explicit opt-in only; does not repeat Search AXPress or read values.
+        if ProcessInfo.processInfo.environment[
+            "TITLEHELPER_SAFE_UNIQUE_GENERIC_INPUT_SHAPE"] == "1" &&
+           ProcessInfo.processInfo.environment[
+            "TITLEHELPER_SAFE_UNIQUE_GENERIC_SEARCH_PRESS"] != "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self else { return }
+                self.recentRestorer.probeUniqueGenericSearchInputShape {
+                    success, detail in
+                    TitleHelperDiagnostics.shared.record(
+                        "unique-generic-input-shape success=\(success) \(detail)")
+                }
+            }
+        }
         // One-shot, identity-fenced read-only scan of the eighth blank window.
         // Both environment variables must be explicitly supplied; ordinary
         // launch never scans the isolated window.
