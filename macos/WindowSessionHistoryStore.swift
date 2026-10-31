@@ -27,6 +27,10 @@ final class WindowSessionHistoryStore {
         let observedAt: Date
         let windowCount: Int
         let entries: [PartialEntry]
+        // A different, newer incomplete PID must survive replacement by the
+        // current PID's partial census until a complete census reconciles it.
+        var interveningPID: Int32? = nil
+        var interveningObservedAt: Date? = nil
     }
 
     private let file: URL
@@ -199,8 +203,21 @@ final class WindowSessionHistoryStore {
                 }
             }
         }
-        let next = PartialSnapshot(appPID: Int32(pid), observedAt: now,
+        var next = PartialSnapshot(appPID: Int32(pid), observedAt: now,
                                    windowCount: windowCount, entries: ordered)
+        if let old = partialSnapshot {
+            next.interveningPID = old.interveningPID
+            next.interveningObservedAt = old.interveningObservedAt
+            if old.appPID != snapshot.appPID && old.appPID != Int32(pid) {
+                let completeAt = snapshot.lastCompleteObservedAt ??
+                    legacyManifestModifiedAt ?? .distantPast
+                if old.observedAt > completeAt &&
+                   old.observedAt > (next.interveningObservedAt ?? .distantPast) {
+                    next.interveningPID = old.appPID
+                    next.interveningObservedAt = old.observedAt
+                }
+            }
+        }
         do {
             try FileManager.default.createDirectory(
                 at: partialFile.deletingLastPathComponent(),
@@ -226,12 +243,17 @@ final class WindowSessionHistoryStore {
         // Once the current PID has a complete census, the transition was
         // already reconciled by observe(); never invalidate its prior manifest.
         guard pid > 0, snapshot.appPID != Int32(pid),
-              let partial = partialSnapshot, partial.appPID > 0,
-              partial.appPID != snapshot.appPID,
-              partial.appPID != Int32(pid) else { return false }
+              let partial = partialSnapshot else { return false }
         let completeAt = snapshot.lastCompleteObservedAt ??
             legacyManifestModifiedAt ?? .distantPast
-        return partial.observedAt > completeAt
+        if partial.appPID > 0 && partial.appPID != snapshot.appPID &&
+           partial.appPID != Int32(pid) && partial.observedAt > completeAt {
+            return true
+        }
+        return partial.interveningPID != nil &&
+            partial.interveningPID != snapshot.appPID &&
+            partial.interveningPID != Int32(pid) &&
+            (partial.interveningObservedAt ?? .distantPast) > completeAt
     }
 
     // If the ChatGPT process restarted while AX still lacks a complete
