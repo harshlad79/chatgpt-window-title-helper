@@ -403,8 +403,8 @@ expect(!IsolatedWindowSnapshotPolicy.accepts(
     expected: ["blank": false], targetID: "blank", actual: ["blank": false]),
     "isolated probe requires at least one preserved original")
 expect(!IsolatedWindowSnapshotPolicy.accepts(
-    expected: isolatedTwo, targetID: "owner", actual: isolatedTwo),
-    "target must be independently identified, not an owner window")
+    expected: isolatedTwo, targetID: "unknown", actual: isolatedTwo),
+    "unrecognized target identity fails closed")
 expect(!IsolatedWindowSnapshotPolicy.accepts(
     expected: ["owner": false, "blank": true], targetID: "blank",
     actual: ["owner": false, "blank": true]),
