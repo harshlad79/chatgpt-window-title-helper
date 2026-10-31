@@ -369,12 +369,12 @@ final class DockRecentWindowRestorer {
             before.generic == after.generic &&
             before.nonGeneric == after.nonGeneric
         completed(preserved && !scan.limited,
-            "uniqueGeneric=true count=\\(before.states.count) " +
-            "minimized=\\(before.states.values.filter { $0 }.count) " +
-            "visited=\\(scan.visitedCount) elapsedMs=\\(scan.elapsedMs) " +
-            "remaining=\\(scan.remainingCount) limited=\\(scan.limited) " +
-            "searchButtons=\\(scan.buttons.count) inputs=\\(scan.inputs) " +
-            "dialogs=\\(scan.dialogs) originalsPreserved=\\(preserved)")
+            "uniqueGeneric=true count=\(before.states.count) " +
+            "minimized=\(before.states.values.filter { $0 }.count) " +
+            "visited=\(scan.visitedCount) elapsedMs=\(scan.elapsedMs) " +
+            "remaining=\(scan.remainingCount) limited=\(scan.limited) " +
+            "searchButtons=\(scan.buttons.count) inputs=\(scan.inputs) " +
+            "dialogs=\(scan.dialogs) originalsPreserved=\(preserved)")
     }
 
     // One-shot privacy-safe AX attribute-shape probe for the isolated eighth window.
