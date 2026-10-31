@@ -86,6 +86,17 @@ final class WindowSessionRestoreQueue {
 }
 
 
+// An isolated blank-window probe must use the current complete AX census,
+// not an old fixed eight-window fixture. Both snapshots contain opaque
+// per-window identity and minimized state, never conversation text.
+struct IsolatedWindowSnapshotPolicy {
+    static func accepts(expected: [String: Bool], targetID: String,
+                        actual: [String: Bool]) -> Bool {
+        expected.count >= 2 && expected.count <= 12 &&
+            expected[targetID] == false && actual == expected
+    }
+}
+
 // Title-only evidence cannot distinguish two open conversations sharing a title.
 // Refuse restore preflight rather than silently skip an unknown native window.
 struct WindowRestorePreflightPolicy {
