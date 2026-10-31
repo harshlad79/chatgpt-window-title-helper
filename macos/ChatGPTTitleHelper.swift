@@ -1882,6 +1882,23 @@ final class OverlayController:
                 }
             }
         }
+        // Explicit opt-in, one-shot Search button AXPress in the unique
+        // generic native window. Requires that window to ALREADY be the AX
+        // focused ChatGPT window; restores prior frontmost app when possible.
+        // No query, chat selection, new window or owner-window AXRaise.
+        if ProcessInfo.processInfo.environment[
+            "TITLEHELPER_SAFE_UNIQUE_GENERIC_SEARCH_PRESS"] == "1" &&
+           ProcessInfo.processInfo.environment[
+            "TITLEHELPER_SAFE_UNIQUE_GENERIC_METRICS"] != "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self else { return }
+                self.recentRestorer.probeUniqueGenericSearchPress {
+                    success, detail in
+                    TitleHelperDiagnostics.shared.record(
+                        "unique-generic-search-press success=\(success) \(detail)")
+                }
+            }
+        }
         // One-shot, identity-fenced read-only scan of the eighth blank window.
         // Both environment variables must be explicitly supplied; ordinary
         // launch never scans the isolated window.
