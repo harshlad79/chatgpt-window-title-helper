@@ -1878,7 +1878,7 @@ final class OverlayController:
                 self.recentRestorer.probeUniqueGenericWindowMetrics {
                     success, detail in
                     TitleHelperDiagnostics.shared.record(
-                        "unique-generic-metrics success=\\(success) \\(detail)")
+                        "unique-generic-metrics success=\(success) \(detail)")
                 }
             }
         }
