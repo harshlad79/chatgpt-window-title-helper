@@ -256,6 +256,57 @@ expect(steadyClose.snapshot.lastCompleteOpen == ["Y"],
        "long-lived window close eventually saved")
 try! FileManager.default.removeItem(at: quitDir)
 
+// A complete manifest can be older than a more recent incomplete PID.
+// Never relabel the old complete set as the immediately previous session.
+let staleDir = FileManager.default.temporaryDirectory
+    .appendingPathComponent("title-helper-stale-\\(UUID().uuidString)")
+let staleFile = staleDir.appendingPathComponent("state.json")
+let stale = WindowSessionHistoryStore(file: staleFile)
+let staleBase = Date(timeIntervalSince1970: 20_000)
+expect(stale.observe(pid: 501, titles: ["Old A", "Old B"], windowCount: 2,
+                     now: staleBase), "old complete PID saved")
+expect(stale.observePartial(pid: 27828, windowCount: 4,
+    entries: [WindowSessionHistoryStore.PartialEntry(
+        windowIndex: 0, title: "Recent partial", minimized: false)],
+    now: staleBase.addingTimeInterval(100)), "newer intermediate partial PID saved")
+let staleReload = WindowSessionHistoryStore(file: staleFile)
+expect(staleReload.hasInterveningPartialSession(pid: 10411),
+       "third PID detects intervening partial session")
+expect(staleReload.lastSessionTargets(pid: 10411).isEmpty,
+       "old complete titles cannot be used for latest-session restore")
+expect(!staleReload.hasPendingRestart(pid: 10411) &&
+       staleReload.recoverable(excluding: [], pid: 10411).isEmpty,
+       "sidecar hides unsafe old restore candidates")
+expect(!staleReload.hasInterveningPartialSession(pid: 27828),
+       "partial evidence from the current PID is not a third process")
+expect(staleReload.observe(pid: 10411, titles: ["Current"], windowCount: 1,
+                           now: staleBase.addingTimeInterval(200)),
+       "new complete current session accepted")
+expect(staleReload.snapshot.previousSessionOpen.isEmpty,
+       "stale old complete set not promoted to previousSessionOpen")
+expect(staleReload.recoverable(excluding: ["Current"], pid: 10411).isEmpty,
+       "no old titles resurface after current complete census")
+// Legacy schema-1 manifest: no embedded timestamp, so use disk mtime.
+let legacyFile = staleDir.appendingPathComponent("legacy.json")
+let legacyJSON = "{\\\"version\\\":1,\\\"appPID\\\":501,\\\"lastCompleteOpen\\\":[\\\"Old A\\\"],\\\"previousSessionOpen\\\":[],\\\"recentTitles\\\":[]}"
+try! FileManager.default.createDirectory(at: staleDir,
+                                         withIntermediateDirectories: true)
+try! legacyJSON.write(to: legacyFile, atomically: true, encoding: .utf8)
+try! FileManager.default.setAttributes([.modificationDate: staleBase],
+                                      ofItemAtPath: legacyFile.path)
+let legacy = WindowSessionHistoryStore(file: legacyFile)
+expect(legacy.snapshot.lastCompleteObservedAt == nil,
+       "legacy schema-1 file loads without embedded observedAt")
+expect(legacy.observePartial(pid: 27828, windowCount: 2,
+    entries: [WindowSessionHistoryStore.PartialEntry(
+        windowIndex: 0, title: "Recent partial", minimized: false)],
+    now: staleBase.addingTimeInterval(100)),
+    "legacy manifest can receive newer partial evidence")
+let legacyReload = WindowSessionHistoryStore(file: legacyFile)
+expect(legacyReload.lastSessionTargets(pid: 10411).isEmpty,
+       "legacy file mtime rejects stale complete manifest")
+try! FileManager.default.removeItem(at: staleDir)
+
 // Bulk restore controller: stable order, already-open suppression, cancel after
 // the in-flight action, no automatic retry or repeated native menu activity.
 let queue = WindowSessionRestoreQueue()
