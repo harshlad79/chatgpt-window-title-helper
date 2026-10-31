@@ -2692,3 +2692,10 @@ OpenAI 사전 안전검사 차단 0, Dev Control 거절 0, Mac Worker 실패 0. 
 
 **6. 사용자 조치·알림:** 현재 별도 승인 필요 없음. schema mismatch는 즉시 수정·복구됐으며 알림 정책상 오류 경과를 Telegram 우선 + Windows 별도 본문으로 알림; 채널별 enqueue/get 영수증은 후속 원장에 기록. 기존 출처 불명 3개에 대해 Restore All 버튼 누르지 말 것. 실제 기기 화면 표시 성공은 알림 접수와 별도.
 
+
+
+**112차 알림 접수 후속 (2026-10-31 22:24–22:25 KST):** 이번 회차의 Dev connector 인자 스키마 오류 1건은 Control 이전 단계에서 발생했고, 공개 스키마에 맞춰 `operation=invoke`로 수정·정상 재실행 및 Experience `0615d150` 저장/재조회 완료. 오류 경과가 있어 기존 정책에 따라 **Telegram 우선 → Windows**, 각 채널 본문을 독립 작성하여 실제 LF(U+000A)로 전송. title `[ChatGPT Window Title Helper] · [macos-main]`, body 첫 줄 `[실제 대화 제목 미확인] ChatGPT Window Title Helper macOS — 마지막 창 모두 복원`; Windows body 670자. 인증정보/원시 로그 미포함.
+- Telegram: Dev Control-only `thecompany_call_tool(operation=enqueue_notification)` request `c78b38ca-670e-4a86-8d9c-29a05b04fefa`, notification `0f5ea455-a072-4a8c-8a91-32d59b466a28`, queued outer/nested completed elapsed4ms. `get_notification` request `bf58974e-6e83-4a6b-a4f9-a95089cb2a68`, outer/nested completed elapsed1ms, registered attempt1 accepted=true exit0 **message_id=163**. `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=808240) -> control.enqueue_notification/get_notification`.
+- Windows: 독립 670자 본문, Dev Control-only `enqueue_notification` request `ac34e8f1-2066-42e1-9d54-f5d2f5b9f124`, notification `3cfe7dd3-610e-4aab-8cb0-029922fa174d`, queued outer/nested completed elapsed17ms. `get_notification` request `32be1063-c9a2-435a-a41c-9e4e71bd578f`, outer/nested completed elapsed1ms, **registered attempt1**; Windows agent pythonw.exe PID11848 → powershell.exe PID18804, exit0 `WINDOWS_NOTIFICATION_REGISTERED`. `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=808240) -> control.enqueue_notification/get_notification`. Enqueue/get은 Control-only; Windows 표시 프로세스는 별도 대상 실행 영수증.
+- **두 채널 접수 성공, 접수 오류 없음.** 실제 Windows/Telegram 기기 화면 표시·사용자 열람은 미검증. 원래 코드·배포 상태 불변, Restore All 전체 E2E 미완료.
+
