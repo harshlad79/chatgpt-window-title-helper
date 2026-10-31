@@ -287,9 +287,9 @@ expect(staleReload.snapshot.previousSessionOpen.isEmpty,
 expect(staleReload.recoverable(excluding: ["Current"], pid: 10411).isEmpty,
        "no old titles resurface after current complete census")
 // Legacy schema-1 manifest: no embedded timestamp, so use disk mtime.
-let legacyFile = staleDir.appendingPathComponent("legacy.json")
+let legacyFile = staleDir.appendingPathComponent("legacy/legacy.json")
 let legacyJSON = #"{"version":1,"appPID":501,"lastCompleteOpen":["Old A"],"previousSessionOpen":[],"recentTitles":[]}"#
-try! FileManager.default.createDirectory(at: staleDir,
+try! FileManager.default.createDirectory(at: legacyFile.deletingLastPathComponent(),
                                          withIntermediateDirectories: true)
 try! legacyJSON.write(to: legacyFile, atomically: true, encoding: .utf8)
 try! FileManager.default.setAttributes([.modificationDate: staleBase],
