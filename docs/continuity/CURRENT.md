@@ -2564,3 +2564,27 @@ Mac read-only 3: 후보 빌드·서명 identity·launchctl 추가 검사 요청 
 **5. 미완료·다음:** 정상 승인된 GitHub 경로에서 회귀 테스트와 `observePartial`의 중간 PID 증거 영구 보존 로직 수정; Mac 격리 소스 Swift 테스트/빌드; 이미 잘못 승격된 `previousSessionOpen=3` 안전 정정(백업/사용자 현재 세션 보호); Helper-only 서명 재배포 및 AX/Dock 실제 차단 검증; 고유 대화 URL/ID와 별도 native 창 복원 E2E. 차단 우회 금지.
 
 **6. 사용자 조치:** 현재 추가 승인 요청 없음. 안전 수정/배포 검증 전 **'마지막 창 모두 복원' 버튼 사용 금지**.
+
+
+## 109차 — 2026-10-31 KST — 중간 PID 증거 보존 및 과거 previous-session provenance fail-closed, Mac 테스트 성공, Helper-only 배포 진행 중
+
+**1. 제목/일시:** ChatGPT Window Title Helper macOS / 마지막 창 모두 복원 / 109차 / 2026-10-31 KST.
+
+**2. 전체 상태:** 107~108차의 A 완전→B 부분→C 부분→C 완전 회귀를 재현하는 테스트와 방어 로직을 canonical GitHub에 구현. 추가로 이미 잘못 승격되어 저장된 `previousSessionOpen=3`이 현재 PID에서 복원 후보가 되는 위험을 막기 위해 **previous-session 원본 PID를 명시적으로 보유하지 않은 레거시 후보는 fail-closed**. MacMini2 격리 소스에서 Swift 테스트 **358 assertions PASS**, optimized ARM64 빌드 exit0. **실제 Helper-only 서명 배포는 이 문서 작성 시 runner 진행 중이며 설치/기능 E2E는 아직 확인되지 않음.**
+
+**3. 이번 회차 수행·근거:**
+- Canonical `harshlad79/chatgpt-window-title-helper`, `feat/macos-adaptive-title-helper`, 시작 HEAD `06a88161de96328c115c601f2ff1145d78b55a0a`; CURRENT, NORMAL_QUIT_RELAUNCH_OVERLAY_RECOVERY, DOCK_LAST_SESSION_BULK_RESTORE 원문 재조회. Draft PR #3 Open→master 미병합. 전체 원격 브랜치 6개(cursor 없음); master 대비 feature ahead397/behind1, app-icon ahead1/behind1(기존 PR #4 merged), dev ahead4/behind8(장기 기반), 다른 두 기능 브랜치 ahead0. 미병합 PR 기능 브랜치 확인 1개; app-icon의 잔존 커밋을 새 미완료 PR로 단정하지 않음.
+- `56d3fc6c` 회귀 테스트 추가, `442754e9` 부분 PID B의 timestamp/provenance를 다음 PID C의 partial snapshot에 보존하도록 수정. 새 필드 `interveningPID`/`interveningObservedAt`는 optional Codable이므로 기존 partial JSON과 호환.
+- `582b76f7` 기존 previous-session 출처 없는 레거시 스냅샷 및 same-PID fallback 차단 테스트, `f4edc2761064497bde44f511e5d4bfaa1932428b` 소스 수정: `previousSessionSourcePID`가 없거나 현재 PID와 같으면 같은 PID의 `previousSessionOpen`을 복원 대상으로 사용하지 않음. 신규 PID 전환에서만 이전 완전 census의 원본 PID를 명시적으로 저장. 현재 설치본에 이미 남은 `previousSessionOpen=3`은 **삭제·덮어쓰기하지 않고**, 새 버전에서 후보로 제시하지 않는 방향. 과거 유효했더라도 출처가 없는 레거시 복원 목록은 안전 우선으로 비활성화되는 의도된 제한.
+- Mac 첫 exact SHA `442754e9` clean detached worktree, `bash macos/tests/run.sh` exit0: scheduler14 + history59 + bulk110 + async119 + menu46 = **348 assertions PASS**, optimized binary 987408 bytes, SHA256 `06cb5a1e89e5c62b47ed6478c6879c420e5c00c6c74d247892e0ef8327c32536`.
+- Mac 최종 exact SHA `f4edc276` 별도 clean detached worktree, 동일 전체 테스트 exit0: scheduler14 + history59 + bulk115 + async124 + menu46 = **358 assertions PASS**, NativeTitleSync byte identity PASS, optimized binary 988816 bytes, SHA256 `afea1b583f7c621c5f405166da2b8d89aa852cf40d325d5cacb0ead91e18d686`. `LIVE_AX_MENU_URL=NOT_TESTED`; Swift deprecated activation warning은 컴파일 실패 아님. 빌드/단위테스트는 Restore All E2E 성공이 아님.
+- 배포 전 MacMini2 read-only 기준선: ChatGPT PID10411, 기존 Helper PID22191, signed 설치 실행파일 SHA256 `ab973f0992ddbe6165ca6ce15e5a429784a4262287b19d29a9bd00c01ed442ea`, codesign PASS. history `appPID=10411,lastCompleteOpen=1,previousSessionOpen=3`, SHA256 `f4fe834b324534ca80e6139ab43a52bccc3bf968babd998c9f19e9580726d104`; partial `appPID=10411,entries=1`, SHA256 `eb675f8b7f3593383ea67950afdaaf19b45b8d0b1e738464d19be8af4cd75976`. 두 파일 0600, 원시 제목 미출력. Helper signed app와 두 JSON의 별도 private backup `predeploy-109-0frq0jmk` 생성, 해시/서명 PASS. **원본 ChatGPT 창·앱은 닫지 않음.**
+- Dev MCP `thecompany_call_tool(operation=invoke)`, `node_id=macos-main,backend=python:subprocess,worker_tool=run_command,project=chatgpt-window-title-helper`, Control `control-n150/thecompany-chatgpt-mcp:python(pid=808240)`→Mac agent `python(pid=5070)`→각 `python3` Worker. 테스트 runner 시작 request `2dcf5362`(PID54139), 최종 runner 시작 `698823a1`(PID57391), 백업 request `48eafd81`, 배포 guarded runner **1회 시작** request `d5f25c85` Worker PID59895, detached runner PID59896. 모든 위 시작/백업 요청 outer/nested completed, Worker exit0; 이는 각 runner **시작**의 증거이지 서명 설치 완료 영수증 아님. 배포 runner의 초기 상태 `packaging`, package 테스트 시작까지 read-only 확인(request `f20a594f`), 재배포 중복 실행 없음. 개별 Dev request/mcp_path/elapsed/exit/Experience는 중앙 기록 `6ad8bed4`, `c616da1d`, `f6ce24ec`, `ccdbee20`, `6b79b6f2`, `20abc539`, `e01038a3`, `207853e5`, `587c238e`, `5fb23f2d`, `3ff819a2`, `dfcbbf2f`, `2fc8de72`, `c483e788`, `f834733a`, `16c60bc6` 등 원본 이벤트로 참조.
+- **오류/복구:** 성공한 Dev read-only poll request `f4f658c3` 이후 해당 성공 시도 Experience 기록 요청이 **OpenAI 사전 안전검사에서 차단**. 기록 호출은 Control에 전달되지 않았으며 request_id/mcp_path/exit_code/event.id 미발급. 차단을 다른 MCP로 우회하지 않음. 허용된 동일 Dev 기록 복구에서 차단 사실을 별도 `tool_boundary` event `6152bbda-190b-493c-9bce-ba628b887ccb`로 저장·재조회하고, 원래 성공 poll을 별도 event `1b4ab65d-f6ef-4c7c-9460-372428a75559`로 저장·재조회. 초기 실패를 성공으로 덮어쓰지 않음.
+- GitHub 커넥터 `fetch_file`, `get_pr_info`, `fetch`, `search_branches`, `compare_commits`, `update_file`로 원문/PR/브랜치/소스 작업. GitHub 호출은 Control/Worker 미경유이며 request_id/mcp_path/exit_code 미제공. Mac 빌드/테스트/서명/설치 경로는 Dev MCP만 사용. 운영 MCP/Work/Codex/TCC 우회/인젝션 없음.
+
+**4. 최종 상태·기존 영향 (중간 기록):** 소스와 Mac 격리 테스트/빌드 성공. **배포 runner가 진행 중이므로 실제 설치본, Helper 새 PID, 기존 ChatGPT PID 보존, 안전 가드의 live AX/Dock 동작은 후속 확인 전까지 미확인.** Windows/NativeTitleSync 원본/PR #3 변경 없음. 기존 history/partial 원본 파일 내용 직접 수정하지 않음. 롤백 백업 보존.
+
+**5. 미완료·다음:** 우선 기존 `/tmp/titlehelper-109-provenance-f4edc276-deploy-status.json` 및 package log, runner PID59896, 서명/설치 SHA, Helper/ChatGPT PID, 세션 SHA를 **read-only 대조**, 중복 패키징 금지. 완료면 현재 PID의 출처 없는 previous3이 UI 복원 후보에서 사라지는지 실제 Helper AX/Dock 로그로 검증. 그 뒤 대화 URL/ID 획득 및 개별 새 native 창 복원/전체 E2E. 사용자 창을 종료·닫기·덮어쓰기하지 말 것.
+
+**6. 사용자 조치:** 현재 별도 승인 요청 없음. 설치 및 실제 복원 검증 전까지 `마지막 창 모두 복원` 버튼 사용 금지. OpenAI 사전 기록 차단은 복구 기록되었지만 실제 복원 E2E는 미완료. 알림 목적지/접수는 후속 원장에 기록.
