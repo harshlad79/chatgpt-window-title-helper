@@ -136,6 +136,22 @@ struct UniqueGenericSearchPressPolicy {
     }
 }
 
+// Read-only Search palette inspection: no action, text entry or URL exposure.
+// A single existing input must belong to the only generic native window.
+struct UniqueGenericSearchInputShapePolicy {
+    static func eligible(minimizedByID: [String: Bool],
+                         genericIDs: Set<String>,
+                         nonGenericIDs: Set<String>,
+                         searchInputs: Int, searchButtons: Int,
+                         limited: Bool) -> Bool {
+        IsolatedGenericCandidatePolicy.select(
+            minimizedByID: minimizedByID,
+            genericIDs: genericIDs,
+            nonGenericIDs: nonGenericIDs
+        ) != nil && searchInputs == 1 && searchButtons == 1 && !limited
+    }
+}
+
 // Title-only evidence cannot distinguish two open conversations sharing a title.
 // Refuse restore preflight rather than silently skip an unknown native window.
 struct WindowRestorePreflightPolicy {
