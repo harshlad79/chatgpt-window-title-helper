@@ -2633,3 +2633,32 @@ Mac read-only 3: 후보 빌드·서명 identity·launchctl 추가 검사 요청 
 - Telegram enqueue request `2294a603-a479-4e98-9252-ac0c2acf6bfe`, notification `71554e09-2d90-4019-838f-d7d117a8936d`, outer/nested completed, elapsed4ms. get_notification request `f3a2b253-a8a8-468b-8ce9-92cec8be2c7e`, outer/nested completed elapsed1ms, state=registered attempt1, accepted=true exit0, **message_id=159**.
 - Windows enqueue request `e73f9ac9-6cab-4577-bd0d-6ca20e607d89`, notification `5d47936c-3a32-42d9-aaac-1b8be19286e8`, outer/nested completed elapsed7ms. get_notification request `1523eb5a-c08c-4ee1-b4ff-6f3b630f3cfa`, outer/nested completed elapsed1ms, state=registered attempt1, Windows agent `pythonw.exe(pid=11848)` → `powershell.exe(pid=31800)`, exit0 `WINDOWS_NOTIFICATION_REGISTERED`.
 - **접수 실패 없음.** 실제 Windows 화면 표시/사용자 열람, Telegram 수신 기기 표시 여부는 미검증. 본 문서 커밋은 알림 접수 및 조사 기록이지 소스·실기기 E2E 완료 증거가 아님. **E2E 미완료, 다음 회차 유지.**
+
+
+## 111차 — 2026-10-31 21:24–21:26 KST — AX 신뢰 Helper의 passive focused-menu URL sampler 재활성화
+
+**1. 제목·일시:** ChatGPT Window Title Helper macOS / 마지막 창 모두 복원 / 111차 / 2026-10-31 21:24–21:26 KST.
+
+**2. 전체 상태:** 실제 전체 창 복원 E2E **미완료**. 이번 회차는 기존 서명 Helper를 백업한 뒤 **Helper만** 안전 재시작하여 이미 구현된 `TITLEHELPER_SAFE_FOCUSED_MENU_URL_PROBE=1` 및 `TITLEHELPER_SAFE_AX_WINDOW_SNAPSHOT=1`을 재활성화했다. 새 코드·빌드·서명·ChatGPT 재시작 없음. 자연스럽게 열린 공식 ChatGPT 메뉴의 비식별 URL 후보 **개수만** 수집할 준비 완료. 실제 메뉴가 열린 상태는 아직 관측되지 않음.
+
+**3. 수행·실측 근거:**
+- Canonical `harshlad79/chatgpt-window-title-helper` `feat/macos-adaptive-title-helper`, 시작 HEAD `ae9ebc65a1f716c932e67d4e57a2a29a3945f42d`. `docs/continuity/CURRENT.md`, `macos/NORMAL_QUIT_RELAUNCH_OVERLAY_RECOVERY.md`, `macos/DOCK_LAST_SESSION_BULK_RESTORE.md` 원문 및 Rulebook `harshlad79/thecompany-core` `feat/org-rulebook-experience-loop` `docs/workstreams/shared-scheduled-notification-report-v1.md` 조회. PR #3 Open/Draft → master, 미병합. 6개 원격 브랜치 전체(cursor 소진): master/dev 기반 제외, feature branch ahead404/behind1, app-icon ahead1/behind1이나 PR #4 merged, title-change probe ahead0/behind2, title UI fix ahead0/behind7. **검증된 미병합 기능 브랜치 1개**, app-icon 잔여 원격 커밋 1개는 병합 PR의 잔존 브랜치로 구별.
+- `FocusedMenuURLProbe.swift` 및 `ChatGPTTitleHelper.swift` 원문 확인. Sampler는 opt-in, 350ms timer, ChatGPT가 전면·AX trusted·PID 일치할 때만 이미 열린 focused AXMenu를 읽고 **URL/ID/제목/본문 비출력, aggregate counts만 기록**. AXPress, 포커스 변경, 메뉴 열기, 공유 링크 생성, 메시지 읽기 없음. 기존 Helper 프로세스 환경에 opt-in 플래그 **없음**을 실제 ps로 확인.
+- 변경 전 ChatGPT PID **10411**, Helper PID **62104**; 서명 `codesign --verify --deep --strict` PASS. `window-session-history.json` SHA256 `f4fe834b324534ca80e6139ab43a52bccc3bf968babd998c9f19e9580726d104`, partial `eb675f8b7f3593383ea67950afdaaf19b45b8d0b1e738464d19be8af4cd75976`, mode0600. 기존 이전 세션 3개 출처 불명 → 복원 후보 **0개** 유지. 기존 서명 앱과 두 세션 파일을 `~/_Project/titlehelper-111-passive-sampler-backup`에 복사, 바이너리 SHA256·서명·세션 해시 일치 검증. 설치 실행파일 SHA256 `d8363d5108ec452ff9d3c1b19186b91ae66733a0d8044aeeda51b6a5ec71b7b9`.
+- **Helper PID62104만 SIGTERM** 후 종료 확인. `/usr/bin/open --env TITLEHELPER_SAFE_FOCUSED_MENU_URL_PROBE=1 --env TITLEHELPER_SAFE_AX_WINDOW_SNAPSHOT=1 -a ~/Applications/ChatGPTTitleOverlay.app` exit0. 새 Helper PID **86036** 단일 인스턴스, 두 환경 플래그 실제 ps 확인, 서명 PASS, ChatGPT PID10411 생존. 두 세션 SHA256 **전후 불변**. 기존 사용자 ChatGPT 앱/창/대화 종료·닫기·덮어쓰기·포커스 조작 없음.
+- 새 Helper event log `helper-start pid=86036`, `ax-observer-created=true pid=10411`, `ax-window-census available raw=1 recognized=1 nativeGeneric=0 nativeNamed=1 minimized=0`, `ax-focused-menu-sampler heartbeat=1 foreground=false trusted=true targetValid=true inFlight=false`. `refresh-success knownWindows=1` 반복. `ax-focused-menu-url` 이벤트 0건은 **ChatGPT 비전면·메뉴 미개방** 때문일 수 있어 URL 미노출 증거가 아님. Dock sidecar UI 실제 표시·버튼 클릭은 이번 회차 미검증.
+
+**도구 호출·실행 경로:** GitHub connector `fetch_file`(필수3·Rulebook·Swift/연구), `fetch`(macos directory), `get_pr_info`(#3/#4), `search_branches`(6+0 cursor 소진), `compare_commits`(4), `update_file`(본 원장). GitHub는 Control/Worker 미경유, request_id/mcp_path/exit_code/elapsed 미제공. Mac 전부 TheCompany **core_dev** `thecompany_call_tool(operation=invoke)`, `node_id=macos-main,backend=python:subprocess,worker_tool=run_command,project=chatgpt-window-title-helper`, `program=/usr/bin/python3,args=['-c',<메타데이터 읽기/백업/Helper-only guarded restart/로그 검증>],timeout_seconds=20–35`. 읽기 전용은 `procedure_key=macos-title-helper-live-readonly`. 공통 실제 `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=808240) -> control.invoke -> macos-main/thecompany-node-agent:python(pid=5070) -> python:subprocess/run_command -> python3(pid=<아래>)`; `mcp_trace` 동일. 모든 6회 outer/nested completed, Worker exit0, timed_out=false, task_id 미발급:
+1. `cfa834b2-0de9-4921-895d-837b64763a50` python84788 / 805ms: PID/세션/로그 read-only.
+2. `4c7c1da7-7bd1-4b0e-b952-fcd520228bab` python84867 / 242ms: AX identity URL 집계 read-only; webURL은 `app:` scheme 1건, ChatGPT conversation URL 0, 메뉴 probe 이벤트0.
+3. `e4276d7e-552f-40a1-a09f-6d461e19ef19` python85706 / 344ms: opt-in 환경 미설정, 서명/해시 read-only.
+4. `a21e1caf-1e28-4849-9edb-4ae3f2482bbd` python85956 / 390ms: 앱/세션 안전 백업, 서명/해시 PASS.
+5. `6ed773e2-3c1c-4255-af64-2c7873fc31d0` python86029 / 6002ms: Helper-only guarded restart, 새 PID86036/opt-in/서명/ChatGPT PID/세션 해시 PASS.
+6. `5c307342-ee82-43df-a877-0d49dee7b8bf` python86133 / 280ms: 새 observer/AX census/heartbeat/세션 해시 read-only.
+OpenAI 사전 안전검사 차단 0, Dev Control 거절 0, Mac Worker 실패 0. Experience tool_boundary 차단 기록 조건 미발생. 운영 MCP, Work/Codex, TCC 우회, 앱 코드 인젝션 없음.
+
+**4. 최종 상태·기존 영향:** 설치 바이너리 변경 없음. Helper PID86036, ChatGPT PID10411. 이전 세션 출처 미확인 3개를 복원 대상으로 승격하지 않음. NativeTitleSync/Windows 소스 변경 없음. Draft PR #3 미병합. 백업 보존, 롤백 불필요. 실제 대화 고유 ID 추출·독립 native 창·전체 E2E **미완료**.
+
+**5. 미완료·다음:** 자연스럽게 ChatGPT가 전면에 있고 공식 대화 메뉴가 열린 때 같은 AX-trusted Helper의 `ax-focused-menu-url` aggregate routeCandidates/conversationURLs를 읽는다. 별도 Probe 실행·메뉴 강제 열기·사용자 창 조작 금지. 유효 후보가 나와도 **해당 native AXWindow와의 동일성** 별도 검증 전에는 세션 ID로 저장/열기 금지. 메뉴 경로가 계속 무증거면 이미 연구한 격리 blank native 창의 지원된 Search/UI 액션을 검증. 출처 검증된 last-session manifest로만 Restore All E2E. 기존 이전3개 Restore All 버튼 클릭 금지.
+
+**6. 사용자 조치·알림:** 즉시 사용자 승인 필요 없음. 정상 회차이므로 **Windows(windows-main)만** 독립 한국어 알림, Telegram 미발송. 접수 결과 후속 기록 예정. 접수는 실제 화면 표시 성공이 아님.
