@@ -2752,3 +2752,9 @@ OpenAI 사전 안전검사 차단 0, Dev Control 거절 0, Mac Worker 실패 0. 
 **5. 미완료·다음:** ChatGPT가 자연스럽게 전면에 있고 공식 메뉴가 열릴 때 passive sampler `menuFound/routeCandidates/conversationURLs` 카운트 확인. 링크가 실제 AXURL로 노출되는지와 동일 native AXWindow에 대응하는지 **독립 검증** 후에만 private ID 저장/복원 경로를 개발. 메뉴가 계속 무관측이면 사용자 원본 창을 보존하는 격리된 새 native 창에서 Search UI 경로를 현재 기준선으로 재설계; 기존 8창 baseline 고정 Probe는 사용 금지. 이전 출처 불명 3개는 복원 대상 0 유지.
 
 **6. 사용자 조치·알림:** 즉시 승인 필요 없음. 정상 진행이므로 **Windows(windows-main)만** 독립 한국어 알림, Telegram 미발송. enqueue/get_notification 접수 영수증은 후속 기록. 접수와 화면 표시 구분. 출처 미확인 이전 세션 3개에 대해 Restore All 버튼 클릭 금지.
+
+
+**114차 알림 접수 후속 (2026-11-01 00:28–00:29 KST):** 정상 회차·사용자 개입 불필요 → 기존 정책대로 **Windows(windows-main)만**, Telegram **미발송**. Windows용 title `[ChatGPT Window Title Helper] · [macos-main]`, body 첫 줄 `[실제 대화 제목 미확인] ChatGPT Window Title Helper macOS — 마지막 창 모두 복원`, 실제 LF(U+000A)로 독립 작성. 인증정보/원시 로그/실제 대화 ID 미포함.
+- Dev core_dev Control-only `thecompany_call_tool(operation=enqueue_notification)`: request `65b1d9d2-1bd5-4718-8635-d71eedb305b8`, notification `ac545f5d-3775-44cf-8dd1-e5fcf54dd7ee`, outer/nested completed, elapsed3ms, initial queued, `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=821667) -> control.enqueue_notification`, Worker 없음.
+- Dev Control-only `thecompany_call_tool(operation=get_notification)`: request `a90f831d-6a5a-4576-b668-20d398997dd5`, outer/nested completed, elapsed1ms, `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=821667) -> control.get_notification`. **registered attempt1**, Windows agent `pythonw.exe(pid=11848)` → `powershell.exe(pid=6232)`, exit0, `WINDOWS_NOTIFICATION_REGISTERED`. 등록 성공은 실제 화면 표시/사용자 열람 검증과 구분. 접수 오류 없음.
+- 114차 코드/빌드/배포 변경 없음, 실기기 전체 창 복원 E2E 미완료, Draft PR #3 미병합. 본 기록 직전 문서 commit `058ad1a876654145de0992b973ebe004a230935e`; 후속 문서 commit은 기록용이며 테스트 SHA가 아님.
