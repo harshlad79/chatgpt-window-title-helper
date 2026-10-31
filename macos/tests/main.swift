@@ -513,8 +513,8 @@ expect(!inputShapeAllowed(["blank"], ["owner"], 0),
     "closed Search palette blocks input shape scan")
 expect(!inputShapeAllowed(["blank"], ["owner"], 2),
     "multiple inputs block input shape scan")
-expect(!inputShapeAllowed(["blank"], ["owner"], 1, 0),
-    "missing Search control blocks input shape scan")
+expect(inputShapeAllowed(["blank"], ["owner"], 1, 0),
+    "open Search palette may hide its launch button")
 expect(!inputShapeAllowed(["blank"], ["owner"], 1, 2),
     "multiple Search controls block input shape scan")
 expect(!inputShapeAllowed(["blank"], ["owner"], 1, 1, true),
