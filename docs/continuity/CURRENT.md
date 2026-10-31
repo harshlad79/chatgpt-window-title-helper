@@ -2460,3 +2460,24 @@ Mac 실측 ChatGPT PID27828, Helper PID15201, 서명 PASS, 세션 SHA `78772da2.
 - **Telegram:** enqueue request `c2325830-159f-4c3a-bb9c-c2716287f631`, notification `b3a98b35-3e22-4c05-805b-b4a6b86d9d0f`, outer/nested completed/queued, elapsed8ms. 독립 get request `4d09b18c-c39b-43bc-ae39-5ae749251700`, completed/1ms, **registered attempt1, accepted=true, exit0, message_id=140**. Experience `f27e3b8d`(enqueue), `9d1b7128`(readback), event.id 재조회 확인.
 - **Windows:** enqueue request `d608a039-6f83-4684-8d00-ce4584e5fa8e`, notification `a3e674d4-6fa3-47f1-8802-475f354e8494`, completed/queued, elapsed4ms. 독립 get request `47851e72-79c7-471f-a6ff-59f812a86567`, completed/1ms, **registered attempt1, exit0**, windows-main agent `pythonw.exe(pid=11848)` → `powershell.exe(pid=42164)`, stdout `WINDOWS_NOTIFICATION_REGISTERED`. Experience `0d287e7e`(enqueue), `e8ef28d0`(readback), event.id 재조회 확인.
 - **알림 접수 오류 없음.** Windows 실제 OS 표시·사용자 열람, Telegram 수신 기기 표시 여부는 미검증. GitHub 문서-only 커밋은 실제 Helper 배포를 뜻하지 않음.
+
+
+## 105차 — 2026-10-31 15:20–15:22 KST — stale-manifest 안전 가드 배포 전 점검 / OpenAI 사전 차단
+
+**1. 제목/일시:** ChatGPT Window Title Helper macOS / 마지막 창 모두 복원, 105차. 2026-10-31 15:20–15:22 KST.
+
+**2. 전체 상태:** 배포 전 읽기전용 검증 2회 성공 후 3번째 읽기전용 요청이 **OpenAI 사전 안전검사에서 차단**. Dev Control/Worker로 전달되지 않음. 차단을 우회하지 않고 후속 Mac 실행·Helper 배포를 보류. 실제 전체 창 복원 E2E 미완료.
+
+**3. 이번 회차 수행·근거:** canonical branch HEAD `113d87060e34c171056fc7edb441d426ff281a76`, Draft PR #3 Open → `master` 미병합 확인. CURRENT, NORMAL_QUIT_RELAUNCH_OVERLAY_RECOVERY, DOCK_LAST_SESSION_BULK_RESTORE 원문 재조회. 소스 `WindowSessionHistoryStore.swift`의 `hasInterveningPartialSession`·`lastSessionTargets` 안전 가드가 HEAD에 있음을 확인. 검증 소스 `09daf197708fb2b02964cd050304a2c9b57a2c81`(104차 334 assertions PASS, ARM64 빌드 PASS)는 **아직 미배포**. 이번 회차 신규 테스트·빌드 없음.
+
+Mac read-only 1: Dev `thecompany_call_tool(operation=invoke)`, `node_id=macos-main, worker_tool=run_command, backend=python:subprocess, project=chatgpt-window-title-helper, procedure_key=macos-title-helper-live-readonly, program=/usr/bin/python3, timeout_seconds=25`, sanitized PID/서명/세션·후보 조회. request `31e1ede5-859e-4188-ace3-466e3ca80839`; Control `control-n150/thecompany-chatgpt-mcp:python(pid=795264)` → `control.invoke` → `macos-main/thecompany-node-agent:python(pid=5070)` → `python:subprocess/run_command` → `python3(pid=88515)`. outer/nested completed, Worker exit0, elapsed688ms. ChatGPT PID10411, 설치 앱 코드 서명 검증 exit0, 세션 history mode0600 SHA256 `78772da251d30948b688b4c33f58b1d9d63da609b45098276b289552bf974159`; history appPID501/complete3/previous5. 격리 상위 폴더는 git repository가 아니어서 `git -C <parent>` 조회 exit128 (Python Worker 자체 exit0). Experience `848c3d79-8c99-4717-9ca9-1489277f9ab7` 저장·재조회 확인.
+
+Mac read-only 2: 같은 Dev 경로, `/usr/bin/python3`, timeout20, 실제 후보 하위 디렉터리·세션 partial·설치본 해시/프로세스 확인. request `55433046-4a60-456d-b74f-24516d2083e5`; Control PID795264 → macos-main agent PID5070 → Python PID88661, outer/nested completed, exit0, elapsed603ms. 실제 격리 repo는 `/tmp/titlehelper-104-stale-guard-09daf197/src`, git HEAD `09daf197708fb2b02964cd050304a2c9b57a2c81`. 설치 Helper PID15201, ChatGPT PID10411 유지. 설치 executable SHA256 `15a8f1130b9ec12a1f2af7c8b73b268049410bac9a10a317cb63f86d7acf00da`, 서명 Authority=TheCompany. Partial evidence PID27828, windowCount9, identified6, SHA256 `f1f0318456a5ba6ad7604cbc926ce9260b4b4ce52df7eb1aaf813f3297a754b9`; 저장된 완전 세션 PID501과 불일치. 원본 창 제목·민감 JSON 본문 출력/수정 없음. Experience `984559e8-0102-4008-b4fb-44354b3ea729` 저장·재조회 확인.
+
+Mac read-only 3: 후보 빌드·서명 identity·launchctl 추가 검사 요청 시 `This tool call was blocked by OpenAI's safety checks.` 반환. **OpenAI 사전 안전검사 차단**이며 Dev MCP 거절/Worker 실패 아님. Dev request_id, mcp_path, elapsed, exit_code, Worker PID 모두 **미발급**. 추가 검사 및 배포 **실제 미수행**. 직접 Dev `thecompany_record_experience(type=tool_boundary)`로 `ec4e3e91-33f0-4cd1-860c-d364a53c71e3` durable 저장(outer/nested completed) 및 `thecompany_list_experience` 재조회 확인. 이전 성공 두 건과 별개로 보존. 안전 차단 우회 없음.
+
+**4. 최종 상태·기존 영향:** ChatGPT PID10411 / Helper PID15201 (차단 전 읽기전용 관측). 기존 ChatGPT 창·세션·앱·Windows 소스·NativeTitleSync 변경 없음. 배포/서명/롤백 미수행, PR #3 병합 없음. 신규 커밋은 본 CURRENT 기록만. 실제 화면 AX/CG 재측정, 안전 가드 설치 검증, Restore All 클릭, 고유 URL/ID 추출 모두 **미검증**.
+
+**5. 미완료·다음:** 다음 허용 회차에 GitHub HEAD/실제 Mac PID·AX/CG 창 식별자 기준선 재확인, 안전 백업과 격리 exact SHA 후보 검사, Helper-only 서명 배포 후 설치 서명·로그·오래된 세션 오복원 차단 실기기 검증. 기존 앱·창 종료 금지. 안전 가드 설치 전 Restore All 클릭 금지. 이후 고유 URL/ID 확보와 별도 native 창 복원 E2E 진행. 총 18회 재시도 한도 준수; 사전 안전 차단을 다른 MCP/Work/Codex로 우회하지 않음.
+
+**6. 사용자 조치:** 당장 승인 요청 없음. 설치된 이전 Helper의 stale-manifest 위험은 남음. 오류/차단이므로 Telegram 우선 + Windows 독립 알림 필요. 알림 발송·접수 결과는 후속 원장에 기록.
