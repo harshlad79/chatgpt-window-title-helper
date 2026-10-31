@@ -310,6 +310,27 @@ expect(chainReload.observe(pid: 10411, titles: ["Current C"], windowCount: 1,
        "chain C complete")
 expect(chainReload.snapshot.previousSessionOpen.isEmpty,
        "chain B evidence prevents old A promotion")
+expect(chainReload.lastSessionTargets(pid: 10411).isEmpty,
+       "same-PID current complete is not a previous session")
+let unsafeLegacyFile = staleDir.appendingPathComponent("legacy-previous/state.json")
+try! FileManager.default.createDirectory(
+    at: unsafeLegacyFile.deletingLastPathComponent(),
+    withIntermediateDirectories: true)
+let unsafeLegacyJSON = #"{"version":1,"appPID":10411,"lastCompleteOpen":["Current"],"previousSessionOpen":["Old A","Old B"],"recentTitles":[]}"#
+try! unsafeLegacyJSON.write(to: unsafeLegacyFile, atomically: true,
+                            encoding: .utf8)
+let unsafeLegacy = WindowSessionHistoryStore(file: unsafeLegacyFile)
+expect(unsafeLegacy.lastSessionTargets(pid: 10411).isEmpty,
+       "legacy previous-session titles without source PID fail closed")
+let sourceFile = staleDir.appendingPathComponent("source/state.json")
+let source = WindowSessionHistoryStore(file: sourceFile)
+expect(source.observe(pid: 501, titles: ["A"], windowCount: 1,
+                      now: staleBase), "source initial A complete")
+expect(source.observe(pid: 10411, titles: ["B"], windowCount: 1,
+                      now: staleBase.addingTimeInterval(20)), "source B complete")
+expect(source.snapshot.previousSessionSourcePID == 501 &&
+       source.lastSessionTargets(pid: 10411) == ["A"],
+       "verified prior PID provenance permits valid last-session recovery")
 // Legacy schema-1 manifest: no embedded timestamp, so use disk mtime.
 let legacyFile = staleDir.appendingPathComponent("legacy/legacy.json")
 let legacyJSON = #"{"version":1,"appPID":501,"lastCompleteOpen":["Old A"],"previousSessionOpen":[],"recentTitles":[]}"#
