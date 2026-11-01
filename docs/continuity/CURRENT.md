@@ -1,3 +1,23 @@
+## 141차 — 2026-11-02 03:28–03:34 KST
+
+**상태:** AX 후보의 실제 AXParent 동일성·최대 8단계 AXGroup 공유·대화 제목 AXButton과의 공통 조상 여부를 **읽기 전용 Bool/개수**로 확인하는 Swift 진단을 GitHub에 추가. **Mac 격리 테스트 411 assertions PASS, ARM64 최적화 BUILT, 신규 Helper 설치·AX 실측 미수행. Restore All E2E 미완료.** 상세 실행 원장: [macos/HEADER_MORE_PARENT_IDENTITY_20261102.md](../../macos/HEADER_MORE_PARENT_IDENTITY_20261102.md).
+
+**GitHub:** canonical `harshlad79/chatgpt-window-title-helper`, branch `feat/macos-adaptive-title-helper`, 시작 HEAD `d3f51c6a`; **코드 수정·실제 테스트 소스 `7bffdc51b7fbb7e3505b8b176bf673db95cf61fe`**; 상세 원장 커밋 `f0da0b241c10dd6a37a9aa82150eaf9ebd8aeac6`. PR #3 **Open/Draft → master**, 미병합. 원격 브랜치 6개 전수+cursor 종료, master 비교: 활성 미병합 기능 브랜치 **1개**(`feat/macos-adaptive-title-helper`, ahead528/behind1); PR 없는 신규 미병합 0개. `feat/approved-app-icon-20261016` ahead1/behind1은 이미 merged PR #4의 squash 잔여; 다른 2개 기능 브랜치 ahead0, `dev` 장기 기반.
+
+**실제 Mac 테스트:** Dev Control → `macos-main` → `python:subprocess/run_command`로 GitHub SHA를 격리 checkout하고 `macos/tests/run.sh` 실행. NativeTitleSync byte identity PASS; scheduler14/history59/native115/async177/menu46 = **411 PASS**, `LIVE_AX_MENU_URL=NOT_TESTED`, ARM64 `BUILT`, `test-141.exit=0`. Swift 신규 helper `return raw as! AXUIElement`의 optional return 강제 캐스트 **경고 1건**(컴파일 성공). 실제 신규 진단 결과는 미확보. 사전 읽기 전용 런타임: ChatGPT PID10411, Helper PID77666(140차 설치본), CG on-screen layer0 2개(16252/15360), 세션 SHA256 `f4fe834b324534ca80e6139ab43a52bccc3bf968babd998c9f19e9580726d104`/mode0600 불변. Python Quartz import 불가를 포착하고 Swift CoreGraphics로 별도 재확인. 기존 ChatGPT 앱·창 변경 없음.
+
+**중요 차단 — OpenAI 사전 안전검사:** Helper만 SIGTERM → `package-title-helper.sh` 백업·서명 설치 → Helper 재시작을 의도한 **Dev `thecompany_call_tool(operation=execute)` 호출이 전송 전** `This tool call was blocked by OpenAI's safety checks.`로 차단. **request_id/mcp_path/mcp_trace/mcp_elapsed_ms/exit_code 모두 미발급(null), Dev Control·Mac Worker 미실행, Helper 종료·설치·재시작 0**. Dev MCP 자체 거절·Mac Worker 실패와 구분. 다른 MCP/Work/Codex 경로 우회·동일 배포 재시도 없음. Dev direct `thecompany_record_experience(type=tool_boundary)` event **`4cbdeb7f-3d3a-434d-a739-51b41fc39a43`**, request `eb7d7ed7`, outer/nested completed/captured, elapsed3ms; `list_experience` request `e684cad0`, event 재조회 **found=true**. 차단 전 정확한 요청 시각은 미발급; Experience 기록 03:32:47 KST.
+
+**도구 호출·경로:** GitHub connector `fetch_file`(필수 3문서·Swift·스크립트·Rulebook), `update_file`(코드 `7bffdc51`), `create_file`(상세 원장 `f0da0b24`), `search_branches`/cursor·`compare_commits`·`get_pr_info` 사용; Control/Worker 비경유, 별도 mcp_path/PID 미제공. Dev `execute`는 `node_id=macos-main,backend=python:subprocess,worker_tool=run_command,program=/usr/bin/python3|/usr/bin/swift|/bin/bash,timeout_seconds=12~25`; 각 Worker exit0. 대표 격리 checkout/test request `d90ee43b` bash PID47973, background test PID48005, 마지막 test poll `dd680ecc` bash PID51033 exit0. 공통 `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.execute -> macos-main/thecompany-node-agent:python(pid=5070) -> python:subprocess/run_command -> <program>(pid=각 요청)`. 정확한 각 요청/argv/elapsed/PID/실패 구분은 상세 원장 참조.
+
+**최종 영향·롤백:** 141차 코드는 **GitHub에만 반영**, 실제 설치본은 140차 검증·배포 소스 `19f61f3`. 기존 ChatGPT/2개 창/세션 보존. Windows 소스·NativeTitleSync 변경 없음. 설치 롤백 불필요, 기존 140차 백업 유지. Draft PR #3 병합 없음.
+
+**미완료·다음:** 새 진단의 실제 AXParent 동일성/제목 공통 조상·정확한 More 버튼·대화 URL/ID·개별 native 새 창·Restore All E2E **미검증**. 우선 GitHub의 신규 Swift 경고/정적 테스트 계약 보강. 안전검사 차단된 배포를 다른 경로로 우회하지 말고, 허용된 Dev 실행 가능 여부 확인 후에만 실제 서명 배포·AX 진단 재개. 사용자 즉시 수동 조치 없음. **예약 유지.**
+
+**알림:** 중요 차단으로 Telegram 우선 → Windows 별도 독립 한국어 본문, 실제 LF, 제목/본문 분리, Windows 769자(<1000), Telegram 1599자. Telegram `enqueue_notification` request `18121d0c`, notification `6d7c7c50-608e-494e-9c05-cf699114180c`, Control-only outer/nested completed/queued elapsed3ms; `get_notification` request `63a5dfa6`, completed/registered elapsed1ms, attempt1 accepted=true exit0 **message_id=225**. Windows `enqueue_notification` request `5efcd937`, notification `8575d48e-80fa-4c52-ae0b-5642c3f91909`, completed/queued elapsed3ms; `get_notification` request `a0812977`, completed/registered elapsed1ms, attempt1, NodeAgent `pythonw.exe(pid=11848)` → `python:subprocess/run_command` → `powershell.exe(pid=42252)`, exit0/HTTP200, `WINDOWS_NOTIFICATION_REGISTERED`. Control-only `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.enqueue_notification/get_notification`. **양 채널 접수·목적지 등록 성공, 실제 기기 화면 표시·열람 미검증**. 알림 실패·재시도 없음.
+
+---
+
 ## 140차 알림 접수 후속 — 2026-11-02 02:34 KST
 
 조건: 최초 **백그라운드 테스트 exit1**(이후 수정·재검증 완료). 사용자 조치 불필요하나 오류 회차 정책에 따라 **Telegram 우선 → Windows 별도** 독립 본문 발송. 제목 `[ChatGPT Window Title Helper] · [macos-main]`, 본문 첫 줄 실제 대화 제목 미확인 및 임시 제목, LF(U+000A) 실제 개행, 리터럴 백슬래시+n 없음. Telegram 1671자, Windows 698자(<1000), 공통 보고 1~6항. 정상 영수증은 알림 본문 생략.
