@@ -892,7 +892,7 @@ final class DockRecentWindowRestorer {
         }
         // Only aggregate metadata counts are emitted. Never expose the query
         // results, user titles, AXValue, conversation IDs or URL strings.
-        func metadata() -> (Int, Int, Int, Bool) {
+        func metadata() -> (Int, Int, Int, Bool, Int, Int, Int, Int, Int) {
             let candidateRoles: Set<String> = [
                 "AXRow", "AXCell", "AXMenuItem", "AXButton", "AXGroup"
             ]
@@ -904,6 +904,13 @@ final class DockRecentWindowRestorer {
             var candidates = 0
             var uuidShaped = 0
             var chatURLShaped = 0
+            // Read-only structural evidence. Counts only; no result text,
+            // title, conversation ID, URL, or element pointer is persisted.
+            var lists = 0
+            var rows = 0
+            var pressableGroups = 0
+            var exactQueryTexts = 0
+            var links = 0
             let start = ProcessInfo.processInfo.systemUptime
             while offset < pending.count &&
                   ProcessInfo.processInfo.systemUptime - start < 5.0 {
@@ -912,7 +919,23 @@ final class DockRecentWindowRestorer {
                 guard visited.insert(String(CFHash(element))).inserted else {
                     continue
                 }
-                if candidateRoles.contains(str(element, kAXRoleAttribute)) {
+                let role = str(element, kAXRoleAttribute)
+                if role == "AXList" { lists += 1 }
+                if role == "AXRow" { rows += 1 }
+                if role == "AXLink" { links += 1 }
+                if role == "AXStaticText",
+                   let value = read(element, kAXValueAttribute) as? String,
+                   value.trimmingCharacters(in: .whitespacesAndNewlines) == query {
+                    exactQueryTexts += 1
+                }
+                if role == "AXGroup" {
+                    var actions: CFArray?
+                    if AXUIElementCopyActionNames(element, &actions) == .success,
+                       let names = actions as? [String], names.contains("AXPress") {
+                        pressableGroups += 1
+                    }
+                }
+                if candidateRoles.contains(role) {
                     candidates += 1
                     for key in ["AXValue", "AXIdentifier", "AXURL"] {
                         let raw = read(element, key)
@@ -937,7 +960,8 @@ final class DockRecentWindowRestorer {
                 pending.append(contentsOf: next)
             }
             return (candidates, uuidShaped, chatURLShaped,
-                    offset < pending.count)
+                    offset < pending.count, lists, rows,
+                    pressableGroups, exactQueryTexts, links)
         }
         guard sameTarget() else {
             completed(false, "query-roundtrip-prewrite-identity-changed")
@@ -993,6 +1017,9 @@ final class DockRecentWindowRestorer {
                     "restoredEmpty=\(empty) baselineCandidates=\(baseline.0) " +
                     "duringCandidates=\(during.0) afterCandidates=\(after.0) " +
                     "duringUUIDShapes=\(during.1) duringChatURLShapes=\(during.2) " +
+                    "duringLists=\(during.4) duringRows=\(during.5) " +
+                    "duringPressableGroups=\(during.6) duringExactQueryTexts=\(during.7) " +
+                    "duringLinks=\(during.8) " +
                     "limited=\(during.3 || after.3) " +
                     "originalsPreserved=\(originalsPreserved) focusPreserved=\(focusPreserved)")
             }
