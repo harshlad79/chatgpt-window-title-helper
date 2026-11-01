@@ -669,6 +669,30 @@ for forbidden in [
 ]:
     assert forbidden not in header_more, forbidden
 
+# Header More census must cover non-default child routes and aggregate metadata
+# without ever emitting raw accessibility labels, conversation IDs or URLs.
+for required in [
+    'positionKnown', 'topButtons', 'titlePresent',
+    'descriptionPresent', 'helpPresent', 'emptyLabels',
+    'ellipsisLike', 'containsMore', 'navigationExtra',
+    'visibleExtra', 'contentsExtra', 'AXChildrenInNavigationOrder',
+    'kAXVisibleChildrenAttribute', 'kAXContentsAttribute',
+    'ordinaryIDs.contains', 'queue.count < 1200'
+]:
+    assert required in header_more, required
+for required in [
+    'positionKnown=\\(more.positionKnown)',
+    'topButtons=\\(more.topButtons)',
+    'ellipsisLike=\\(more.ellipsisLike)',
+    'navigationExtra=\\(more.navigationExtra)',
+    'visibleExtra=\\(more.visibleExtra)',
+    'contentsExtra=\\(more.contentsExtra)'
+]:
+    assert required in new, required
+for forbidden in ['AXUIElementPerformAction', 'AXUIElementSetAttributeValue',
+                  'TitleHelperDiagnostics.shared.record', 'NSLog(', 'print(']:
+    assert forbidden not in header_more, forbidden
+
 # Full native AXWindow census, not the nested AXWebArea-only scope.
 assert 'let more = boundedHeaderMoreCensus(window)' in new
 assert 'scope=window buttons=' in new
