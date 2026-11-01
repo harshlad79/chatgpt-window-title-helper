@@ -685,7 +685,7 @@ private func boundedHeaderMoreCensus(
                         let isEnabled = axBool(element, kAXEnabledAttribute) == true
                         if isEnabled { rightEnabled += 1 }
                         // Fixed metadata buckets only; no labels, IDs, raw coordinates or URLs.
-                        let yFraction = (point.y - top) / height
+                        let yFraction = (point.y - (rootTop ?? point.y)) / max(rootHeight ?? 1, 1)
                         let xBand = fraction >= 0.9 ? "edge10" :
                             (fraction >= 0.8 ? "outer20" : "inner13")
                         let yBand = yFraction < 0.1 ? "first10" :
