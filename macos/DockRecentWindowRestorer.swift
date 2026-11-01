@@ -782,6 +782,7 @@ final class DockRecentWindowRestorer {
     // Never opens a result, navigates, sends a message, logs user content,
     // changes focus, or touches the owner's named conversation windows.
     func probeUniqueGenericSearchQueryRoundtrip(
+        useNamedTitle: Bool = false,
         completed: @escaping (Bool, String) -> Void
     ) {
         guard !busy, AXIsProcessTrusted(),
@@ -829,6 +830,18 @@ final class DockRecentWindowRestorer {
               String(CFHash(focused as! AXUIElement)) == targetID else {
             completed(false, "query-roundtrip-identity-or-focus-unavailable")
             return
+        }
+        let query: String
+        if useNamedTitle {
+            let namedTitles = before.windows.filter {
+                before.named.contains(String(CFHash($0)))
+            }.map { title($0) }
+            guard let candidate = NamedConversationSearchQueryPolicy.candidate(namedTitles) else {
+                completed(false, "query-roundtrip-named-title-not-unique"); return
+            }
+            query = candidate
+        } else {
+            query = ReversibleGenericSearchQueryPolicy.probe
         }
         let scan = searchUIScan(target)
         var queue: [AXUIElement] = [target]
@@ -935,7 +948,7 @@ final class DockRecentWindowRestorer {
             completed(false, "query-roundtrip-baseline-scan-limited"); return
         }
         busy = true
-        let sentinel = ReversibleGenericSearchQueryPolicy.probe
+        let sentinel = query
         let written = AXUIElementSetAttributeValue(
             input, kAXValueAttribute as CFString, sentinel as NSString)
         guard written == .success else {
@@ -943,7 +956,7 @@ final class DockRecentWindowRestorer {
             completed(false, "query-roundtrip-write-failed status=\(written.rawValue)")
             return
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + (useNamedTitle ? 6.0 : 3.0)) { [weak self] in
             guard let self else { return }
             let observed = self.read(input, kAXValueAttribute) as? String
             let during = metadata()
@@ -954,7 +967,7 @@ final class DockRecentWindowRestorer {
                       targetID: targetID, actualID: targetID,
                       before: before.states,
                       after: census()?.states ?? [:],
-                      currentValue: observed) else {
+                      currentValue: observed, expectedQuery: sentinel) else {
                 self.busy = false
                 completed(false, "query-roundtrip-restore-fence-failed")
                 return
@@ -976,7 +989,7 @@ final class DockRecentWindowRestorer {
                 let success = empty && originalsPreserved && focusPreserved &&
                     !during.3 && !after.3
                 completed(success,
-                    "count=\(before.states.count) syntheticReadback=\(observed == sentinel) " +
+                    "count=\(before.states.count) queryKind=\(useNamedTitle ? "named-title" : "synthetic") queryReadback=\(observed == sentinel) " +
                     "restoredEmpty=\(empty) baselineCandidates=\(baseline.0) " +
                     "duringCandidates=\(during.0) afterCandidates=\(after.0) " +
                     "duringUUIDShapes=\(during.1) duringChatURLShapes=\(during.2) " +
