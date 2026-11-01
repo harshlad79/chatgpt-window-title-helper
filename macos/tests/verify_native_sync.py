@@ -709,6 +709,27 @@ for forbidden in ['AXUIElementPerformAction', 'AXUIElementSetAttributeValue',
                   'TitleHelperDiagnostics.shared.record', 'NSLog(', 'print(']:
     assert forbidden not in header_more, forbidden
 
+# Upper-right controls are cross-correlated by role, actions and enabled state
+# without logging raw labels/IDs/coordinates or performing any AX actions.
+for required in [
+    'rightShowMenu', 'rightMenuRoles', 'rightEmptyLabels',
+    'rightPress', 'rightEnabled', 'rightOtherActions',
+    'if hasShowMenu { rightShowMenu += 1 }',
+    'if hasPress { rightPress += 1 }',
+    'if hasOtherAction { rightOtherActions += 1 }',
+    'if axBool(element, kAXEnabledAttribute) == true',
+]:
+    assert required in header_more, required
+for required in [
+    'rightShowMenu=\\(more.rightShowMenu)',
+    'rightMenuRoles=\\(more.rightMenuRoles)',
+    'rightEmptyLabels=\\(more.rightEmptyLabels)',
+    'rightPress=\\(more.rightPress)',
+    'rightEnabled=\\(more.rightEnabled)',
+    'rightOtherActions=\\(more.rightOtherActions)',
+]:
+    assert required in new, required
+
 # Full native AXWindow census, not the nested AXWebArea-only scope.
 assert 'let more = boundedHeaderMoreCensus(window)' in new
 assert 'scope=window buttons=' in new
