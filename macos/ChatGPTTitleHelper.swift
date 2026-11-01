@@ -543,10 +543,17 @@ private func boundedHeaderMoreCensus(
       descriptionPresent: Int, helpPresent: Int, emptyLabels: Int,
       ellipsisLike: Int, containsMore: Int, navigationExtra: Int,
       visibleExtra: Int, contentsExtra: Int,
+      topIdentifierPresent: Int, topRoleDescriptionPresent: Int,
+      topMenuButtonRoles: Int, topMenuRoleDescriptions: Int,
+      topMenuIdentifiers: Int, topPressActions: Int,
+      topShowMenuActions: Int, topOtherActions: Int,
+      topLeft: Int, topMiddle: Int, topRight: Int,
       visited: Int, limited: Bool) {
     let start = ProcessInfo.processInfo.systemUptime
     let rootTop = axPoint(root)?.y
+    let rootLeft = axPoint(root)?.x
     let rootHeight = axSize(root)?.height
+    let rootWidth = axSize(root)?.width
     var queue = [root]
     var seen: Set<String> = []
     var index = 0
@@ -568,6 +575,17 @@ private func boundedHeaderMoreCensus(
     var navigationExtra = 0
     var visibleExtra = 0
     var contentsExtra = 0
+    var topIdentifierPresent = 0
+    var topRoleDescriptionPresent = 0
+    var topMenuButtonRoles = 0
+    var topMenuRoleDescriptions = 0
+    var topMenuIdentifiers = 0
+    var topPressActions = 0
+    var topShowMenuActions = 0
+    var topOtherActions = 0
+    var topLeft = 0
+    var topMiddle = 0
+    var topRight = 0
     let accepted: Set<String> = [
         "more", "more options", "더 보기", "더보기", "추가 옵션"
     ]
@@ -605,6 +623,47 @@ private func boundedHeaderMoreCensus(
                 positionKnown += 1
                 isTop = point.y - top <= height * 0.25
                 if isTop { topButtons += 1 }
+            }
+            // Top-band controls only: fixed aggregate semantic/action buckets.
+            // Never log AXIdentifier, AXRoleDescription or individual coordinates.
+            if isTop {
+                let identifier = axString(element, "AXIdentifier")
+                    .trimmingCharacters(in: .whitespacesAndNewlines).localizedLowercase
+                let roleDescription = axString(element, "AXRoleDescription")
+                    .trimmingCharacters(in: .whitespacesAndNewlines).localizedLowercase
+                if !identifier.isEmpty { topIdentifierPresent += 1 }
+                if !roleDescription.isEmpty { topRoleDescriptionPresent += 1 }
+                if role == "AXMenuButton" || role == "AXPopUpButton" {
+                    topMenuButtonRoles += 1
+                }
+                if roleDescription.contains("menu") || roleDescription.contains("메뉴") {
+                    topMenuRoleDescriptions += 1
+                }
+                if identifier.contains("menu") || identifier.contains("more") ||
+                   identifier.contains("overflow") {
+                    topMenuIdentifiers += 1
+                }
+                var actionArray: CFArray?
+                if AXUIElementCopyActionNames(element, &actionArray) == .success {
+                    let names = (actionArray as? [String]) ?? []
+                    if names.contains(kAXPressAction as String) {
+                        topPressActions += 1
+                    }
+                    if names.contains("AXShowMenu") {
+                        topShowMenuActions += 1
+                    }
+                    if names.contains(where: {
+                        $0 != (kAXPressAction as String) && $0 != "AXShowMenu"
+                    }) { topOtherActions += 1 }
+                }
+                if let left = rootLeft, let width = rootWidth, width > 0,
+                   let point = axPoint(element), point.x >= left - 10,
+                   point.x <= left + width + 10 {
+                    let fraction = (point.x - left) / width
+                    if fraction < 1.0 / 3.0 { topLeft += 1 }
+                    else if fraction < 2.0 / 3.0 { topMiddle += 1 }
+                    else { topRight += 1 }
+                }
             }
             if labels.contains(where: { accepted.contains($0) }) {
                 matched += 1
@@ -658,7 +717,13 @@ private func boundedHeaderMoreCensus(
             positionKnown, topButtons, titlePresent,
             descriptionPresent, helpPresent, emptyLabels,
             ellipsisLike, containsMore, navigationExtra,
-            visibleExtra, contentsExtra, seen.count, index < queue.count)
+            visibleExtra, contentsExtra,
+            topIdentifierPresent, topRoleDescriptionPresent,
+            topMenuButtonRoles, topMenuRoleDescriptions,
+            topMenuIdentifiers, topPressActions,
+            topShowMenuActions, topOtherActions,
+            topLeft, topMiddle, topRight,
+            seen.count, index < queue.count)
 }
 
 // Read-only observation can safely subscribe to multiple title buttons.
@@ -3444,6 +3509,16 @@ final class OverlayController:
                             "ellipsisLike=\(more.ellipsisLike) containsMore=\(more.containsMore) " +
                             "navigationExtra=\(more.navigationExtra) visibleExtra=\(more.visibleExtra) " +
                             "contentsExtra=\(more.contentsExtra) " +
+                            "topIdentifierPresent=\(more.topIdentifierPresent) " +
+                            "topRoleDescriptionPresent=\(more.topRoleDescriptionPresent) " +
+                            "topMenuButtonRoles=\(more.topMenuButtonRoles) " +
+                            "topMenuRoleDescriptions=\(more.topMenuRoleDescriptions) " +
+                            "topMenuIdentifiers=\(more.topMenuIdentifiers) " +
+                            "topPressActions=\(more.topPressActions) " +
+                            "topShowMenuActions=\(more.topShowMenuActions) " +
+                            "topOtherActions=\(more.topOtherActions) " +
+                            "topLeft=\(more.topLeft) topMiddle=\(more.topMiddle) " +
+                            "topRight=\(more.topRight) " +
                             "visited=\(more.visited) limited=\(more.limited)")
                     }
                     shareCandidates += controls.share
