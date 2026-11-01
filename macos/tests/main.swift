@@ -624,6 +624,8 @@ expect(NamedConversationSearchQueryPolicy.candidate(["ChatGPT"]) == nil,
        "named Search rejects generic title")
 expect(NamedConversationSearchQueryPolicy.candidate([" x "]) == nil,
        "named Search rejects too-short title")
+expect(NamedConversationSearchQueryPolicy.candidate(["가나"]) == "가나",
+       "named Search supports two-character Korean titles")
 expect(NamedConversationSearchQueryPolicy.candidate(["  actual title  "]) == "actual title",
        "named Search trims input")
 expect(NamedConversationSearchQueryPolicy.candidate([String(repeating: "x", count: 100)])?.count == 72,
