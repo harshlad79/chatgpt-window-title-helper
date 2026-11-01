@@ -892,13 +892,13 @@ final class DockRecentWindowRestorer {
         }
         // Only aggregate metadata counts are emitted. Never expose the query
         // results, user titles, AXValue, conversation IDs or URL strings.
-        func metadata() -> (Int, Int, Int, Bool, Int, Int, Int, Int, Int) {
+        func metadata() -> (Int, Int, Int, Bool, Int, Int, Int, Int, Int, Int, Int, Int) {
             let candidateRoles: Set<String> = [
                 "AXRow", "AXCell", "AXMenuItem", "AXButton", "AXGroup"
             ]
             let uuidPattern =
                 "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-            var pending: [AXUIElement] = [target]
+            var pending: [(element: AXUIElement, pressableAncestors: [String])] = [(target, [])]
             var visited: Set<String> = []
             var offset = 0
             var candidates = 0
@@ -911,10 +911,14 @@ final class DockRecentWindowRestorer {
             var pressableGroups = 0
             var exactQueryTexts = 0
             var links = 0
+            var matchedPressableGroups: Set<String> = []
+            var exactTextsUnderPressable = 0
+            var exactTextsOutsidePressable = 0
             let start = ProcessInfo.processInfo.systemUptime
             while offset < pending.count &&
                   ProcessInfo.processInfo.systemUptime - start < 5.0 {
-                let element = pending[offset]
+                let node = pending[offset]
+                let element = node.element
                 offset += 1
                 guard visited.insert(String(CFHash(element))).inserted else {
                     continue
@@ -927,12 +931,20 @@ final class DockRecentWindowRestorer {
                    let value = read(element, kAXValueAttribute) as? String,
                    value.trimmingCharacters(in: .whitespacesAndNewlines) == query {
                     exactQueryTexts += 1
+                    if node.pressableAncestors.isEmpty {
+                        exactTextsOutsidePressable += 1
+                    } else {
+                        exactTextsUnderPressable += 1
+                        matchedPressableGroups.formUnion(node.pressableAncestors)
+                    }
                 }
+                var childPressableAncestors = node.pressableAncestors
                 if role == "AXGroup" {
                     var actions: CFArray?
                     if AXUIElementCopyActionNames(element, &actions) == .success,
                        let names = actions as? [String], names.contains("AXPress") {
                         pressableGroups += 1
+                        childPressableAncestors.append(String(CFHash(element)))
                     }
                 }
                 if candidateRoles.contains(role) {
@@ -957,11 +969,13 @@ final class DockRecentWindowRestorer {
                     next = (read(element, kAXVisibleChildrenAttribute)
                         as? [AXUIElement]) ?? []
                 }
-                pending.append(contentsOf: next)
+                pending.append(contentsOf: next.map { (element: $0, pressableAncestors: childPressableAncestors) })
             }
             return (candidates, uuidShaped, chatURLShaped,
                     offset < pending.count, lists, rows,
-                    pressableGroups, exactQueryTexts, links)
+                    pressableGroups, exactQueryTexts, links,
+                    exactTextsUnderPressable, matchedPressableGroups.count,
+                    exactTextsOutsidePressable)
         }
         guard sameTarget() else {
             completed(false, "query-roundtrip-prewrite-identity-changed")
@@ -1020,6 +1034,9 @@ final class DockRecentWindowRestorer {
                     "duringLists=\(during.4) duringRows=\(during.5) " +
                     "duringPressableGroups=\(during.6) duringExactQueryTexts=\(during.7) " +
                     "duringLinks=\(during.8) " +
+                    "duringExactTextsUnderPressable=\(during.9) " +
+                    "duringDistinctPressableMatches=\(during.10) " +
+                    "duringExactTextsOutsidePressable=\(during.11) " +
                     "limited=\(during.3 || after.3) " +
                     "originalsPreserved=\(originalsPreserved) focusPreserved=\(focusPreserved)")
             }
