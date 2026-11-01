@@ -550,6 +550,8 @@ private func boundedHeaderMoreCensus(
       topLeft: Int, topMiddle: Int, topRight: Int,
       rightShowMenu: Int, rightMenuRoles: Int, rightEmptyLabels: Int,
       rightPress: Int, rightEnabled: Int, rightOtherActions: Int,
+      rightParentSame: Bool, rightSharedGroup: Bool,
+      rightTitleSharedGroup: Bool, exactTitleButtons: Int,
       rightOrder: String, visited: Int, limited: Bool) {
     let start = ProcessInfo.processInfo.systemUptime
     let rootTop = axPoint(root)?.y
@@ -595,6 +597,8 @@ private func boundedHeaderMoreCensus(
     var rightEnabled = 0
     var rightOtherActions = 0
     var rightDetails: [(x: Double, detail: String)] = []
+    var rightElements: [AXUIElement] = []
+    var exactTitleButtons: [AXUIElement] = []
     let accepted: Set<String> = [
         "more", "more options", "더 보기", "더보기", "추가 옵션"
     ]
@@ -609,6 +613,11 @@ private func boundedHeaderMoreCensus(
         if role == "AXButton" || role == "AXMenuButton" ||
            role == "AXPopUpButton" {
             buttons += 1
+            if !conversationTitle.isEmpty && exactTitleButtons.count < 12 &&
+               axString(element, kAXTitleAttribute)
+                   .trimmingCharacters(in: .whitespacesAndNewlines) == conversationTitle {
+                exactTitleButtons.append(element)
+            }
             let labels = [
                 axString(element, kAXTitleAttribute),
                 axString(element, kAXDescriptionAttribute),
@@ -731,6 +740,7 @@ private func boundedHeaderMoreCensus(
                             "\(labelKind),\(descriptionKind)," +
                             "showMenu=\(hasShowMenu),press=\(hasPress),\(parentContext)"
                         rightDetails.append((x: Double(point.x), detail: detail))
+                        rightElements.append(element)
                     }
                 }
             }
@@ -781,6 +791,39 @@ private func boundedHeaderMoreCensus(
             }
         }
     }
+    // Compare AX identity only in memory. Do not log hashes, labels, URLs,
+    // coordinates or window identifiers; common groups do not prove Header.
+    func parent(_ element: AXUIElement) -> AXUIElement? {
+        guard let raw = axGet(element, kAXParentAttribute),
+              CFGetTypeID(raw) == AXUIElementGetTypeID() else { return nil }
+        return raw as! AXUIElement
+    }
+    func groups(_ element: AXUIElement) -> [AXUIElement] {
+        var result: [AXUIElement] = []
+        var current = element
+        for _ in 0..<8 {
+            guard let next = parent(current) else { break }
+            if axString(next, kAXRoleAttribute) == "AXGroup" { result.append(next) }
+            current = next
+        }
+        return result
+    }
+    let rightParentSame: Bool = {
+        guard rightElements.count == 2,
+              let left = parent(rightElements[0]),
+              let right = parent(rightElements[1]) else { return false }
+        return CFEqual(left, right)
+    }()
+    let rightGroups = rightElements.map { groups($0) }
+    let rightSharedGroup = rightGroups.count == 2 &&
+        rightGroups[0].contains { a in rightGroups[1].contains { CFEqual(a, $0) } }
+    let rightTitleSharedGroup = rightGroups.count == 2 &&
+        exactTitleButtons.contains { title in
+            let titleGroups = groups(title)
+            return rightGroups.allSatisfy { candidates in
+                candidates.contains { a in titleGroups.contains { CFEqual(a, $0) } }
+            }
+        }
     return (matched, enabledCount, pressable, topBand,
             toolbarAncestor, buttons, toolbars,
             positionKnown, topButtons, titlePresent,
@@ -794,6 +837,8 @@ private func boundedHeaderMoreCensus(
             topLeft, topMiddle, topRight,
             rightShowMenu, rightMenuRoles, rightEmptyLabels,
             rightPress, rightEnabled, rightOtherActions,
+            rightParentSame, rightSharedGroup, rightTitleSharedGroup,
+            exactTitleButtons.count,
             rightDetails.sorted { $0.x < $1.x }.enumerated().map {
                 "\($0.offset + 1):\($0.element.detail)"
             }.joined(separator: "|"),
@@ -3599,6 +3644,10 @@ final class OverlayController:
                             "rightPress=\(more.rightPress) " +
                             "rightEnabled=\(more.rightEnabled) " +
                             "rightOtherActions=\(more.rightOtherActions) " +
+                            "rightParentSame=\(more.rightParentSame) " +
+                            "rightSharedGroup=\(more.rightSharedGroup) " +
+                            "rightTitleSharedGroup=\(more.rightTitleSharedGroup) " +
+                            "exactTitleButtons=\(more.exactTitleButtons) " +
                             "rightOrder=\(more.rightOrder) " +
                             "visited=\(more.visited) limited=\(more.limited)")
                     }
