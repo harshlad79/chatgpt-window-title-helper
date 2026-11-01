@@ -625,8 +625,8 @@ for required in [
     'domLengthShort', 'domLengthMedium', 'domLengthLong',
     'urlLengthShort', 'urlLengthMedium', 'urlLengthLong',
     'domUUID', 'urlUUID', 'domChatPath', 'urlChatPath',
-    'String(leafShapes[key, default: 0])',
-    'String(allShapes[key, default: 0])'
+    'leafShapes[key] ?? 0',
+    'allShapes[key] ?? 0'
 ]:
     assert required in ancestry_scan, required
 assert 'during.21 + " "' in named_probe
