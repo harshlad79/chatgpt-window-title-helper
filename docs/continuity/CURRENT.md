@@ -1,3 +1,19 @@
+## 140차 — 2026-11-02 02:25–02:33 KST
+
+**상태:** 우측 AX 버튼의 부모·형제 구조를 읽기 전용으로 진단하는 코드를 구현·테스트·서명 설치·실기기 확인. **전체 Restore All E2E 미완료**. 상세 원장: [macos/HEADER_MORE_PARENT_SIBLING_20261102.md](../../macos/HEADER_MORE_PARENT_SIBLING_20261102.md).
+
+**GitHub:** canonical `harshlad79/chatgpt-window-title-helper`, `feat/macos-adaptive-title-helper`. 소스 `d6171e7` → 테스트 계약 수정 `19f61f3`(**실제 검증·배포 소스**). 상세 원장 커밋 `5925a3a`. PR #3 Open/Draft → master, 미병합. 원격 6브랜치 전수+master 비교: 활성 미병합 작업 브랜치 1개; merged PR #4의 squash 잔여 브랜치는 별도 분류. Windows 소스/NativeTitleSync 변경 없음.
+
+**새 실측:** 기존 '상단 버튼'은 AXWindow 높이 **상단 25%** 범주이지 Header 소속 증명이 아님. 실제 signed Helper AX `visited125/buttons47/top12/right2`; 두 우측 후보 모두 `siblings6/buttons3/titlePeer=false/ancestor=AXGroup×4`. 왼쪽 enabled, 오른쪽 disabled. 둘 다 AXShowMenu·AXPress 지원. **More 정확 식별 0, URL/ID 0**. 화면 캡처는 Terminal 전면이라 ChatGPT UI 증거 아님.
+
+**검증·기존 영향:** 최초 background test exit1(`verify_native_sync.py`가 변경 전 함수 호출 문자열 assert), 테스트 수정 후 411 assertions PASS/ARM64 build PASS. Helper만 재서명·재설치 exit0, rollback 백업 확보. 최종 ChatGPT PID10411 유지, Helper PID77666, CG on-screen 2개 유지, 세션 SHA256 `f4fe834b324534ca80e6139ab43a52bccc3bf968babd998c9f19e9580726d104`·mode0600 불변, codesign PASS, tracked worktree clean. 롤백 불필요. 원본 앱·대화창 종료/덮어쓰기 없음.
+
+**오류·Experience:** OpenAI 사전 안전검사 차단 0, Dev MCP 거절 0, run_command Worker exit1 0. **백그라운드 테스트 exit1**은 Dev 호출 성공과 분리 기록, 수정 후 재시험·배포 완료. Experience `038fb753-6ec6-4b6c-b07a-b12cb2fa1b0e`(tool_boundary) 저장·list 재조회 확인. 각 호출의 프로그램/인자·request_id/PID/elapsed/mcp_path 및 최초 실패→수정→재호출은 상세 원장 참조.
+
+**다음:** 두 후보의 AXParent 동일성(원문 ID 미기록)과 실제 대화 제목 버튼의 상위 조상 관계 확인. Header 소속·고유 ID 확인 전 클릭 금지. 개별 native 새 창 복원과 전체 E2E 미검증. 사용자 조치 없음. 오류 회차로 Telegram 우선/Windows 별도 알림 예정; 접수 영수증은 후속 기록.
+
+---
+
 ## 139차 알림 접수 후속 — 2026-11-02 01:33~01:34 KST
 
 조건: Mac Worker exit1 및 사전 인자 검증 실패·내부 스크린샷 실패·최초 컴파일 실패 이력. 사용자 개입은 필요하지 않지만 오류 발생 정책에 따라 **Telegram 우선 → Windows 별도** 발송. 실제 대화 제목 미확인 문구와 임시 제목을 명시. 채널별 처음부터 독립 작성(원문 Telegram 1456자, Windows 643자), 실제 LF 사용, 리터럴 백슬래시+n 없음. 정상 영수증을 알림 본문에는 포함하지 않음.
