@@ -1066,17 +1066,22 @@ final class DockRecentWindowRestorer {
                 "urlNonempty", "urlLengthShort", "urlLengthMedium",
                 "urlLengthLong", "urlUUID", "urlChatPath"
             ]
-            let shapeSummary = shapeKeys.map { key in
-                "leaf" + key.prefix(1).uppercased() + key.dropFirst() +
-                    "=" + String(leafShapes[key, default: 0])
-            }.joined(separator: " ") + " " +
-                shapeKeys.filter { $0 == "domNonempty" || $0 == "urlNonempty" ||
-                                   $0 == "domUUID" || $0 == "urlUUID" ||
-                                   $0 == "domChatPath" || $0 == "urlChatPath" }
-                    .map { key in
-                        "all" + key.prefix(1).uppercased() + key.dropFirst() +
-                            "=" + String(allShapes[key, default: 0])
-                    }.joined(separator: " ")
+            var shapeParts: [String] = []
+            for key in shapeKeys {
+                let label = key.prefix(1).uppercased() + String(key.dropFirst())
+                let count = leafShapes[key] ?? 0
+                shapeParts.append("leaf" + label + "=" + String(count))
+            }
+            let allKeys = [
+                "domNonempty", "urlNonempty", "domUUID", "urlUUID",
+                "domChatPath", "urlChatPath"
+            ]
+            for key in allKeys {
+                let label = key.prefix(1).uppercased() + String(key.dropFirst())
+                let count = allShapes[key] ?? 0
+                shapeParts.append("all" + label + "=" + String(count))
+            }
+            let shapeSummary = shapeParts.joined(separator: " ")
             return (candidates, uuidShaped, chatURLShaped,
                     offset < pending.count, lists, rows,
                     pressableGroups, exactQueryTexts, links,
