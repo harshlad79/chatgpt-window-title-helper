@@ -1,3 +1,13 @@
+## 139차 알림 접수 후속 — 2026-11-02 01:33~01:34 KST
+
+조건: Mac Worker exit1 및 사전 인자 검증 실패·내부 스크린샷 실패·최초 컴파일 실패 이력. 사용자 개입은 필요하지 않지만 오류 발생 정책에 따라 **Telegram 우선 → Windows 별도** 발송. 실제 대화 제목 미확인 문구와 임시 제목을 명시. 채널별 처음부터 독립 작성(원문 Telegram 1456자, Windows 643자), 실제 LF 사용, 리터럴 백슬래시+n 없음. 정상 영수증을 알림 본문에는 포함하지 않음.
+
+1. **Telegram:** Dev Control-only `thecompany_call_tool(operation=enqueue_notification)`, request `0e7b8950-d037-48e1-a0d9-0e17518ccfd6`, destination `telegram`, source `macos-main`, project `chatgpt-window-title-helper`, session_ref `6ad8d8ff97ac8191b351582129a28330`, task_label `마지막 창 모두 복원 139차`. Notification `022ac089-e7cd-4aa4-8d03-f3c5ba841fd4`, outer/nested completed/queued, elapsed4ms. `get_notification` request `7ed32146-8b11-47e6-af68-0d564b654950`, completed/registered elapsed1ms, attempt1 accepted=true, exit0, **message_id=220**.
+2. **Windows(windows-main):** 독립 643자 본문. `enqueue_notification` request `6fabe0c5-2aff-4ff5-84da-1c20abd41558`, notification `79075407-ca0c-4f9a-a244-d925610d6ab2`, completed/queued elapsed8ms. `get_notification` request `709994b2-3cf2-4ec3-b055-5dfe7cfe58cf`, completed/registered elapsed1ms, attempt1, NodeAgent `pythonw.exe(pid=11848)` → `python:subprocess/run_command` → `powershell.exe(pid=34092)`, cwd `[비공개]`, exit0, timed_out=false, HTTP200, `WINDOWS_NOTIFICATION_REGISTERED`.
+3. **Control 경로:** `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.enqueue_notification/get_notification`, Control-only, Mac Worker 없음. 두 채널 큐 접수 및 목적지 등록 확인. 실패·재시도 없음. **실제 기기 화면 표시·사용자 열람 미검증**. 전체 Restore All E2E 미완료, 예약 유지.
+
+---
+
 # CURRENT — ChatGPT Window Title Helper macOS
 
 ## 139차 — 2026-11-02 01:21–01:33 KST
