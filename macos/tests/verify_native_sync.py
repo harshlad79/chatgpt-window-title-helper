@@ -738,3 +738,17 @@ assert 'chain=\\(roles.joined(separator:' in header_more
 assert 'scope=window buttons=' in new
 assert 'toolbars=\\(more.toolbars)' in new
 assert 'if role == "AXToolbar" { toolbars += 1 }' in header_more
+
+# Header More AXParent identity must remain bounded, read-only, and type-checked.
+# Parenthesized CF downcast avoids Swift's optional-return warning without
+# weakening the explicit CFTypeID guard or introducing any AX mutation.
+parent_identity = header_more.split('    func parent(_ element: AXUIElement)', 1)[1].split(
+    '    func groups(_ element: AXUIElement)', 1)[0]
+assert 'CFGetTypeID(raw) == AXUIElementGetTypeID()' in parent_identity
+assert 'return (raw as! AXUIElement)' in parent_identity
+assert 'AXUIElementSetAttributeValue' not in parent_identity
+assert 'AXUIElementPerformAction' not in parent_identity
+assert 'rightParentSame' in header_more
+assert 'rightSharedGroup' in header_more
+assert 'rightTitleSharedGroup' in header_more
+assert 'exactTitleButtons.count' in header_more
