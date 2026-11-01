@@ -47,3 +47,7 @@ GitHub 문서만 변경 예정, Swift 소스/테스트/서명 설치/ChatGPT 앱
 
 ## 6. 사용자 조치·알림
 외부 Probe로 추가 AX 진단을 원한다면 **macOS Accessibility에서 ChatGPTTitleProbe를 사용자 본인이 허용**해야 함. 강제/자동 권한 변경 없음. 이 회차는 Dev 거절 및 권한 차단으로 **Telegram 우선 + Windows 별도 독립 본문**을 Dev Control `enqueue_notification`으로 발송하고 `get_notification` 접수 영수증 확인 예정. 접수와 실제 기기 표시 분리. 예약 유지.
+
+### 후속 GitHub 검증 오류·복구 (05:24 KST)
+- `mcp__GitHub__fetch_commit` 최초 호출에서 실제 스키마가 요구하는 `repo_full_name,commit_sha` 대신 `repository_full_name,sha`를 전달해 **커넥터 인자 검증 단계에서 거절**. MCP/Worker 실행 영수증·request_id/mcp_path/exit_code 미발급. OpenAI 안전검사 차단 아님.
+- 정확한 스키마 `fetch_commit({repo_full_name:"harshlad79/chatgpt-window-title-helper",commit_sha:"55e56c129bf44e467a56a8a17d4e518ee642ef6e"})`로 수정해 재조회 성공. `get_pr_info(#3)`는 head `55e56c129bf44e467a56a8a17d4e518ee642ef6e`, Open/Draft→master 확인; `fetch_file(CURRENT.md,start_line=1,end_line=17)`는 143차 본문 반영 확인. 이 오류는 Mac Worker/TCC 차단과 무관하며 복구 완료.
