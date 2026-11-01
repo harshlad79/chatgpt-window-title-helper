@@ -12,7 +12,7 @@
 
 **다음:** 이미 ON인 TCC 토글을 반복 요구하지 말고, **설치 Helper(권한 작동)의 읽기 전용 진단 결과와 외부 Probe 실행 컨텍스트/코드 서명·TCC 판정 차이를 조사**. 필요하면 승인된 비파괴적 GUI 실행 경로를 검증하되 Dock 메뉴 열린 상태 별도 Probe 실행 금지, 권한 우회·코드 인젝션·141차 차단 배포 우회 금지. Search 팔레트가 가리지 않는 실제 Header에서 More/고유 URL/ID 확보 후 native 개별 복원, 전체 E2E. 사용자 즉시 조치 없음, 예약 유지.
 
-**알림:** TCC 판정 불일치라는 미해결 이상으로 Telegram 우선 → Windows 독립 한국어 본문을 Dev Control로 접수/조회할 예정. 결과는 후속 CURRENT 갱신에 기록. 실제 기기 표시와 큐 접수 구분.
+**알림 실제 결과:** TCC 판정 불일치 미해결 이상으로 **Telegram 우선 → Windows** 독립 한국어 본문(Windows 679자, 실제 LF, 리터럴 백슬래시+n 없음, 실제 대화 제목 미확인 명시). Telegram `enqueue_notification` request `212b305c-11c2-490c-808e-0687755f14f6`, notification `3549c0cc-5883-4570-99e0-b2282c7c546a`, outer/nested completed/queued 7ms; `get_notification` request `3c21b9f4-24e6-46c1-be6d-c734f1cb605c`, completed/registered 1ms, attempt1 accepted=true exit0 **message_id=232**. Windows `enqueue_notification` request `762c5b28-a088-4dae-9ea9-ff2d32f8a724`, notification `acfb0d2a-1c4c-4e56-b55f-e5e1bb1f5c0d`, completed/queued 4ms; `get_notification` request `d2aa3f19-852a-4cdc-ab3a-8213454cb088`, completed/registered 1ms, Windows NodeAgent `pythonw.exe(pid=11848)` → `python:subprocess/run_command` → `powershell.exe(pid=38792)`, exit0/HTTP200 `WINDOWS_NOTIFICATION_REGISTERED`. Control-only `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.enqueue_notification/get_notification`. 각 알림 호출의 direct Experience events `116b75ad-49a5-480a-9115-37cf24b5adb7`, `3df5700e-36d5-4f86-8ac4-5bb8e9017090`, `3de513bf-6fd7-4565-8e1d-f3450a6aa2eb`, `0fb5b60a-ea6c-4bd4-8d1a-dacbc19b651c` 저장·list 재조회 found=true. **두 채널 접수/등록 성공, 실제 기기 화면 표시·사용자 열람 미검증**. 알림 실패·재시도 없음.
 
 ---
 
