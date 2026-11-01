@@ -1,3 +1,21 @@
+## 144차 — 2026-11-02 06:23–06:25 KST
+
+**상태:** 143차의 'TCC 미승인' 표현을 **실제 상태에 맞게 정정**. 별도 05:58 read-only Mac 화면/Experience `cb7678c5-359e-44dd-98a2-c2de977837a9`에서 **ChatGPTTitleProbe 및 ChatGPTTitleOverlay의 손쉬운 사용 스위치가 이미 ON**임을 확인. 그러나 143차 기존 signed Probe의 `AXIsProcessTrusted=false`와 `AXWindows=-25211`은 실제 측정값으로 유지. **스위치 ON ≠ 해당 실행 컨텍스트에서 신뢰 판정 성공**. 사용자에게 스위치를 다시 켜라는 안내는 부정확. 현재 원인(실행 컨텍스트/서명·책임 프로세스/기존 TCC 레코드 불일치 등)은 **가설**, 미확정. 전체 Restore All E2E 미완료.
+
+**이번 조사:** Dev Control `execute` → `macos-main` `python:subprocess/run_command` → `/bin/bash -lc` **읽기 전용 3회**, 모두 outer/nested completed, Worker exit0, timeout 없음. `079a031f`(632ms, bash PID53215): 설치 Probe `local.chatgpt.titleprobe`, Overlay `local.chatgpt.titleoverlay` 각각 `codesign --verify --deep --strict` PASS, 동일 TheCompany certificate leaf, TeamIdentifier 없음, 서로 다른 앱 식별자; ChatGPT PID10411/Helper PID77666 관찰. `ae26587c`(386ms, PID53450): Probe 실행파일 mtime 2026-10-17 04:29:57, Overlay 2026-11-02 02:32:21; Probe의 05:21 로그 `trusted=false; blocked=accessibility-not-trusted` 재확인. `34e9045c`(302ms, PID53582): **설치 Helper 실시간 로그가 2초마다 `refresh-success knownWindows=1 nativeEnabled=true`** 기록. 따라서 모든 AX 경로가 죽은 것은 아님. Helper의 실제 활성 AX 경로와 외부 Probe 거절을 분리해야 함. 세션 JSON SHA256 `f4fe834b324534ca80e6139ab43a52bccc3bf968babd998c9f19e9580726d104`, mode0600 불변. 공통 실행 경로 `control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.execute -> macos-main/thecompany-node-agent:python(pid=5070) -> python:subprocess/run_command -> bash(pid=53215/53450/53582)`; 각 요청 원문/인자는 Control receipt, 비밀 경로는 보고에서 비공개. **이번 회차 OpenAI 사전 안전 차단 0, Dev Control 거절 0, Worker 실패 0**. 도구로 앱·Dock·창·TCC·Helper를 조작하지 않음.
+
+**Experience:** 최초 성공·실패 사전조회 `thecompany_list_experience(types=[tool_boundary],order=desc,limit=100)`에서 143차 `f4cfce90...` 및 05:58 `cb7678c5...` 확인. 각 Mac 시도별 direct `thecompany_record_experience(type=tool_boundary)` event `44e3db49-2d08-4303-b58d-92a2cb3a5422`, `e4610a37-0c7b-4184-b001-fe18f17ac747`, `aa6fbb48-16c9-4637-81cd-4e0b66641d96`; 각각 outer/nested completed/captured, `list_experience(scope=project:chatgpt-window-title-helper)` 재조회 found=true. 조회·기록은 Control-only.
+
+**GitHub:** canonical `harshlad79/chatgpt-window-title-helper` branch `feat/macos-adaptive-title-helper`, 시작 HEAD `1fcb9806a97e31b35c3ea263d3ff5629bedaadf2`, PR #3 **Open/Draft → master**, 미병합. 필수 `CURRENT.md`, `NORMAL_QUIT_RELAUNCH_OVERLAY_RECOVERY.md`, `DOCK_LAST_SESSION_BULK_RESTORE.md` 원문 재조회. 원격 브랜치 6개 cursor 종료; master 대비 기능 미병합 1개(`feat/macos-adaptive-title-helper` ahead538/behind1), PR 없는 신규 미병합 0개. `feat/approved-app-icon-20261016` ahead1/behind1은 merged PR #4 squash 잔여; 다른 기능 브랜치 2개 ahead0, `dev` 장기 기반. **이번 회차 Swift/Windows/NativeTitleSync 변경·테스트·빌드·설치 없음**, 신규 커밋은 본 CURRENT 문서만. 설치 Helper는 140차 검증 소스 `19f61f3`, 141/142차 신규 AXParent 진단 미배포. Draft PR #3 병합 금지 준수.
+
+**영향/롤백:** ChatGPT 원본·열린 대화·검색 팔레트·Dock·세션·TCC 설정·Helper 실행 상태 무변경. 새 설치 없으므로 롤백 불필요, 140차 백업 유지. 실시간 AX Header More·대화 URL/ID·정확한 새 창 복원·전체 E2E **미검증**.
+
+**다음:** 이미 ON인 TCC 토글을 반복 요구하지 말고, **설치 Helper(권한 작동)의 읽기 전용 진단 결과와 외부 Probe 실행 컨텍스트/코드 서명·TCC 판정 차이를 조사**. 필요하면 승인된 비파괴적 GUI 실행 경로를 검증하되 Dock 메뉴 열린 상태 별도 Probe 실행 금지, 권한 우회·코드 인젝션·141차 차단 배포 우회 금지. Search 팔레트가 가리지 않는 실제 Header에서 More/고유 URL/ID 확보 후 native 개별 복원, 전체 E2E. 사용자 즉시 조치 없음, 예약 유지.
+
+**알림:** TCC 판정 불일치라는 미해결 이상으로 Telegram 우선 → Windows 독립 한국어 본문을 Dev Control로 접수/조회할 예정. 결과는 후속 CURRENT 갱신에 기록. 실제 기기 표시와 큐 접수 구분.
+
+---
+
 ## 143차 — 2026-11-02 05:20–05:24 KST
 
 **상태:** 외부 AX 직접 Swift 및 기존 서명 Probe의 **Accessibility TCC 미승인 실측**. Mac 화면에서 ChatGPT **검색/명령 팔레트가 Header 일부를 가린 상태** 확인(이전 More 미발견의 가능 혼란 변수; 과거 상태·인과는 미확정). **전체 Restore All E2E 미완료.** 상세 실행·도구 인자·실패·대안·롤백: [macos/HEADER_MORE_EXTERNAL_AX_TCC_SCREEN_20261102.md](../../macos/HEADER_MORE_EXTERNAL_AX_TCC_SCREEN_20261102.md).
