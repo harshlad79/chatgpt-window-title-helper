@@ -548,6 +548,8 @@ private func boundedHeaderMoreCensus(
       topMenuIdentifiers: Int, topPressActions: Int,
       topShowMenuActions: Int, topOtherActions: Int,
       topLeft: Int, topMiddle: Int, topRight: Int,
+      rightShowMenu: Int, rightMenuRoles: Int, rightEmptyLabels: Int,
+      rightPress: Int, rightEnabled: Int, rightOtherActions: Int,
       visited: Int, limited: Bool) {
     let start = ProcessInfo.processInfo.systemUptime
     let rootTop = axPoint(root)?.y
@@ -586,6 +588,12 @@ private func boundedHeaderMoreCensus(
     var topLeft = 0
     var topMiddle = 0
     var topRight = 0
+    var rightShowMenu = 0
+    var rightMenuRoles = 0
+    var rightEmptyLabels = 0
+    var rightPress = 0
+    var rightEnabled = 0
+    var rightOtherActions = 0
     let accepted: Set<String> = [
         "more", "more options", "더 보기", "더보기", "추가 옵션"
     ]
@@ -644,17 +652,19 @@ private func boundedHeaderMoreCensus(
                     topMenuIdentifiers += 1
                 }
                 var actionArray: CFArray?
+                var hasPress = false
+                var hasShowMenu = false
+                var hasOtherAction = false
                 if AXUIElementCopyActionNames(element, &actionArray) == .success {
                     let names = (actionArray as? [String]) ?? []
-                    if names.contains(kAXPressAction as String) {
-                        topPressActions += 1
-                    }
-                    if names.contains("AXShowMenu") {
-                        topShowMenuActions += 1
-                    }
-                    if names.contains(where: {
+                    hasPress = names.contains(kAXPressAction as String)
+                    hasShowMenu = names.contains("AXShowMenu")
+                    hasOtherAction = names.contains(where: {
                         $0 != (kAXPressAction as String) && $0 != "AXShowMenu"
-                    }) { topOtherActions += 1 }
+                    })
+                    if hasPress { topPressActions += 1 }
+                    if hasShowMenu { topShowMenuActions += 1 }
+                    if hasOtherAction { topOtherActions += 1 }
                 }
                 if let left = rootLeft, let width = rootWidth, width > 0,
                    let point = axPoint(element), point.x >= left - 10,
@@ -662,7 +672,19 @@ private func boundedHeaderMoreCensus(
                     let fraction = (point.x - left) / width
                     if fraction < 1.0 / 3.0 { topLeft += 1 }
                     else if fraction < 2.0 / 3.0 { topMiddle += 1 }
-                    else { topRight += 1 }
+                    else {
+                        topRight += 1
+                        if hasShowMenu { rightShowMenu += 1 }
+                        if hasPress { rightPress += 1 }
+                        if hasOtherAction { rightOtherActions += 1 }
+                        if role == "AXMenuButton" || role == "AXPopUpButton" {
+                            rightMenuRoles += 1
+                        }
+                        if labels.allSatisfy({ $0.isEmpty }) { rightEmptyLabels += 1 }
+                        if axBool(element, kAXEnabledAttribute) == true {
+                            rightEnabled += 1
+                        }
+                    }
                 }
             }
             if labels.contains(where: { accepted.contains($0) }) {
@@ -723,6 +745,8 @@ private func boundedHeaderMoreCensus(
             topMenuIdentifiers, topPressActions,
             topShowMenuActions, topOtherActions,
             topLeft, topMiddle, topRight,
+            rightShowMenu, rightMenuRoles, rightEmptyLabels,
+            rightPress, rightEnabled, rightOtherActions,
             seen.count, index < queue.count)
 }
 
@@ -3519,6 +3543,12 @@ final class OverlayController:
                             "topOtherActions=\(more.topOtherActions) " +
                             "topLeft=\(more.topLeft) topMiddle=\(more.topMiddle) " +
                             "topRight=\(more.topRight) " +
+                            "rightShowMenu=\(more.rightShowMenu) " +
+                            "rightMenuRoles=\(more.rightMenuRoles) " +
+                            "rightEmptyLabels=\(more.rightEmptyLabels) " +
+                            "rightPress=\(more.rightPress) " +
+                            "rightEnabled=\(more.rightEnabled) " +
+                            "rightOtherActions=\(more.rightOtherActions) " +
                             "visited=\(more.visited) limited=\(more.limited)")
                     }
                     shareCandidates += controls.share
