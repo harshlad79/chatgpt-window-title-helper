@@ -1932,10 +1932,13 @@ final class OverlayController:
                 }
             }
         }
-        // Explicit opt-in only: one reversible synthetic Search query on the
-        // unique generic window. No navigation, message send or result press.
-        if ProcessInfo.processInfo.environment[
-            "TITLEHELPER_SAFE_UNIQUE_GENERIC_QUERY_ROUNDTRIP"] == "1" &&
+        // Opt-in reversible Search on the isolated generic window only.
+        // Named-title variant never logs the owner's title or search text.
+        let syntheticQueryProbe = ProcessInfo.processInfo.environment[
+            "TITLEHELPER_SAFE_UNIQUE_GENERIC_QUERY_ROUNDTRIP"] == "1"
+        let namedQueryProbe = ProcessInfo.processInfo.environment[
+            "TITLEHELPER_SAFE_UNIQUE_GENERIC_NAMED_QUERY"] == "1"
+        if syntheticQueryProbe != namedQueryProbe &&
            ProcessInfo.processInfo.environment[
             "TITLEHELPER_SAFE_UNIQUE_GENERIC_RESULT_METADATA"] != "1" &&
            ProcessInfo.processInfo.environment[
@@ -1944,8 +1947,8 @@ final class OverlayController:
             "TITLEHELPER_SAFE_UNIQUE_GENERIC_SEARCH_PRESS"] != "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
                 guard let self else { return }
-                self.recentRestorer.probeUniqueGenericSearchQueryRoundtrip {
-                    success, detail in
+                self.recentRestorer.probeUniqueGenericSearchQueryRoundtrip(
+                    useNamedTitle: namedQueryProbe) { success, detail in
                     TitleHelperDiagnostics.shared.record(
                         "unique-generic-query-roundtrip success=\(success) \(detail)")
                 }
