@@ -174,9 +174,20 @@ struct ReversibleGenericSearchQueryPolicy {
     }
     static func canRestore(targetID: String, actualID: String,
                            before: [String: Bool], after: [String: Bool],
-                           currentValue: String?) -> Bool {
+                           currentValue: String?, expectedQuery: String = probe) -> Bool {
         targetID == actualID && before == after &&
-            currentValue == probe
+            currentValue == expectedQuery
+    }
+}
+
+// A real-title Search probe may use only one currently open named conversation.
+// This never establishes a durable conversation ID or opens a search result.
+struct NamedConversationSearchQueryPolicy {
+    static func candidate(_ titles: [String]) -> String? {
+        guard titles.count == 1 else { return nil }
+        let trimmed = titles[0].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 3 && trimmed != "ChatGPT" else { return nil }
+        return String(trimmed.prefix(72))
     }
 }
 
