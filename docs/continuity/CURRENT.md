@@ -3417,3 +3417,9 @@ Mac 런타임은 **TheCompany-core-dev `thecompany_call_tool(operation=invoke)` 
 
 **6. 사용자 조치·알림:** 사용자 추가 조치 없음. Dev Rulebook 거절 1건이므로 정책상 **Telegram 우선, Windows 별도** 독립 본문을 Dev `enqueue_notification`으로 발송하고 `get_notification`으로 각각 접수 확인 예정. 정상 영수증은 후속 기록. Windows 1000자 이내, LF 실제 개행, 개인 대화 원문 없음. 실제 화면 표시 성공은 별도 미검증. 예약 유지.
 
+
+
+**135차 알림 접수 후속 — 2026-11-01 21:35 KST:** Dev Rulebook project mismatch(후속 승인된 실행 성공) 이력 때문에 **Telegram 우선 → Windows 별도** 채널별 독립 본문 생성. 공통 1~6항, 실제 LF, 비밀/대화 원문 없음. 제목 `[ChatGPT Window Title Helper] · [macos-main]`, 첫 body 줄 `[실제 대화 제목 미확인] ChatGPT Window Title Helper macOS — 마지막 창 모두 복원`. Windows body **624자**(<1000), Telegram 상세 별도 작성.
+1. Telegram Dev Control-only `enqueue_notification` request `3e3b23df-9396-47b4-bd0f-dabc90cdc638`, notification `5b11d447-bd63-4ce5-ae4b-72e1e9a9c61f`, destination `telegram`, outer/nested completed/queued elapsed3ms. `get_notification` request `7f2b4bab-0941-422f-8d18-ed9390472729`, outer/nested completed elapsed1ms, **registered attempt1 accepted=true exit0 message_id212**; provider PID 미제공.
+2. Windows Dev Control-only `enqueue_notification` request `856bf092-e7bb-4df1-b50b-5665ea6ef336`, notification `e859b1b1-a3e9-4b05-8e94-fd4be74951ce`, destination `windows-main`, outer/nested completed/queued elapsed3ms. `get_notification` request `d3eb5788-70f3-4669-9850-e089d5d52463`, outer/nested completed elapsed1ms, **registered attempt1**, Windows NodeAgent `pythonw.exe(pid=11848)`→`python:subprocess/run_command`→`powershell.exe(pid=35864)`, cwd `D:\\_Project\\thecompany-core`, exit0/timed_out=false/HTTP200, `WINDOWS_NOTIFICATION_REGISTERED`.
+3. 공통 실제 `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.enqueue_notification/get_notification`, `mcp_trace` Control PID850940, Control-only. **두 채널 접수/등록 성공, 발송 실패·재시도 없음. 실제 기기 화면 표시/열람은 미검증**. 본 후속은 문서 커밋만; 설치 source `d66813c9`, Restore All E2E 미완료, 예약 유지.
