@@ -1,3 +1,21 @@
+## 142차 — 2026-11-02 04:21–04:28 KST
+
+**상태:** AXParent optional-return Swift 경고 수정·정적 테스트 계약 강화. **Mac 격리 411 assertions PASS, ARM64 optimized BUILT, 신규 Helper 설치·AX 실측 미수행. Restore All E2E 미완료.** 상세 실행·오류·롤백·도구 영수증: [macos/HEADER_MORE_PARENT_CAST_VALIDATION_20261102.md](../../macos/HEADER_MORE_PARENT_CAST_VALIDATION_20261102.md).
+
+**GitHub:** canonical `harshlad79/chatgpt-window-title-helper`, branch `feat/macos-adaptive-title-helper`; 필수 3문서·공통 Rulebook 원문 조회. 코드 커밋 **`272951949bbdb4bae78a85130a3ebca16e935f16`**(`return raw as! AXUIElement` → `return (raw as! AXUIElement)`), 테스트 계약 커밋·**실제 검증 소스 `346d8c05ca040ddb333b07831ae0ebe3e2dc7117`**, 상세 원장 커밋 `f198f1ad3a2a35ba302c6c0838f94cca999adafc`. PR #3 **Open/Draft → master**, 미병합. 원격 6개 브랜치 전수+cursor 종료, master 비교: 활성 미병합 작업 브랜치 **1개**(feat/macos-adaptive-title-helper ahead532/behind1), PR 없는 신규 미병합 0개; app-icon ahead1/behind1은 이미 merged PR #4 squash 잔여, 2개 다른 기능 브랜치는 ahead0, dev는 장기 기반.
+
+**실제 Mac 테스트:** Dev Control → `macos-main` → `python:subprocess/run_command`로 격리 detached checkout `346d8c05`에서 `macos/tests/run.sh` 실행. NativeTitleSync byte identity PASS, scheduler14/history59/native115/async177/menu46 = **411 PASS**, `LIVE_AX_MENU_URL=NOT_TESTED`, ARM64 최적화 **BUILT**, `test-142.exit=0`. 이번 AXParent forced-cast optional warning **0건**; 기존 macOS activation deprecation warning 8건. 설치·실행 없음. 읽기 전용 Mac 최종: ChatGPT PID10411, Helper PID77666(140차 설치본), CG layer0 창 **2개**(15360/16252), session SHA256 `f4fe834b324534ca80e6139ab43a52bccc3bf968babd998c9f19e9580726d104`/mode0600 불변. 화면 캡처는 Terminal 전면이어서 ChatGPT Header 증거 아님. 기존 창 조작·종료 없음. 격리 worktree 추적 diff 없음(테스트 exit 영수증 untracked).
+
+**오류·복구 구분:** Dev `rulebook_request(project=chatgpt-window-title-helper)` request `3a0390e3` **Control-only rejected: rulebook_project_mismatch**, Worker 미실행. Mac read-only `python3 -c` 무제한 recursive glob request `41478a63` **Worker execution_timeout/exit-9/18.131s** → bounded `os.listdir` request `84b1db32` exit0. Swift 원형 `as!` optional 경고 request `9221b58b`, 잘못된 `as?` 시도 request `37e9e136` 컴파일 exit1 → 괄호 `as!` request `c9707a52` exit0/경고0. 테스트 진행 중 없는 `test-142.exit` 파일을 `ls`한 진단 Worker request `7221acd3` exit1; 실제 테스트는 계속되어 최종 exit0. **이번 회차 OpenAI 사전 안전검사 차단 0건**. 141차 차단된 Helper 종료·서명 설치·재시작 **재전송/우회 없음**. Experience `0172e1a8-8630-46ec-9371-15b3e118ced5` direct Dev `type=tool_boundary` 저장·list 재조회 found=true. 각 호출의 프로그램/argv/timeout/request_id/PID/elapsed/mcp_path는 상세 원장 참조.
+
+**최종 영향·롤백:** GitHub 코드·테스트만 변경, 기존 설치 Helper 140차 소스 `19f61f3` 유지. Windows 소스/NativeTitleSync/ChatGPT 원본·대화창·세션 불변. 신규 배포 없음, 설치 롤백 불필요, 기존 백업 유지. Draft PR #3 미병합.
+
+**미완료·다음:** 신규 AXParent 동일성/제목 공통 조상 실제 측정, 정확한 Header More, 대화 URL/ID, 개별 native 창 복원, 전체 Restore All E2E **미검증**. 다음에는 허용된 Dev 읽기 전용 외부 AX 경로를 연구하되 141차 안전 차단된 배포를 우회·재시도하지 않음. 실제 More 식별 전 클릭 금지. **예약 유지**.
+
+**알림:** Dev 거절/Worker timeout 오류 회차. **Telegram 우선 → Windows 독립 본문**(각 실제 LF, 제목/본문 분리). Telegram 2199자: Dev Control-only `enqueue_notification` request `c8161428`, notification `53ee710a-d227-47f5-a6f6-be53a18d9e63`, completed/queued elapsed3ms; `get_notification` request `3cdc566e`, completed/registered elapsed1ms, attempt1 accepted=true exit0 **message_id=227**. Windows 861자(<1000): `enqueue_notification` request `b94c061f`, notification `5fb0a66e-4250-4eac-a6ae-03a0085ef4ef`, completed/queued elapsed3ms; `get_notification` request `1fcb3a75`, completed/registered elapsed1ms, attempt1, NodeAgent `pythonw.exe(pid=11848)` → `python:subprocess/run_command` → `powershell.exe(pid=3600)`, exit0/HTTP200 `WINDOWS_NOTIFICATION_REGISTERED`. Control-only `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.enqueue_notification/get_notification`. **양 채널 큐 접수·대상 등록 성공, 실제 기기 표시·열람 미검증**, 알림 오류·재시도 없음. 사용자 조치 없음.
+
+---
+
 ## 141차 — 2026-11-02 03:28–03:34 KST
 
 **상태:** AX 후보의 실제 AXParent 동일성·최대 8단계 AXGroup 공유·대화 제목 AXButton과의 공통 조상 여부를 **읽기 전용 Bool/개수**로 확인하는 Swift 진단을 GitHub에 추가. **Mac 격리 테스트 411 assertions PASS, ARM64 최적화 BUILT, 신규 Helper 설치·AX 실측 미수행. Restore All E2E 미완료.** 상세 실행 원장: [macos/HEADER_MORE_PARENT_IDENTITY_20261102.md](../../macos/HEADER_MORE_PARENT_IDENTITY_20261102.md).
