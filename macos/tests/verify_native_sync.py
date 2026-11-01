@@ -731,7 +731,10 @@ for required in [
     assert required in new, required
 
 # Full native AXWindow census, not the nested AXWebArea-only scope.
-assert 'let more = boundedHeaderMoreCensus(window)' in new
+assert 'let more = boundedHeaderMoreCensus(window, conversationTitle: title)' in new
+assert 'titlePeer=\\(peerTitleMatch)' in header_more
+assert 'siblings=\\(siblings.count)' in header_more
+assert 'chain=\\(roles.joined(separator:' in header_more
 assert 'scope=window buttons=' in new
 assert 'toolbars=\\(more.toolbars)' in new
 assert 'if role == "AXToolbar" { toolbars += 1 }' in header_more
