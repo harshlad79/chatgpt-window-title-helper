@@ -535,7 +535,8 @@ private func boundedShareControlCensus(
 private func boundedHeaderMoreCensus(
     _ root: AXUIElement
 ) -> (matched: Int, enabled: Int, pressable: Int,
-      topBand: Int, toolbarAncestor: Int, visited: Int, limited: Bool) {
+      topBand: Int, toolbarAncestor: Int, buttons: Int, toolbars: Int,
+      visited: Int, limited: Bool) {
     let start = ProcessInfo.processInfo.systemUptime
     let rootTop = axPoint(root)?.y
     let rootHeight = axSize(root)?.height
@@ -547,6 +548,8 @@ private func boundedHeaderMoreCensus(
     var pressable = 0
     var topBand = 0
     var toolbarAncestor = 0
+    var buttons = 0
+    var toolbars = 0
     let accepted: Set<String> = [
         "more", "more options", "더 보기", "더보기", "추가 옵션"
     ]
@@ -557,8 +560,10 @@ private func boundedHeaderMoreCensus(
         guard seen.insert(String(CFHash(element))).inserted else { continue }
         _ = AXUIElementSetMessagingTimeout(element, 0.12)
         let role = axString(element, kAXRoleAttribute)
+        if role == "AXToolbar" { toolbars += 1 }
         if role == "AXButton" || role == "AXMenuButton" ||
            role == "AXPopUpButton" {
+            buttons += 1
             let labels = [
                 axString(element, kAXTitleAttribute),
                 axString(element, kAXDescriptionAttribute),
@@ -596,7 +601,7 @@ private func boundedHeaderMoreCensus(
         queue.append(contentsOf: axChildren(element))
     }
     return (matched, enabledCount, pressable, topBand,
-            toolbarAncestor, seen.count, index < queue.count)
+            toolbarAncestor, buttons, toolbars, seen.count, index < queue.count)
 }
 
 // Read-only observation can safely subscribe to multiple title buttons.
@@ -3370,11 +3375,12 @@ final class OverlayController:
                     let controls = boundedShareControlCensus(area)
                     if ProcessInfo.processInfo.environment[
                         "TITLEHELPER_SAFE_HEADER_MORE_CENSUS"] == "1" {
-                        let more = boundedHeaderMoreCensus(area)
+                        let more = boundedHeaderMoreCensus(window)
                         TitleHelperDiagnostics.shared.record(
                             "ax-header-more matched=\(more.matched) " +
                             "enabled=\(more.enabled) pressable=\(more.pressable) " +
                             "topBand=\(more.topBand) toolbarAncestor=\(more.toolbarAncestor) " +
+                            "scope=window buttons=\(more.buttons) toolbars=\(more.toolbars) " +
                             "visited=\(more.visited) limited=\(more.limited)")
                     }
                     shareCandidates += controls.share
