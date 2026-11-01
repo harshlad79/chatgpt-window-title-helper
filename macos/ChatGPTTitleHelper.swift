@@ -536,7 +536,7 @@ private func boundedShareControlCensus(
 // Count button metadata sources and alternative child routes; never emit labels,
 // titles, URLs, element hashes, or touch the user's ChatGPT window.
 private func boundedHeaderMoreCensus(
-    _ root: AXUIElement
+    _ root: AXUIElement, conversationTitle: String
 ) -> (matched: Int, enabled: Int, pressable: Int,
       topBand: Int, toolbarAncestor: Int, buttons: Int, toolbars: Int,
       positionKnown: Int, topButtons: Int, titlePresent: Int,
@@ -692,19 +692,44 @@ private func boundedHeaderMoreCensus(
                             (yFraction < 0.2 ? "next10" : "last5")
                         let labelKind = labels[0].isEmpty ? "noTitle" : "title"
                         let descriptionKind = labels[1].isEmpty ? "noDesc" : "desc"
-                        let parentRole: String = {
+                        // Read-only, bounded parent/sibling census. Only counts and
+                        // exact-title equality; never persist any title or element hash.
+                        let parentContext: String = {
                             guard let raw = axGet(element, kAXParentAttribute),
                                   CFGetTypeID(raw) == AXUIElementGetTypeID() else {
                                 return "missing"
                             }
                             let parent = raw as! AXUIElement
-                            let role = axString(parent, kAXRoleAttribute)
-                            return ["AXGroup", "AXWebArea", "AXToolbar", "AXWindow",
-                                    "AXScrollArea"].contains(role) ? role : "other"
+                            let siblings = Array(axChildren(parent).prefix(60))
+                            let siblingButtons = siblings.filter {
+                                ["AXButton", "AXMenuButton", "AXPopUpButton"]
+                                    .contains(axString($0, kAXRoleAttribute))
+                            }.count
+                            let peerTitleMatch = !conversationTitle.isEmpty &&
+                                siblings.contains {
+                                    axString($0, kAXTitleAttribute)
+                                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                                        == conversationTitle
+                                }
+                            var roles: [String] = []
+                            var cursor = parent
+                            for _ in 0..<4 {
+                                let role = axString(cursor, kAXRoleAttribute)
+                                roles.append(["AXGroup", "AXWebArea", "AXToolbar",
+                                              "AXWindow", "AXScrollArea"]
+                                    .contains(role) ? role : "other")
+                                guard let next = axGet(cursor, kAXParentAttribute),
+                                      CFGetTypeID(next) == AXUIElementGetTypeID() else {
+                                    break
+                                }
+                                cursor = next as! AXUIElement
+                            }
+                            return "siblings=\(siblings.count),buttons=\(siblingButtons)," +
+                                "titlePeer=\(peerTitleMatch),chain=\(roles.joined(separator: ">"))"
                         }()
                         let detail = "x=\(xBand),y=\(yBand),enabled=\(isEnabled)," +
                             "\(labelKind),\(descriptionKind)," +
-                            "showMenu=\(hasShowMenu),press=\(hasPress),parent=\(parentRole)"
+                            "showMenu=\(hasShowMenu),press=\(hasPress),\(parentContext)"
                         rightDetails.append((x: Double(point.x), detail: detail))
                     }
                 }
@@ -3546,7 +3571,7 @@ final class OverlayController:
                     let controls = boundedShareControlCensus(area)
                     if ProcessInfo.processInfo.environment[
                         "TITLEHELPER_SAFE_HEADER_MORE_CENSUS"] == "1" {
-                        let more = boundedHeaderMoreCensus(window)
+                        let more = boundedHeaderMoreCensus(window, conversationTitle: title)
                         TitleHelperDiagnostics.shared.record(
                             "ax-header-more matched=\(more.matched) " +
                             "enabled=\(more.enabled) pressable=\(more.pressable) " +
