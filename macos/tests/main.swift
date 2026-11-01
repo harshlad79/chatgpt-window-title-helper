@@ -615,4 +615,25 @@ expect(WindowRestoreVerificationPolicy.decide(
     elapsed: 16.1, expectedCount: 3, actualCount: 4,
     newWindowTitleMatched: true, originalsRetained: true) == .failure,
     "unexpected extra windows do not silently pass")
+// Named-title Search is opt-in and must reject ambiguous/generic names.
+expect(NamedConversationSearchQueryPolicy.candidate([]) == nil,
+       "named Search requires one title")
+expect(NamedConversationSearchQueryPolicy.candidate(["one", "two"]) == nil,
+       "named Search rejects ambiguous names")
+expect(NamedConversationSearchQueryPolicy.candidate(["ChatGPT"]) == nil,
+       "named Search rejects generic title")
+expect(NamedConversationSearchQueryPolicy.candidate([" x "]) == nil,
+       "named Search rejects too-short title")
+expect(NamedConversationSearchQueryPolicy.candidate(["  actual title  "]) == "actual title",
+       "named Search trims input")
+expect(NamedConversationSearchQueryPolicy.candidate([String(repeating: "x", count: 100)])?.count == 72,
+       "named Search bounds input length")
+expect(ReversibleGenericSearchQueryPolicy.canRestore(
+    targetID: "a", actualID: "a", before: ["a": false],
+    after: ["a": false], currentValue: "private query",
+    expectedQuery: "private query"), "named Search restores exact input")
+expect(!ReversibleGenericSearchQueryPolicy.canRestore(
+    targetID: "a", actualID: "a", before: ["a": false],
+    after: ["a": false], currentValue: "owner edited",
+    expectedQuery: "private query"), "named Search refuses user-edited input")
 print("PASS asynchronous restore verification policy \(passes) assertions")
