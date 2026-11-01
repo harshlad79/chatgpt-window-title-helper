@@ -796,7 +796,7 @@ private func boundedHeaderMoreCensus(
     func parent(_ element: AXUIElement) -> AXUIElement? {
         guard let raw = axGet(element, kAXParentAttribute),
               CFGetTypeID(raw) == AXUIElementGetTypeID() else { return nil }
-        return raw as! AXUIElement
+        return (raw as! AXUIElement)
     }
     func groups(_ element: AXUIElement) -> [AXUIElement] {
         var result: [AXUIElement] = []
