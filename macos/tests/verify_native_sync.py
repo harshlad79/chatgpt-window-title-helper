@@ -597,12 +597,24 @@ ancestry_scan = named_probe.split('        func metadata()', 1)[1].split(
 for required in [
     'pressableAncestors', 'matchedPressableGroups.formUnion',
     'exactTextsUnderPressable', 'exactTextsOutsidePressable',
-    'matchedPressableGroups.count', 'AXUIElementCopyActionNames'
+    'matchedPressableGroups.count', 'AXUIElementCopyActionNames',
+    'innermostMatchedGroups.insert', 'outermostMatchedGroups.insert',
+    'matchedListOwners.insert', 'maximumPressableDepth',
+    'AXUIElementCopyAttributeNames',
+    'matchedPressableGroups.intersection(menuActionGroups)',
+    'matchedPressableGroups.intersection(domKeyGroups)',
+    'matchedPressableGroups.intersection(identifierKeyGroups)',
+    'matchedPressableGroups.intersection(urlKeyGroups)'
 ]:
     assert required in ancestry_scan, required
 for required in [
     'duringExactTextsUnderPressable=', 'duringDistinctPressableMatches=',
-    'duringExactTextsOutsidePressable='
+    'duringExactTextsOutsidePressable=',
+    'duringInnermostMatchedGroups=', 'duringOutermostMatchedGroups=',
+    'duringExactTextsInLists=', 'duringMatchedListOwners=',
+    'duringMaxPressableDepth=', 'duringMatchedMenuGroups=',
+    'duringMatchedDOMKeyGroups=', 'duringMatchedIdentifierKeyGroups=',
+    'duringMatchedURLKeyGroups='
 ]:
     assert required in named_probe, required
 for forbidden in [
