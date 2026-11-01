@@ -636,6 +636,8 @@ for required in [
     'parentRole: role', 'siblingCount: next.count',
     'innermostMatchedGroups.compactMap',
     'leafParentAXGroup=', 'leafParentAXList=', 'leafParentOther=',
+    'safeParentRoleNames', 'leafParentRoleUnclassified=',
+    'leafParentRole', 'knownParentRoles',
     'leafSiblingTotal=', 'leafSiblingMax=',
     'leafChildTotal=', 'leafChildMax='
 ]:
