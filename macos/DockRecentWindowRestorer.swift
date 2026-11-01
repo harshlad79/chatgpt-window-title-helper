@@ -1109,6 +1109,21 @@ final class DockRecentWindowRestorer {
                 String(leafParentRoles.filter { $0 == "AXList" }.count))
             shapeParts.append("leafParentOther=" +
                 String(leafParentRoles.filter { $0 != "AXGroup" && $0 != "AXList" }.count))
+            // Fixed AXRole allowlist: count categories, never print arbitrary
+            // AX labels, user text, raw attributes, identifiers or URLs.
+            let safeParentRoleNames = [
+                "AXScrollArea", "AXListBox", "AXRow", "AXCell",
+                "AXButton", "AXStaticText", "AXUnknown",
+                "AXWebArea", "AXLayoutArea", "AXTable"
+            ]
+            for safeRole in safeParentRoleNames {
+                let label = String(safeRole.dropFirst(2))
+                shapeParts.append("leafParentRole" + label + "=" +
+                    String(leafParentRoles.filter { $0 == safeRole }.count))
+            }
+            let knownParentRoles = Set(safeParentRoleNames + ["AXGroup", "AXList"])
+            shapeParts.append("leafParentRoleUnclassified=" +
+                String(leafParentRoles.filter { !knownParentRoles.contains($0) }.count))
             shapeParts.append("leafSiblingTotal=" +
                 String(leafSiblingCounts.reduce(0, +)))
             shapeParts.append("leafSiblingMax=" +
