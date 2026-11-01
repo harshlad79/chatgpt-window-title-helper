@@ -1,3 +1,21 @@
+## 143차 — 2026-11-02 05:20–05:24 KST
+
+**상태:** 외부 AX 직접 Swift 및 기존 서명 Probe의 **Accessibility TCC 미승인 실측**. Mac 화면에서 ChatGPT **검색/명령 팔레트가 Header 일부를 가린 상태** 확인(이전 More 미발견의 가능 혼란 변수; 과거 상태·인과는 미확정). **전체 Restore All E2E 미완료.** 상세 실행·도구 인자·실패·대안·롤백: [macos/HEADER_MORE_EXTERNAL_AX_TCC_SCREEN_20261102.md](../../macos/HEADER_MORE_EXTERNAL_AX_TCC_SCREEN_20261102.md).
+
+**GitHub:** canonical `harshlad79/chatgpt-window-title-helper`, `feat/macos-adaptive-title-helper`. 시작 소스/테스트 HEAD **`a3211ec1c7dd08c0153818d6fe4bda9a89b49441`**, 이번 **문서 전용 상세 원장 커밋 `d7bac476fef65d179ecf79e78afcf613a02ebaf1`**, Swift 소스/테스트 변경·배포 없음. 필수 3문서 및 공통 Rulebook 원문 확인. PR #3 **Open/Draft → master**, 미병합. 원격 6개 브랜치 전수+cursor 종료; 활성 미병합 기능 브랜치 **1개**(`feat/macos-adaptive-title-helper`, master 대비 ahead534/behind1), PR 없는 신규 미병합 0개. `feat/approved-app-icon-20261016` ahead1/behind1은 이미 merged PR #4 squash 잔여, 나머지 두 기능 브랜치 ahead0, `dev` 장기 기반.
+
+**MacMini2 실측:** Dev Control → `macos-main` → `python:subprocess/run_command`. 직접 `/usr/bin/swift -e` `AXIsProcessTrusted=false`, ChatGPT AXWindows status **-25211**. 기존 `ChatGPTTitleProbe.app` 및 Helper `codesign --verify --deep --strict` PASS; 기존 Probe `inspect-window-title`도 `trusted=false; blocked=accessibility-not-trusted`(프로세스 exit0이지만 AX 접근 실패). 기존 Probe 로그 사전 백업. Dev 화면 캡처는 이번에는 **실제 ChatGPT UI**: 검색 팔레트 열림, Header 일부 가림. 별도 AX 부모 관계 실측·More 버튼·URL/ID·복원 **0건**. ChatGPT PID10411, Helper PID77666, CG layer0 창 **2개**(15360/16252), 전면 bundle `com.openai.codex`, session SHA256 `f4fe834b324534ca80e6139ab43a52bccc3bf968babd998c9f19e9580726d104`/mode0600 불변. 기존 앱·대화·팔레트·창 조작 없음.
+
+**오류·Experience:** Dev `rulebook_request(project=chatgpt-window-title-helper)` request `d0fdb216` **Control-only rejected: rulebook_project_mismatch**, Mac Worker 미실행. Dev `execute` Swift AX request `8569bc9c` PID78837 exit0/AX -25211; 서명 Probe request `12f4a9e0` PID79851 exit0/TCC untrusted. 도구 전 JS 문자열 구문 오류 1건은 MCP 호출 전에 수정 후 Swift CG request `ee4959d2` exit0. **OpenAI 사전 안전검사 차단 0건, Mac Worker exit 실패 0건, TCC 미승인 2경로**. direct Dev Experience `type=tool_boundary` event **`f4cfce90-cc2c-4905-ada6-02659cdfe872`** outer/nested completed/captured, `list_experience` request `319a4449` found=true. 각 정확한 argv/timeout/request_id/mcp_path/mcp_trace/PID/elapsed는 상세 원장 참조.
+
+**최종 영향·롤백:** 설치 Helper는 140차 소스 `19f61f3` 유지, 141/142차 신규 진단 미배포. Windows 소스/NativeTitleSync/원본 ChatGPT/창/세션 불변. 기존 140차 롤백 백업 유지, 신규 설치 없으므로 롤백 불필요. Draft PR #3 병합 없음.
+
+**미완료·다음:** 검색 팔레트가 없는 실제 대화 Header를 먼저 시각·AX 검증(사용자 UI 임의 조작 금지). 외부 AX는 사용자 승인된 **시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용 → ChatGPTTitleProbe 허용** 이후 재측정 가능; TCC 우회·코드 인젝션·141차 안전 차단된 Helper 재배포 우회 금지. 정확한 More → URL/ID → 개별 native 새 창 → 전체 Restore All E2E 순서. 예약 유지.
+
+**알림:** 권한 차단·Dev 거절·사용자 조치 필요로 **Telegram 우선 → Windows 독립 한국어 본문**, 실제 LF, 임시 제목/실제 대화 제목 미확인 표시. Telegram 1548자: `enqueue_notification` request `13c3af54`, notification `984f23f1-641d-48c7-b11e-bb63a2c691e8`, completed/queued 3ms; `get_notification` request `3d91542b`, completed/registered 1ms, accepted=true exit0 **message_id=229**. Windows 661자(<1000): enqueue request `a592bc73`, notification `ce624ebd-4822-47ca-83ea-874afd3762b1`, completed/queued 4ms; get request `f56dcc9c`, completed/registered 1ms, NodeAgent `pythonw.exe(pid=11848)` → `python:subprocess/run_command` → `powershell.exe(pid=11164)`, exit0/HTTP200 `WINDOWS_NOTIFICATION_REGISTERED`. Control-only `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.enqueue_notification/get_notification`. 두 채널 **접수·등록 확인, 실제 기기 화면 표시·열람 미검증**, 알림 오류·재시도 없음.
+
+---
+
 ## 142차 — 2026-11-02 04:21–04:28 KST
 
 **상태:** AXParent optional-return Swift 경고 수정·정적 테스트 계약 강화. **Mac 격리 411 assertions PASS, ARM64 optimized BUILT, 신규 Helper 설치·AX 실측 미수행. Restore All E2E 미완료.** 상세 실행·오류·롤백·도구 영수증: [macos/HEADER_MORE_PARENT_CAST_VALIDATION_20261102.md](../../macos/HEADER_MORE_PARENT_CAST_VALIDATION_20261102.md).
