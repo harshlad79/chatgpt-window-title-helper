@@ -659,7 +659,7 @@ for required in [
     'AXButton', 'AXMenuButton', 'AXPopUpButton', 'AXToolbar',
     'kAXPressAction', 'kAXParentAttribute', 'kAXEnabledAttribute',
     'index < 1200', 'start < 1.5', 'topBand',
-    'toolbarAncestor', 'matched', 'pressable'
+    'toolbarAncestor', 'matched', 'pressable', 'buttons', 'toolbars'
 ]:
     assert required in header_more, required
 for forbidden in [
@@ -668,3 +668,9 @@ for forbidden in [
     'NSLog(', 'print(', 'TitleHelperDiagnostics.shared.record'
 ]:
     assert forbidden not in header_more, forbidden
+
+# Full native AXWindow census, not the nested AXWebArea-only scope.
+assert 'let more = boundedHeaderMoreCensus(window)' in new
+assert 'scope=window buttons=' in new
+assert 'toolbars=\\(more.toolbars)' in new
+assert 'if role == "AXToolbar" { toolbars += 1 }' in header_more
