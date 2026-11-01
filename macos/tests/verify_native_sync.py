@@ -630,6 +630,17 @@ for required in [
 ]:
     assert required in ancestry_scan, required
 assert 'during.21 + " "' in named_probe
+# Leaf Search-result structure is counted without raw labels, text or clicks.
+for required in [
+    'pressableParentRoles', 'pressableSiblingCounts', 'pressableChildCounts',
+    'parentRole: role', 'siblingCount: next.count',
+    'innermostMatchedGroups.compactMap',
+    'leafParentAXGroup=', 'leafParentAXList=', 'leafParentOther=',
+    'leafSiblingTotal=', 'leafSiblingMax=',
+    'leafChildTotal=', 'leafChildMax='
+]:
+    assert required in ancestry_scan, required
+
 for forbidden in [
     'AXUIElementPerformAction', 'fileNewWindow(', 'dockRecentMatches(',
     'TitleHelperDiagnostics.shared.record', 'print('
