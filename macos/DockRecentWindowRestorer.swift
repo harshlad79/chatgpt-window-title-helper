@@ -892,13 +892,13 @@ final class DockRecentWindowRestorer {
         }
         // Only aggregate metadata counts are emitted. Never expose the query
         // results, user titles, AXValue, conversation IDs or URL strings.
-        func metadata() -> (Int, Int, Int, Bool, Int, Int, Int, Int, Int, Int, Int, Int) {
+        func metadata() -> (Int, Int, Int, Bool, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int) {
             let candidateRoles: Set<String> = [
                 "AXRow", "AXCell", "AXMenuItem", "AXButton", "AXGroup"
             ]
             let uuidPattern =
                 "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-            var pending: [(element: AXUIElement, pressableAncestors: [String])] = [(target, [])]
+            var pending: [(element: AXUIElement, pressableAncestors: [String], listAncestors: [String])] = [(target, [], [])]
             var visited: Set<String> = []
             var offset = 0
             var candidates = 0
@@ -914,6 +914,17 @@ final class DockRecentWindowRestorer {
             var matchedPressableGroups: Set<String> = []
             var exactTextsUnderPressable = 0
             var exactTextsOutsidePressable = 0
+            // Structure-only search-result diagnostics. The identifiers below
+            // are ephemeral AX element hashes, used solely for set cardinality.
+            var innermostMatchedGroups: Set<String> = []
+            var outermostMatchedGroups: Set<String> = []
+            var matchedListOwners: Set<String> = []
+            var exactTextsInLists = 0
+            var maximumPressableDepth = 0
+            var menuActionGroups: Set<String> = []
+            var domKeyGroups: Set<String> = []
+            var identifierKeyGroups: Set<String> = []
+            var urlKeyGroups: Set<String> = []
             let start = ProcessInfo.processInfo.systemUptime
             while offset < pending.count &&
                   ProcessInfo.processInfo.systemUptime - start < 5.0 {
@@ -931,20 +942,41 @@ final class DockRecentWindowRestorer {
                    let value = read(element, kAXValueAttribute) as? String,
                    value.trimmingCharacters(in: .whitespacesAndNewlines) == query {
                     exactQueryTexts += 1
+                    if let list = node.listAncestors.last {
+                        exactTextsInLists += 1
+                        matchedListOwners.insert(list)
+                    }
                     if node.pressableAncestors.isEmpty {
                         exactTextsOutsidePressable += 1
                     } else {
                         exactTextsUnderPressable += 1
                         matchedPressableGroups.formUnion(node.pressableAncestors)
+                        innermostMatchedGroups.insert(node.pressableAncestors.last!)
+                        outermostMatchedGroups.insert(node.pressableAncestors.first!)
+                        maximumPressableDepth = max(maximumPressableDepth,
+                                                     node.pressableAncestors.count)
                     }
                 }
                 var childPressableAncestors = node.pressableAncestors
                 if role == "AXGroup" {
                     var actions: CFArray?
                     if AXUIElementCopyActionNames(element, &actions) == .success,
-                       let names = actions as? [String], names.contains("AXPress") {
-                        pressableGroups += 1
-                        childPressableAncestors.append(String(CFHash(element)))
+                       let names = actions as? [String] {
+                        let elementKey = String(CFHash(element))
+                        if names.contains("AXShowMenu") {
+                            menuActionGroups.insert(elementKey)
+                        }
+                        if names.contains("AXPress") {
+                            pressableGroups += 1
+                            childPressableAncestors.append(elementKey)
+                            var attributes: CFArray?
+                            if AXUIElementCopyAttributeNames(element, &attributes) == .success,
+                               let keys = attributes as? [String] {
+                                if keys.contains("AXDOMIdentifier") { domKeyGroups.insert(elementKey) }
+                                if keys.contains("AXIdentifier") { identifierKeyGroups.insert(elementKey) }
+                                if keys.contains("AXURL") { urlKeyGroups.insert(elementKey) }
+                            }
+                        }
                     }
                 }
                 if candidateRoles.contains(role) {
@@ -969,13 +1001,24 @@ final class DockRecentWindowRestorer {
                     next = (read(element, kAXVisibleChildrenAttribute)
                         as? [AXUIElement]) ?? []
                 }
-                pending.append(contentsOf: next.map { (element: $0, pressableAncestors: childPressableAncestors) })
+                var childListAncestors = node.listAncestors
+                if role == "AXList" { childListAncestors.append(String(CFHash(element))) }
+                pending.append(contentsOf: next.map {
+                    (element: $0, pressableAncestors: childPressableAncestors,
+                     listAncestors: childListAncestors)
+                })
             }
             return (candidates, uuidShaped, chatURLShaped,
                     offset < pending.count, lists, rows,
                     pressableGroups, exactQueryTexts, links,
                     exactTextsUnderPressable, matchedPressableGroups.count,
-                    exactTextsOutsidePressable)
+                    exactTextsOutsidePressable, innermostMatchedGroups.count,
+                    outermostMatchedGroups.count, exactTextsInLists,
+                    matchedListOwners.count, maximumPressableDepth,
+                    matchedPressableGroups.intersection(menuActionGroups).count,
+                    matchedPressableGroups.intersection(domKeyGroups).count,
+                    matchedPressableGroups.intersection(identifierKeyGroups).count,
+                    matchedPressableGroups.intersection(urlKeyGroups).count)
         }
         guard sameTarget() else {
             completed(false, "query-roundtrip-prewrite-identity-changed")
@@ -1037,6 +1080,15 @@ final class DockRecentWindowRestorer {
                     "duringExactTextsUnderPressable=\(during.9) " +
                     "duringDistinctPressableMatches=\(during.10) " +
                     "duringExactTextsOutsidePressable=\(during.11) " +
+                    "duringInnermostMatchedGroups=\(during.12) " +
+                    "duringOutermostMatchedGroups=\(during.13) " +
+                    "duringExactTextsInLists=\(during.14) " +
+                    "duringMatchedListOwners=\(during.15) " +
+                    "duringMaxPressableDepth=\(during.16) " +
+                    "duringMatchedMenuGroups=\(during.17) " +
+                    "duringMatchedDOMKeyGroups=\(during.18) " +
+                    "duringMatchedIdentifierKeyGroups=\(during.19) " +
+                    "duringMatchedURLKeyGroups=\(during.20) " +
                     "limited=\(during.3 || after.3) " +
                     "originalsPreserved=\(originalsPreserved) focusPreserved=\(focusPreserved)")
             }
