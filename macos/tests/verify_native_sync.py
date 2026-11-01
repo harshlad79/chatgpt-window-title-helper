@@ -648,3 +648,23 @@ for forbidden in [
     'TitleHelperDiagnostics.shared.record', 'print('
 ]:
     assert forbidden not in ancestry_scan, forbidden
+
+# Header More menu trigger census is opt-in, bounded, aggregate-only and read-only.
+assert 'TITLEHELPER_SAFE_HEADER_MORE_CENSUS' in new
+assert 'ax-header-more matched=' in new
+header_more = new.split('private func boundedHeaderMoreCensus(', 1)[1].split(
+    '// Read-only observation can safely subscribe', 1
+)[0]
+for required in [
+    'AXButton', 'AXMenuButton', 'AXPopUpButton', 'AXToolbar',
+    'kAXPressAction', 'kAXParentAttribute', 'kAXEnabledAttribute',
+    'index < 1200', 'start < 1.5', 'topBand',
+    'toolbarAncestor', 'matched', 'pressable'
+]:
+    assert required in header_more, required
+for forbidden in [
+    'AXUIElementPerformAction', 'AXUIElementSetAttributeValue',
+    'app.activate(', 'fileNewWindow(', 'dockRecentMatches(',
+    'NSLog(', 'print(', 'TitleHelperDiagnostics.shared.record'
+]:
+    assert forbidden not in header_more, forbidden
