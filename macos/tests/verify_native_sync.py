@@ -617,6 +617,19 @@ for required in [
     'duringMatchedURLKeyGroups='
 ]:
     assert required in named_probe, required
+# Only matched AXPress group value SHAPES may be counted; no raw identifiers.
+for required in [
+    'pressableValueShapes', 'aggregateShapes(innermostMatchedGroups)',
+    'aggregateShapes(matchedPressableGroups)', 'AXDOMIdentifier',
+    'urlTypeString', 'urlTypeURL', 'domTypeString', 'domTypeURL',
+    'domLengthShort', 'domLengthMedium', 'domLengthLong',
+    'urlLengthShort', 'urlLengthMedium', 'urlLengthLong',
+    'domUUID', 'urlUUID', 'domChatPath', 'urlChatPath',
+    'String(leafShapes[key, default: 0])',
+    'String(allShapes[key, default: 0])'
+]:
+    assert required in ancestry_scan, required
+assert 'during.21 + " "' in named_probe
 for forbidden in [
     'AXUIElementPerformAction', 'fileNewWindow(', 'dockRecentMatches(',
     'TitleHelperDiagnostics.shared.record', 'print('
