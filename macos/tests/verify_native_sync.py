@@ -586,3 +586,27 @@ for forbidden in [
     'fileNewWindow(', 'dockRecentMatches('
 ]:
     assert forbidden not in generic_metadata, forbidden
+
+# Named-title Search result ancestry: aggregate-only, never select a result.
+named_probe = restorer.split(
+    '    func probeUniqueGenericSearchQueryRoundtrip(', 1
+)[1].split('    // One-shot privacy-safe AX attribute-shape probe', 1)[0]
+ancestry_scan = named_probe.split('        func metadata()', 1)[1].split(
+    '        guard sameTarget() else {', 1
+)[0]
+for required in [
+    'pressableAncestors', 'matchedPressableGroups.formUnion',
+    'exactTextsUnderPressable', 'exactTextsOutsidePressable',
+    'matchedPressableGroups.count', 'AXUIElementCopyActionNames'
+]:
+    assert required in ancestry_scan, required
+for required in [
+    'duringExactTextsUnderPressable=', 'duringDistinctPressableMatches=',
+    'duringExactTextsOutsidePressable='
+]:
+    assert required in named_probe, required
+for forbidden in [
+    'AXUIElementPerformAction', 'fileNewWindow(', 'dockRecentMatches(',
+    'TitleHelperDiagnostics.shared.record', 'print('
+]:
+    assert forbidden not in ancestry_scan, forbidden
