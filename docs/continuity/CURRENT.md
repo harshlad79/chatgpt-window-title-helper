@@ -1,3 +1,13 @@
+## 140차 알림 접수 후속 — 2026-11-02 02:34 KST
+
+조건: 최초 **백그라운드 테스트 exit1**(이후 수정·재검증 완료). 사용자 조치 불필요하나 오류 회차 정책에 따라 **Telegram 우선 → Windows 별도** 독립 본문 발송. 제목 `[ChatGPT Window Title Helper] · [macos-main]`, 본문 첫 줄 실제 대화 제목 미확인 및 임시 제목, LF(U+000A) 실제 개행, 리터럴 백슬래시+n 없음. Telegram 1671자, Windows 698자(<1000), 공통 보고 1~6항. 정상 영수증은 알림 본문 생략.
+
+1. **Telegram:** Dev Control-only `thecompany_call_tool(operation=enqueue_notification)` request `cbb13b14-3249-4993-9853-8551896798bb`, `notification_destination=telegram`, `session_ref=6ad8d8ff97ac8191b351582129a28330`, `source_node=macos-main`, `project=chatgpt-window-title-helper`, `task_label=마지막 창 모두 복원 140차`. Notification `468c6949-9c72-4658-ae94-48238aa540b4`, outer/nested completed/queued, elapsed4ms. `get_notification` request `86d9f4b2-d73b-4feb-a1bf-1eaca9cbdb66`, outer/nested completed/registered elapsed1ms, attempt1 accepted=true exit0 **message_id=223**.
+2. **Windows(windows-main):** 독립 698자 본문. `enqueue_notification` request `bed54f9a-c5f5-47df-abef-d3b4d76ac2e6`, notification `c482cb93-ff9f-48db-8fd8-18ff0b543351`, outer/nested completed/queued elapsed4ms. `get_notification` request `9f7ef8e3-039a-45d0-a9fa-61bbd27cc769`, completed/registered elapsed1ms, attempt1, NodeAgent `pythonw.exe(pid=11848)` → `python:subprocess/run_command` → `powershell.exe(pid=2508)`, cwd `[비공개]`, exit0/timed_out=false/HTTP200, `WINDOWS_NOTIFICATION_REGISTERED`.
+3. **경로·판정:** `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.enqueue_notification/get_notification`; Control-only, Mac Worker 없음. 양 채널 접수·목적지 등록 성공, 재시도·알림 오류 없음. **실제 기기 화면 표시·사용자 열람 미검증**. 전체 Restore All E2E 미완료, 예약 유지.
+
+---
+
 ## 140차 — 2026-11-02 02:25–02:33 KST
 
 **상태:** 우측 AX 버튼의 부모·형제 구조를 읽기 전용으로 진단하는 코드를 구현·테스트·서명 설치·실기기 확인. **전체 Restore All E2E 미완료**. 상세 원장: [macos/HEADER_MORE_PARENT_SIBLING_20261102.md](../../macos/HEADER_MORE_PARENT_SIBLING_20261102.md).
