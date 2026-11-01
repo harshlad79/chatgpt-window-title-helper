@@ -1,3 +1,15 @@
+## 146차 알림 접수 후속 — 2026-11-02 08:23 KST
+
+**대상 선택:** 145차 Telegram 사전 차단(미발송)과 현재 미해결 Probe/Helper TCC 판정 불일치를 중요 이상으로 분류해 **Telegram 우선 → Windows**. 각 채널 독립 한국어 본문, 실제 LF(U+000A), 제목 `[ChatGPT Window Title Helper] · [macos-main]`, 첫 줄 실제 대화 제목 미확인 및 임시 제목. Telegram 1908자, Windows 753자(<1000), 리터럴 백슬래시+n 없음. 정상 영수증은 발송 본문에서 생략.
+
+1. **Telegram:** Dev Control-only `thecompany_call_tool(operation=enqueue_notification)` request `2fab3df3-d423-4b50-b194-ba6b5c5b2c2a`, notification `d8b7ad58-b3df-4f70-b971-c578cc2e7ee8`, outer/nested completed/queued, elapsed4ms. `get_notification` request `3769cb5f-6eac-4259-965b-eba31d54642b`, outer/nested completed/registered, elapsed1ms, attempt1 exit0, `TELEGRAM_NOTIFICATION_REGISTERED`. Experience events `e5e73bd7-bf99-49cb-b856-41f534f5f19a`, `f2f74bbb-5604-48d8-a42a-2dbe678c50a3`, 각각 list 재조회 found=true.
+
+2. **Windows(windows-main):** Dev Control-only `enqueue_notification` request `70188bf8-4396-47a9-97ed-a870287ebede`, notification `58a00062-79c5-4cb2-b104-a5a5345be71a`, outer/nested completed/queued elapsed3ms. `get_notification` request `a4783c44-bbb1-48fd-8eb9-b70681bf2101`, outer/nested completed/registered elapsed1ms, attempt1, Windows target exit0/HTTP200, `WINDOWS_NOTIFICATION_REGISTERED`. Experience `692e9925-1764-4b25-b36f-fc1139a0b688`, `0191ca8c-f0f7-49ca-961a-cc5ac72a3efb`, 각각 list 재조회 found=true.
+
+**경로·판정:** Control-only `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.enqueue_notification/get_notification`. 양 채널 **큐 접수 및 목적지 등록 확인**, 실제 화면 표시·사용자 열람 미검증. 이번 회차 알림 전송/등록 실패 0, 재시도 0. 기존 ChatGPT 앱/창·Helper·세션 무변경, E2E 미완료, 예약 유지.
+
+---
+
 ## 146차 — 2026-11-02 08:20–08:23 KST (145차 누락 원장 복구)
 
 **상태:** 145차 GitHub CURRENT 갱신 사전 차단으로 누락된 기록을 원본 Experience와 146차 실기기 영수증으로 대조해 복구. **기존 ChatGPT/Helper 계속 동작, 전체 Restore All E2E 미완료.** 새 기능 코드·빌드·서명·배포·창 조작 없음. 원장 갱신은 기존 차단을 다른 실행 경로로 우회한 것이 아니라 canonical GitHub 커넥터의 승인된 정상 문서 갱신임. 차단된 145차 호출이 실행됐다고 간주하지 않음.
