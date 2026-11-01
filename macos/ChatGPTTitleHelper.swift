@@ -530,6 +530,75 @@ private func boundedShareControlCensus(
             queue.count - index, index < queue.count)
 }
 
+// Opt-in, bounded AX-only census of the conversation header's More button.
+// No AXPress, value writes, menu opening, window activation, or raw labels/URLs.
+private func boundedHeaderMoreCensus(
+    _ root: AXUIElement
+) -> (matched: Int, enabled: Int, pressable: Int,
+      topBand: Int, toolbarAncestor: Int, visited: Int, limited: Bool) {
+    let start = ProcessInfo.processInfo.systemUptime
+    let rootTop = axPoint(root)?.y
+    let rootHeight = axSize(root)?.height
+    var queue = [root]
+    var seen: Set<String> = []
+    var index = 0
+    var matched = 0
+    var enabledCount = 0
+    var pressable = 0
+    var topBand = 0
+    var toolbarAncestor = 0
+    let accepted: Set<String> = [
+        "more", "more options", "더 보기", "더보기", "추가 옵션"
+    ]
+    while index < queue.count && index < 1200 &&
+          ProcessInfo.processInfo.systemUptime - start < 1.5 {
+        let element = queue[index]
+        index += 1
+        guard seen.insert(String(CFHash(element))).inserted else { continue }
+        _ = AXUIElementSetMessagingTimeout(element, 0.12)
+        let role = axString(element, kAXRoleAttribute)
+        if role == "AXButton" || role == "AXMenuButton" ||
+           role == "AXPopUpButton" {
+            let labels = [
+                axString(element, kAXTitleAttribute),
+                axString(element, kAXDescriptionAttribute),
+                axString(element, kAXHelpAttribute)
+            ].map { $0.trimmingCharacters(in: .whitespacesAndNewlines).localizedLowercase }
+            if labels.contains(where: { accepted.contains($0) }) {
+                matched += 1
+                if axBool(element, kAXEnabledAttribute) == true {
+                    enabledCount += 1
+                }
+                var actions: CFArray?
+                if AXUIElementCopyActionNames(element, &actions) == .success &&
+                   ((actions as? [String]) ?? []).contains(kAXPressAction as String) {
+                    pressable += 1
+                }
+                if let top = rootTop, let height = rootHeight, height > 0,
+                   let point = axPoint(element), point.y >= top - 10,
+                   point.y - top <= height * 0.25 {
+                    topBand += 1
+                }
+                var cursor = element
+                for _ in 0..<5 {
+                    guard let raw = axGet(cursor, kAXParentAttribute),
+                          CFGetTypeID(raw) == AXUIElementGetTypeID() else { break }
+                    let parent = raw as! AXUIElement
+                    _ = AXUIElementSetMessagingTimeout(parent, 0.12)
+                    if axString(parent, kAXRoleAttribute) == "AXToolbar" {
+                        toolbarAncestor += 1
+                        break
+                    }
+                    cursor = parent
+                }
+            }
+        }
+        queue.append(contentsOf: axChildren(element))
+    }
+    return (matched, enabledCount, pressable, topBand,
+            toolbarAncestor, seen.count, index < queue.count)
+}
+
 // Read-only observation can safely subscribe to multiple title buttons.
 // The current ChatGPT AX tree exposes two AXButtons with the conversation
 // title. Uniqueness is essential for *pressing* buttons, but would incorrectly
@@ -3299,6 +3368,15 @@ final class OverlayController:
                 var chatPath = 0
                 for (title, area, window) in samples {
                     let controls = boundedShareControlCensus(area)
+                    if ProcessInfo.processInfo.environment[
+                        "TITLEHELPER_SAFE_HEADER_MORE_CENSUS"] == "1" {
+                        let more = boundedHeaderMoreCensus(area)
+                        TitleHelperDiagnostics.shared.record(
+                            "ax-header-more matched=\(more.matched) " +
+                            "enabled=\(more.enabled) pressable=\(more.pressable) " +
+                            "topBand=\(more.topBand) toolbarAncestor=\(more.toolbarAncestor) " +
+                            "visited=\(more.visited) limited=\(more.limited)")
+                    }
                     shareCandidates += controls.share
                     copyLinkCandidates += controls.copyLink
                     shareEnabled += controls.shareEnabled
