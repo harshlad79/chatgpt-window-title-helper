@@ -677,7 +677,13 @@ for required in [
     'ellipsisLike', 'containsMore', 'navigationExtra',
     'visibleExtra', 'contentsExtra', 'AXChildrenInNavigationOrder',
     'kAXVisibleChildrenAttribute', 'kAXContentsAttribute',
-    'ordinaryIDs.contains', 'queue.count < 1200'
+    'ordinaryIDs.contains', 'queue.count < 1200',
+    'topIdentifierPresent', 'topRoleDescriptionPresent',
+    'topMenuButtonRoles', 'topMenuRoleDescriptions',
+    'topMenuIdentifiers', 'topPressActions', 'topShowMenuActions',
+    'topOtherActions', 'topLeft', 'topMiddle', 'topRight',
+    'AXUIElementCopyActionNames', '"AXShowMenu"',
+    '"AXIdentifier"', '"AXRoleDescription"'
 ]:
     assert required in header_more, required
 for required in [
@@ -686,7 +692,17 @@ for required in [
     'ellipsisLike=\\(more.ellipsisLike)',
     'navigationExtra=\\(more.navigationExtra)',
     'visibleExtra=\\(more.visibleExtra)',
-    'contentsExtra=\\(more.contentsExtra)'
+    'contentsExtra=\\(more.contentsExtra)',
+    'topIdentifierPresent=\\(more.topIdentifierPresent)',
+    'topRoleDescriptionPresent=\\(more.topRoleDescriptionPresent)',
+    'topMenuButtonRoles=\\(more.topMenuButtonRoles)',
+    'topMenuRoleDescriptions=\\(more.topMenuRoleDescriptions)',
+    'topMenuIdentifiers=\\(more.topMenuIdentifiers)',
+    'topPressActions=\\(more.topPressActions)',
+    'topShowMenuActions=\\(more.topShowMenuActions)',
+    'topOtherActions=\\(more.topOtherActions)',
+    'topLeft=\\(more.topLeft)', 'topMiddle=\\(more.topMiddle)',
+    'topRight=\\(more.topRight)'
 ]:
     assert required in new, required
 for forbidden in ['AXUIElementPerformAction', 'AXUIElementSetAttributeValue',
