@@ -550,7 +550,7 @@ private func boundedHeaderMoreCensus(
       topLeft: Int, topMiddle: Int, topRight: Int,
       rightShowMenu: Int, rightMenuRoles: Int, rightEmptyLabels: Int,
       rightPress: Int, rightEnabled: Int, rightOtherActions: Int,
-      visited: Int, limited: Bool) {
+      rightOrder: String, visited: Int, limited: Bool) {
     let start = ProcessInfo.processInfo.systemUptime
     let rootTop = axPoint(root)?.y
     let rootLeft = axPoint(root)?.x
@@ -594,6 +594,7 @@ private func boundedHeaderMoreCensus(
     var rightPress = 0
     var rightEnabled = 0
     var rightOtherActions = 0
+    var rightDetails: [(x: Double, detail: String)] = []
     let accepted: Set<String> = [
         "more", "more options", "더 보기", "더보기", "추가 옵션"
     ]
@@ -681,9 +682,30 @@ private func boundedHeaderMoreCensus(
                             rightMenuRoles += 1
                         }
                         if labels.allSatisfy({ $0.isEmpty }) { rightEmptyLabels += 1 }
-                        if axBool(element, kAXEnabledAttribute) == true {
-                            rightEnabled += 1
-                        }
+                        let isEnabled = axBool(element, kAXEnabledAttribute) == true
+                        if isEnabled { rightEnabled += 1 }
+                        // Fixed metadata buckets only; no labels, IDs, raw coordinates or URLs.
+                        let yFraction = (point.y - top) / height
+                        let xBand = fraction >= 0.9 ? "edge10" :
+                            (fraction >= 0.8 ? "outer20" : "inner13")
+                        let yBand = yFraction < 0.1 ? "first10" :
+                            (yFraction < 0.2 ? "next10" : "last5")
+                        let labelKind = labels[0].isEmpty ? "noTitle" : "title"
+                        let descriptionKind = labels[1].isEmpty ? "noDesc" : "desc"
+                        let parentRole: String = {
+                            guard let raw = axGet(element, kAXParentAttribute),
+                                  CFGetTypeID(raw) == AXUIElementGetTypeID() else {
+                                return "missing"
+                            }
+                            let parent = raw as! AXUIElement
+                            let role = axString(parent, kAXRoleAttribute)
+                            return ["AXGroup", "AXWebArea", "AXToolbar", "AXWindow",
+                                    "AXScrollArea"].contains(role) ? role : "other"
+                        }()
+                        let detail = "x=\(xBand),y=\(yBand),enabled=\(isEnabled)," +
+                            "\(labelKind),\(descriptionKind)," +
+                            "showMenu=\(hasShowMenu),press=\(hasPress),parent=\(parentRole)"
+                        rightDetails.append((x: Double(point.x), detail: detail))
                     }
                 }
             }
@@ -747,6 +769,9 @@ private func boundedHeaderMoreCensus(
             topLeft, topMiddle, topRight,
             rightShowMenu, rightMenuRoles, rightEmptyLabels,
             rightPress, rightEnabled, rightOtherActions,
+            rightDetails.sorted { $0.x < $1.x }.enumerated().map {
+                "\($0.offset + 1):\($0.element.detail)"
+            }.joined(separator: "|"),
             seen.count, index < queue.count)
 }
 
@@ -3549,6 +3574,7 @@ final class OverlayController:
                             "rightPress=\(more.rightPress) " +
                             "rightEnabled=\(more.rightEnabled) " +
                             "rightOtherActions=\(more.rightOtherActions) " +
+                            "rightOrder=\(more.rightOrder) " +
                             "visited=\(more.visited) limited=\(more.limited)")
                     }
                     shareCandidates += controls.share
