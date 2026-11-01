@@ -532,10 +532,17 @@ private func boundedShareControlCensus(
 
 // Opt-in, bounded AX-only census of the conversation header's More button.
 // No AXPress, value writes, menu opening, window activation, or raw labels/URLs.
+// Opt-in, bounded, aggregate-only AX census of the named conversation window.
+// Count button metadata sources and alternative child routes; never emit labels,
+// titles, URLs, element hashes, or touch the user's ChatGPT window.
 private func boundedHeaderMoreCensus(
     _ root: AXUIElement
 ) -> (matched: Int, enabled: Int, pressable: Int,
       topBand: Int, toolbarAncestor: Int, buttons: Int, toolbars: Int,
+      positionKnown: Int, topButtons: Int, titlePresent: Int,
+      descriptionPresent: Int, helpPresent: Int, emptyLabels: Int,
+      ellipsisLike: Int, containsMore: Int, navigationExtra: Int,
+      visibleExtra: Int, contentsExtra: Int,
       visited: Int, limited: Bool) {
     let start = ProcessInfo.processInfo.systemUptime
     let rootTop = axPoint(root)?.y
@@ -550,6 +557,17 @@ private func boundedHeaderMoreCensus(
     var toolbarAncestor = 0
     var buttons = 0
     var toolbars = 0
+    var positionKnown = 0
+    var topButtons = 0
+    var titlePresent = 0
+    var descriptionPresent = 0
+    var helpPresent = 0
+    var emptyLabels = 0
+    var ellipsisLike = 0
+    var containsMore = 0
+    var navigationExtra = 0
+    var visibleExtra = 0
+    var contentsExtra = 0
     let accepted: Set<String> = [
         "more", "more options", "더 보기", "더보기", "추가 옵션"
     ]
@@ -569,6 +587,25 @@ private func boundedHeaderMoreCensus(
                 axString(element, kAXDescriptionAttribute),
                 axString(element, kAXHelpAttribute)
             ].map { $0.trimmingCharacters(in: .whitespacesAndNewlines).localizedLowercase }
+            if !labels[0].isEmpty { titlePresent += 1 }
+            if !labels[1].isEmpty { descriptionPresent += 1 }
+            if !labels[2].isEmpty { helpPresent += 1 }
+            if labels.allSatisfy({ $0.isEmpty }) { emptyLabels += 1 }
+            if labels.contains(where: {
+                $0.contains("…") || $0.contains("⋯") || $0.contains("...")
+            }) { ellipsisLike += 1 }
+            if labels.contains(where: {
+                $0.contains("more") || $0.contains("더 보기") ||
+                $0.contains("더보기")
+            }) { containsMore += 1 }
+            var isTop = false
+            if let top = rootTop, let height = rootHeight, height > 0,
+               let point = axPoint(element), point.y >= top - 10,
+               point.y <= top + height + 10 {
+                positionKnown += 1
+                isTop = point.y - top <= height * 0.25
+                if isTop { topButtons += 1 }
+            }
             if labels.contains(where: { accepted.contains($0) }) {
                 matched += 1
                 if axBool(element, kAXEnabledAttribute) == true {
@@ -579,11 +616,7 @@ private func boundedHeaderMoreCensus(
                    ((actions as? [String]) ?? []).contains(kAXPressAction as String) {
                     pressable += 1
                 }
-                if let top = rootTop, let height = rootHeight, height > 0,
-                   let point = axPoint(element), point.y >= top - 10,
-                   point.y - top <= height * 0.25 {
-                    topBand += 1
-                }
+                if isTop { topBand += 1 }
                 var cursor = element
                 for _ in 0..<5 {
                     guard let raw = axGet(cursor, kAXParentAttribute),
@@ -598,10 +631,34 @@ private func boundedHeaderMoreCensus(
                 }
             }
         }
-        queue.append(contentsOf: axChildren(element))
+        let ordinary = axChildren(element)
+        let ordinaryIDs = Set(ordinary.map { String(CFHash($0)) })
+        for child in ordinary.prefix(max(0, 1200 - queue.count)) {
+            queue.append(child)
+        }
+        for source in [kAXVisibleChildrenAttribute as String,
+                       kAXContentsAttribute as String,
+                       "AXChildrenInNavigationOrder"] {
+            let children = (axGet(element, source) as? [AXUIElement]) ?? []
+            for child in children.prefix(150) where queue.count < 1200 {
+                if ordinaryIDs.contains(String(CFHash(child))) { continue }
+                if source == "AXChildrenInNavigationOrder" {
+                    navigationExtra += 1
+                } else if source == (kAXVisibleChildrenAttribute as String) {
+                    visibleExtra += 1
+                } else {
+                    contentsExtra += 1
+                }
+                queue.append(child)
+            }
+        }
     }
     return (matched, enabledCount, pressable, topBand,
-            toolbarAncestor, buttons, toolbars, seen.count, index < queue.count)
+            toolbarAncestor, buttons, toolbars,
+            positionKnown, topButtons, titlePresent,
+            descriptionPresent, helpPresent, emptyLabels,
+            ellipsisLike, containsMore, navigationExtra,
+            visibleExtra, contentsExtra, seen.count, index < queue.count)
 }
 
 // Read-only observation can safely subscribe to multiple title buttons.
@@ -3381,6 +3438,12 @@ final class OverlayController:
                             "enabled=\(more.enabled) pressable=\(more.pressable) " +
                             "topBand=\(more.topBand) toolbarAncestor=\(more.toolbarAncestor) " +
                             "scope=window buttons=\(more.buttons) toolbars=\(more.toolbars) " +
+                            "positionKnown=\(more.positionKnown) topButtons=\(more.topButtons) " +
+                            "titlePresent=\(more.titlePresent) descriptionPresent=\(more.descriptionPresent) " +
+                            "helpPresent=\(more.helpPresent) emptyLabels=\(more.emptyLabels) " +
+                            "ellipsisLike=\(more.ellipsisLike) containsMore=\(more.containsMore) " +
+                            "navigationExtra=\(more.navigationExtra) visibleExtra=\(more.visibleExtra) " +
+                            "contentsExtra=\(more.contentsExtra) " +
                             "visited=\(more.visited) limited=\(more.limited)")
                     }
                     shareCandidates += controls.share
