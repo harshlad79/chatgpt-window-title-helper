@@ -898,7 +898,7 @@ final class DockRecentWindowRestorer {
             ]
             let uuidPattern =
                 "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-            var pending: [(element: AXUIElement, pressableAncestors: [String], listAncestors: [String])] = [(target, [], [])]
+            var pending: [(element: AXUIElement, pressableAncestors: [String], listAncestors: [String], parentRole: String, siblingCount: Int)] = [(target, [], [], "", 0)]
             var visited: Set<String> = []
             var offset = 0
             var candidates = 0
@@ -927,6 +927,9 @@ final class DockRecentWindowRestorer {
             var urlKeyGroups: Set<String> = []
             // Only aggregate value shapes; never persist private AX values.
             var pressableValueShapes: [String: [String: Int]] = [:]
+            var pressableParentRoles: [String: String] = [:]
+            var pressableSiblingCounts: [String: Int] = [:]
+            var pressableChildCounts: [String: Int] = [:]
             let start = ProcessInfo.processInfo.systemUptime
             while offset < pending.count &&
                   ProcessInfo.processInfo.systemUptime - start < 5.0 {
@@ -1042,9 +1045,17 @@ final class DockRecentWindowRestorer {
                 }
                 var childListAncestors = node.listAncestors
                 if role == "AXList" { childListAncestors.append(String(CFHash(element))) }
+                if role == "AXGroup",
+                   childPressableAncestors.count > node.pressableAncestors.count {
+                    let key = String(CFHash(element))
+                    pressableParentRoles[key] = node.parentRole
+                    pressableSiblingCounts[key] = node.siblingCount
+                    pressableChildCounts[key] = next.count
+                }
                 pending.append(contentsOf: next.map {
                     (element: $0, pressableAncestors: childPressableAncestors,
-                     listAncestors: childListAncestors)
+                     listAncestors: childListAncestors, parentRole: role,
+                     siblingCount: next.count)
                 })
             }
             func aggregateShapes(_ ids: Set<String>) -> [String: Int] {
@@ -1081,6 +1092,31 @@ final class DockRecentWindowRestorer {
                 let count = allShapes[key] ?? 0
                 shapeParts.append("all" + label + "=" + String(count))
             }
+            // Aggregate only structural counts for exact-text leaf groups. Parent
+            // labels, sibling content, element hashes and result text never log.
+            let leafParentRoles = innermostMatchedGroups.map {
+                pressableParentRoles[$0] ?? ""
+            }
+            let leafSiblingCounts = innermostMatchedGroups.compactMap {
+                pressableSiblingCounts[$0]
+            }
+            let leafChildCounts = innermostMatchedGroups.compactMap {
+                pressableChildCounts[$0]
+            }
+            shapeParts.append("leafParentAXGroup=" +
+                String(leafParentRoles.filter { $0 == "AXGroup" }.count))
+            shapeParts.append("leafParentAXList=" +
+                String(leafParentRoles.filter { $0 == "AXList" }.count))
+            shapeParts.append("leafParentOther=" +
+                String(leafParentRoles.filter { $0 != "AXGroup" && $0 != "AXList" }.count))
+            shapeParts.append("leafSiblingTotal=" +
+                String(leafSiblingCounts.reduce(0, +)))
+            shapeParts.append("leafSiblingMax=" +
+                String(leafSiblingCounts.max() ?? 0))
+            shapeParts.append("leafChildTotal=" +
+                String(leafChildCounts.reduce(0, +)))
+            shapeParts.append("leafChildMax=" +
+                String(leafChildCounts.max() ?? 0))
             let shapeSummary = shapeParts.joined(separator: " ")
             return (candidates, uuidShaped, chatURLShaped,
                     offset < pending.count, lists, rows,
