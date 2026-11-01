@@ -892,7 +892,7 @@ final class DockRecentWindowRestorer {
         }
         // Only aggregate metadata counts are emitted. Never expose the query
         // results, user titles, AXValue, conversation IDs or URL strings.
-        func metadata() -> (Int, Int, Int, Bool, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int) {
+        func metadata() -> (Int, Int, Int, Bool, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, String) {
             let candidateRoles: Set<String> = [
                 "AXRow", "AXCell", "AXMenuItem", "AXButton", "AXGroup"
             ]
@@ -925,6 +925,8 @@ final class DockRecentWindowRestorer {
             var domKeyGroups: Set<String> = []
             var identifierKeyGroups: Set<String> = []
             var urlKeyGroups: Set<String> = []
+            // Only aggregate value shapes; never persist private AX values.
+            var pressableValueShapes: [String: [String: Int]] = [:]
             let start = ProcessInfo.processInfo.systemUptime
             while offset < pending.count &&
                   ProcessInfo.processInfo.systemUptime - start < 5.0 {
@@ -975,6 +977,43 @@ final class DockRecentWindowRestorer {
                                 if keys.contains("AXDOMIdentifier") { domKeyGroups.insert(elementKey) }
                                 if keys.contains("AXIdentifier") { identifierKeyGroups.insert(elementKey) }
                                 if keys.contains("AXURL") { urlKeyGroups.insert(elementKey) }
+                                var shapes: [String: Int] = [:]
+                                for (key, prefix) in [("AXDOMIdentifier", "dom"),
+                                                      ("AXURL", "url")] {
+                                    guard keys.contains(key) else { continue }
+                                    let raw = read(element, key)
+                                    let value: String
+                                    let kind: String
+                                    if let url = raw as? URL {
+                                        value = url.absoluteString
+                                        kind = "URL"
+                                    } else if let string = raw as? String {
+                                        value = string
+                                        kind = "String"
+                                    } else {
+                                        value = ""
+                                        kind = raw == nil ? "Missing" : "Other"
+                                    }
+                                    shapes[prefix + "Type" + kind, default: 0] += 1
+                                    if !value.isEmpty {
+                                        shapes[prefix + "Nonempty", default: 0] += 1
+                                        let length = value.utf16.count
+                                        let bucket = length <= 32 ? "Short" :
+                                            (length <= 128 ? "Medium" : "Long")
+                                        shapes[prefix + "Length" + bucket, default: 0] += 1
+                                        if value.range(of: uuidPattern,
+                                                       options: .regularExpression) != nil {
+                                            shapes[prefix + "UUID", default: 0] += 1
+                                        }
+                                        if let parsed = URLComponents(string: value),
+                                           parsed.host?.lowercased() == "chatgpt.com",
+                                           parsed.path.hasPrefix("/c/") ||
+                                           parsed.path.contains("/c/") {
+                                            shapes[prefix + "ChatPath", default: 0] += 1
+                                        }
+                                    }
+                                }
+                                pressableValueShapes[elementKey] = shapes
                             }
                         }
                     }
@@ -1008,6 +1047,36 @@ final class DockRecentWindowRestorer {
                      listAncestors: childListAncestors)
                 })
             }
+            func aggregateShapes(_ ids: Set<String>) -> [String: Int] {
+                var totals: [String: Int] = [:]
+                for id in ids {
+                    for (key, count) in pressableValueShapes[id] ?? [:] {
+                        totals[key, default: 0] += count
+                    }
+                }
+                return totals
+            }
+            let leafShapes = aggregateShapes(innermostMatchedGroups)
+            let allShapes = aggregateShapes(matchedPressableGroups)
+            let shapeKeys = [
+                "domTypeString", "domTypeURL", "domTypeOther", "domTypeMissing",
+                "domNonempty", "domLengthShort", "domLengthMedium",
+                "domLengthLong", "domUUID", "domChatPath",
+                "urlTypeString", "urlTypeURL", "urlTypeOther", "urlTypeMissing",
+                "urlNonempty", "urlLengthShort", "urlLengthMedium",
+                "urlLengthLong", "urlUUID", "urlChatPath"
+            ]
+            let shapeSummary = shapeKeys.map { key in
+                "leaf" + key.prefix(1).uppercased() + key.dropFirst() +
+                    "=" + String(leafShapes[key, default: 0])
+            }.joined(separator: " ") + " " +
+                shapeKeys.filter { $0 == "domNonempty" || $0 == "urlNonempty" ||
+                                   $0 == "domUUID" || $0 == "urlUUID" ||
+                                   $0 == "domChatPath" || $0 == "urlChatPath" }
+                    .map { key in
+                        "all" + key.prefix(1).uppercased() + key.dropFirst() +
+                            "=" + String(allShapes[key, default: 0])
+                    }.joined(separator: " ")
             return (candidates, uuidShaped, chatURLShaped,
                     offset < pending.count, lists, rows,
                     pressableGroups, exactQueryTexts, links,
@@ -1018,7 +1087,8 @@ final class DockRecentWindowRestorer {
                     matchedPressableGroups.intersection(menuActionGroups).count,
                     matchedPressableGroups.intersection(domKeyGroups).count,
                     matchedPressableGroups.intersection(identifierKeyGroups).count,
-                    matchedPressableGroups.intersection(urlKeyGroups).count)
+                    matchedPressableGroups.intersection(urlKeyGroups).count,
+                    shapeSummary)
         }
         guard sameTarget() else {
             completed(false, "query-roundtrip-prewrite-identity-changed")
@@ -1089,6 +1159,7 @@ final class DockRecentWindowRestorer {
                     "duringMatchedDOMKeyGroups=\(during.18) " +
                     "duringMatchedIdentifierKeyGroups=\(during.19) " +
                     "duringMatchedURLKeyGroups=\(during.20) " +
+                    during.21 + " " +
                     "limited=\(during.3 || after.3) " +
                     "originalsPreserved=\(originalsPreserved) focusPreserved=\(focusPreserved)")
             }
