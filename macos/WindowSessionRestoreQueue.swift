@@ -186,7 +186,7 @@ struct NamedConversationSearchQueryPolicy {
     static func candidate(_ titles: [String]) -> String? {
         guard titles.count == 1 else { return nil }
         let trimmed = titles[0].trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 3 && trimmed != "ChatGPT" else { return nil }
+        guard trimmed.count >= 2 && trimmed != "ChatGPT" else { return nil }
         return String(trimmed.prefix(72))
     }
 }
