@@ -1,3 +1,14 @@
+## 150차 알림 접수 후속 — 2026-11-02 12:39–12:40 KST
+
+**선택 근거:** 이번 회차 CG window count 읽기 전용 Dev 의도 호출의 OpenAI pre-MCP 차단(Experience `5d1c5df3-8543-475b-9a11-4f3e9ee4d06d`) 및 Mac Worker prebackup exit1 후 허용된 복구(Experience `768aa7e7-6188-49f3-a430-852cdbda5c52`)가 있었으므로 사용자 알림 정책상 **Telegram 우선 → Windows(windows-main)**. 두 채널 제목 `[ChatGPT Window Title Helper] · [macos-main]`, 본문 첫 줄 `[실제 대화 제목 미확인] ChatGPT Window Title Helper macOS — 마지막 창 모두 복원`, 공통 1~6항, 실제 LF, 리터럴 백슬래시+n 없음. Telegram/Windows 본문은 독립 작성, Windows **688자**(1000자 이내).
+
+- **Telegram:** Dev Control-only `thecompany_call_tool(operation=enqueue_notification)` request **`a2c1847b-d776-4eed-bf03-c09c243b57a8`**, notification **`9ecdf0ed-7b05-41b1-a68f-24142c407b56`**, outer/nested completed/queued, elapsed5ms. `get_notification` request **`274f8171-d0f4-4069-99b6-adea0a81f35d`**, outer/nested completed/**registered**, attempt1, accepted=true, exit0, message_id**246**, elapsed1ms. Experience **`c42d8092-e2a3-41ca-a485-c1b4ad1cef0b`**, **`4e91f549-84c9-4165-852a-9a347d1482d3`** 각각 저장·list found=true.
+- **Windows(windows-main):** Dev Control-only `enqueue_notification` request **`651445dc-30fa-41ff-84fa-6b54724d7cf3`**, notification **`76d2af42-4c2f-474d-9593-fe791187bf77`**, outer/nested completed/queued, elapsed4ms. `get_notification` request **`0a35ab6a-feee-4909-9f16-5471a14d4d5c`**, outer/nested completed/**registered**, attempt1, Windows NodeAgent `pythonw.exe(pid=11848)` → `python:subprocess/run_command` → `powershell.exe(pid=11752)`, exit0/HTTP200, elapsed1ms. Experience **`914f264d-5b01-4e73-99e8-375675f9c019`**, **`d57651dd-ba67-4f24-924d-7adacbaa14cf`** 각각 저장·list found=true.
+- **실제 Control 경로:** `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.enqueue_notification/get_notification` (operation별 마지막 분기). Control-only 요청; Windows 목적지 내부 NodeAgent/PowerShell은 위 별도 영수증. **두 채널 큐 접수·목적지 등록 성공, 알림 실패/재시도 0. 실제 기기 화면 표시·사용자 열람 미확인.**
+- **최종 영향:** 이 후속은 GitHub 원장 기록만 추가. 150차 설치 Helper PID90080, 원본 ChatGPT PID10411/세션 SHA 불변(마지막 직접 확인 기준), 소스 commit361613af, 실제 전체 창 복원 E2E 미완료, 사용자 조치 없음, 예약 유지. GitHub 문서 커밋과 코드 커밋 구분.
+
+---
+
 ## 150차 — 2026-11-02 12:27–12:38 KST (Header 우측 버튼 비식별 해소 실험·411 PASS·Helper-only 서명 배포·실기기 AX)
 
 ### 1. 제목·일시 / 2. 전체 상태
