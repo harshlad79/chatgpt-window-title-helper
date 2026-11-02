@@ -1,3 +1,17 @@
+## 151차 알림 접수 후속 — 2026-11-02 13:25–13:27 KST
+
+**채널 선택:** 이번 회차 OpenAI 사전 안전검사 차단 2건(CG 읽기 전용 Dev execute / GitHub 코드 update_file)이 있어 기존 정책상 **Telegram 우선 → Windows(windows-main)** 별도 본문. 두 채널 제목 `[ChatGPT Window Title Helper] · [macos-main]`, 첫 줄 실제 대화 제목 미확인·임시 제목. 실제 LF, 리터럴 백슬래시+n 없음. Telegram 상세 한국어 1~6항, Windows 독립 **705자**(<1000).
+
+1. **Telegram:** Dev Control-only `thecompany_call_tool(operation=enqueue_notification)` request `bcc5ce94-0ea0-4d26-8abe-7d4401015df7`, notification `8c8bb7dc-9cfa-4bca-8f14-1ea3f3289fe6`, outer/nested completed/queued 3ms. `get_notification` request `7ea8c58c-b12d-4e39-a172-c9a82396f599`, completed/registered 1ms, attempt1 accepted=true exit0 message_id**249**. enqueue Experience `debca49d-3d1f-4678-be9d-62be9625d352`, receipt Experience `721e9caa-1377-4438-acaa-217b740a5c56`, list found=true.
+
+2. **Windows(windows-main):** 별도 705자 한국어 본문. Dev Control-only `enqueue_notification` request `09d5ed87-1ffe-420c-a95c-9002c455ba11`, notification `212a2690-b33c-4082-b56d-ce78d8ed6518`, completed/queued 4ms. `get_notification` request `85d12e11-d305-4e46-9b50-5b1410b8ba7b`, completed/registered 1ms, attempt1 Windows NodeAgent `pythonw.exe(pid=11848)` → `python:subprocess/run_command` → `powershell.exe(pid=22448)`, exit0/HTTP200 `WINDOWS_NOTIFICATION_REGISTERED`. enqueue Experience `86e9c093-67fb-4192-8d89-9af2e943ec87`, receipt Experience `85ccff83-4538-4503-95cb-bc65917cacd4`, list found=true.
+
+3. **추가 사전 차단·동일 재시도:** Telegram enqueue 영수증을 기록하려던 첫 직접 Dev `thecompany_record_experience` 의도 호출이 OpenAI pre-MCP에서 차단됨. 해당 첫 기록 **미실행**, request_id/mcp_path/elapsed/exit_code **미발급**. 동일 도구·동일 인자의 허용된 재시도는 성공(event `debca49d...`, list found=true). 첫 차단을 별도 Experience `3f011c26-334b-4a1a-b879-24bcd137c82d`로 기록·재조회. 실제 Control-only `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.enqueue_notification/get_notification` (operation별 마지막 분기). 기록 도구는 `control.record_experience`; 첫 차단 시 경로 미발급. 명시적 안전 우회 없음.
+
+**최종:** Telegram/Windows 각각 큐 접수·목적지 **등록 성공**, 알림 전달 실패 0, 실제 기기 화면 표시/사용자 열람 **미검증**. 코드·테스트·설치·기존 ChatGPT/창·세션 추가 변경 없음. 마지막 Mac 실측 ChatGPT PID10411/Helper PID90080/세션 SHA 불변. 전체 Restore All E2E 미완료, 사용자 조치 없음, 예약 유지. 이번 후속은 GitHub 원장 문서만 변경.
+
+---
+
 ## 151차 — 2026-11-02 13:22–13:27 KST (검색 팔레트 가림 실측·AX 근접성 진단 설계·사전 차단 2건)
 
 ### 1. 제목·일시 / 2. 전체 상태
