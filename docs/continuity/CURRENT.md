@@ -1,3 +1,14 @@
+## 149차 알림 접수 후속 — 2026-11-02 11:34 KST
+
+**채널 선택:** 이번 회차 새 Helper를 Worker 셸에서 직접 시작한 뒤 `ax-trusted=false` 런타임 장애가 발생했고, 정상 LaunchServices GUI 재시작으로 복구함. 사용자 최신 정책상 **Telegram 우선 → Windows(windows-main)**. 각 채널 제목 `[ChatGPT Window Title Helper] · [macos-main]`, 본문 첫 줄 실제 대화 제목 미확인 및 임시 제목, 공통 1~6항, 실제 LF, 리터럴 백슬래시+n 없음. **Telegram 1,921자**, **Windows 806자** 독립 작성(Windows 1,000자 이내).
+
+- **Telegram:** Dev Control-only `thecompany_call_tool(operation=enqueue_notification)` request **`4e01ab18-2c9b-4d03-b89f-f45055b32f93`**, notification **`6ab3b12f-7bf8-4a13-8e7c-23632d222914`**, outer/nested completed/queued, elapsed4ms. 후속 `get_notification` request **`3ffe5c55-c207-4359-9b65-c81b0b7d1dc3`**, outer/nested completed/**registered**, attempt1, target accepted=true, exit0, message_id**243**, elapsed1ms. Experience `3848a379-0431-4100-88cd-69ad54ddf4fe`, `90c04540-8eaa-40ac-ad7f-dd87d8ce6ecd` 저장·list 재조회 found=true.
+- **Windows(windows-main):** Dev Control-only `enqueue_notification` request **`cf78d5df-5f1c-4b38-908a-bdaba82f74cf`**, notification **`caf52b14-4897-44c3-b40d-61aa85153c07`**, outer/nested completed/queued, elapsed4ms. 후속 `get_notification` request **`fa42682e-8c82-4e3f-b87f-c2fd904de53a`**, outer/nested completed/**registered**, attempt1, Windows NodeAgent `pythonw.exe(pid=11848)` → `python:subprocess/run_command` → `powershell.exe(pid=38008)`, exit0/HTTP200, elapsed1ms. Experience `221b5b22-e524-4018-b27d-0c37c63f8d9d`, `ff27b27d-0a5d-4bb9-8eb5-9cd1b28fad7b` 저장·list 재조회 found=true.
+- **실제 Control 경로:** `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.enqueue_notification/get_notification` (operation별 마지막 분기). Control-only, 알림 목적지 내부 Windows Worker 영수증은 위 참조. **두 채널 큐 접수·목적지 등록 성공, 알림 실패/재시도 0. 실제 기기 화면 표시·사용자 열람 미확인.**
+- **최종 영향:** GitHub 문서 기록만 추가. 149차 설치 Helper PID13863, 원본 ChatGPT PID10411/CG 2창/세션 불변(마지막 직접 확인 기준). 새 창 복원 E2E 미완료, 예약 유지, 사용자 조치 없음.
+
+---
+
 ## 149차 — 2026-11-02 11:24–11:33 KST (148차 빌드 결과 복구·서명 배포·실제 AXStaticText 관계 확인)
 
 ### 1. 제목·일시 / 2. 전체 상태
