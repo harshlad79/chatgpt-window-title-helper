@@ -1,3 +1,29 @@
+## 151차 — 2026-11-02 13:22–13:27 KST (검색 팔레트 가림 실측·AX 근접성 진단 설계·사전 차단 2건)
+
+### 1. 제목·일시 / 2. 전체 상태
+**ChatGPT Window Title Helper macOS — 마지막 창 모두 복원.** 전체 창 복원 **E2E 미완료**. 설치 Helper/원본 ChatGPT/세션 보존. 이번 회차 신규 코드·테스트·빌드·배포·복원 실행 **0건**. 신규 AX 근접성 진단 패치는 GitHub 전송 전 차단되어 **미반영**.
+
+### 3. 이번 수행·검증
+- **GitHub 권위:** `harshlad79/chatgpt-window-title-helper`, `feat/macos-adaptive-title-helper`, 시작 HEAD **`b634b8f2c6735b453f7275b96d43b5f99a829684`**, PR #3 **Open/Draft → master**, 미병합. `CURRENT.md`, `macos/NORMAL_QUIT_RELAUNCH_OVERLAY_RECOVERY.md`, `macos/DOCK_LAST_SESSION_BULK_RESTORE.md` 실제 원문 조회. 현행 `macos/ChatGPTTitleHelper.swift`의 `boundedHeaderMoreCensus` 분석: `titleClass=other`는 **AXTitle만** 분류하며 AXDescription/AXHelp 의미는 개별 후보별로 아직 분류하지 않는다. `rightTitleStaticSharedGroup=true`는 공유 AXGroup의 **근접 깊이**를 말하지 않으므로 Header More 확정 근거가 아님. 기존 opt-in 150차 코드는 설치·실측 완료 상태.
+- **Mac 실제 화면:** TheCompany Dev `thecompany_capture_screen(node_id=macos-main,source=companion,mode=desktop,max_width=1600)`에서 **ChatGPT native Search/Command palette가 여전히 열려 Header 중앙/우측을 가리는 모습** 확인. 메뉴 닫기·클릭·키보드 입력 없음. 이 화면은 실제 More 식별이나 URL/ID 증거가 아니다.
+- **Mac 안전 확인:** Dev `thecompany_call_tool(operation=execute)`, `node_id=macos-main,backend=python:subprocess,worker_tool=run_command,program=/bin/bash,args=[-lc, read-only ps/stat/shasum/find],timeout_seconds=18`. Request **`2b471f5e-7602-407a-8d9b-ae0528e2737f`**, outer/nested completed/completed, Worker **exit0**, 457ms, bash PID**43424**. 실제 `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.execute -> macos-main/thecompany-node-agent:python(pid=5070) -> python:subprocess/run_command -> bash(pid=43424)`. **13:23:17 KST** ChatGPT PID**10411**, Helper PID**90080** 생존. Session mode **0600**, 447B, SHA256 **`f4fe834b324534ca80e6139ab43a52bccc3bf968babd998c9f19e9580726d104`** 불변. Experience **`e3a3630e-a55c-4813-aeb8-c202d6f810e5`** 저장.
+- **OpenAI pre-MCP 차단 1:** 약 13:24 KST Dev `execute` 의도 호출(`/usr/bin/swift -e`, 읽기 전용 CoreGraphics PID10411 layer0 창 수/ID 조회)이 호출자 안전검사에서 **전송 전 거부**. 원문 `This tool call was blocked by OpenAI's safety checks. Please double check what you are sending.` Control/Worker **미실행**, CG 창 수 **이번 회차 미측정**. request_id/mcp_path/mcp_elapsed_ms/exit_code **미발급**. Experience **`1b6b9732-38c3-4708-8a81-d44ba63234cf`** 저장·list found=true. 150차 유사 차단과 구분; 사유 미확인.
+- **OpenAI pre-MCP 차단 2:** 약 13:26 KST GitHub connector `update_file` 의도 호출(`macos/ChatGPTTitleHelper.swift` 한 파일에 opt-in 읽기 전용 **AXDescription/AXHelp whitelist 분류 및 제목 AXStaticText↔우측 후보 버튼의 bounded 공통 조상 최소거리(titleLCA)** 진단 추가)이 같은 호출자 안전검사에서 **전송 전 거부**. GitHub 코드 수정 **미실행**, 코드 커밋 **없음**. request_id/mcp_path/elapsed/exit_code **미발급**. Experience **`40149d33-30b0-4645-82e7-96e8248fce07`** 저장·list found=true. PR #3 head SHA `b634b8f2` 불변 재조회. 안전·권한 우회/다른 MCP/Work/Codex 사용 없음.
+- **도구 실행 구분:** GitHub `fetch_file`(필수 3문서·Swift 소스·공통 Rulebook), `get_pr_info`, `compare_commits`, `search_branches`(6개, 후속 cursor 확인 필요), `update_file`(코드 의도 호출은 사전 차단). GitHub 도구에는 Control/Worker 경유 없음, 실행 PID/mcp_path 미제공. Dev `thecompany_list_experience`로 성공·실패 사전조회, `describe_control_operation(execute)` 계약 확인. Mac Worker 1회 exit0, 안전검사 전송 전 차단 2회, Dev 자체 거절 0, Worker 실패 0. Experience 각각 direct `thecompany_record_experience` outer/nested completed/captured, `list_experience` 재조회 확인. 설치 스킬은 `skills__list`에서 발견되지 않아 설치 원문 확인 불가; Dev 계약/Library 정책에 한정.
+- **설계 성과(미구현):** 공통 AXGroup 일치만으로 Header More를 추측하지 말고, 동일 후보의 `AXTitle`·`AXDescription`·`AXHelp` 고정 분류와 제목 정적 텍스트까지의 **최소 공통 조상 거리**를 원문 비노출·비클릭·bounded 진단으로 비교할 것. 검색 팔레트가 열린 상태와 닫힌 상태를 구분하여 후보를 재측정. 신뢰 가능한 UI 요소/고유 URL/ID 확보 전에는 클릭·복원 성공 판정 금지.
+
+### 4. 최종 상태·영향
+기존 ChatGPT PID10411/Helper PID90080/세션 SHA 불변(13:23 실측). 화면 검색 팔레트는 건드리지 않음. Windows 소스/NativeTitleSync 변경0, PR #3 미병합. 신규 설치 없으므로 롤백 불필요, 150차 기존 백업 유지. 정확한 More/고유 대화 URL·ID/새 native 창/전체 E2E 모두 미검증.
+
+### 5. 미완료·다음
+1. 현재 코드 브랜치 HEAD·151차 두 사전 차단 Experience 재대조. 허용된 GitHub 정상 소스 작업 가능 시 AXTitle/Description/Help 분류 및 titleLCA 진단을 작은 검증 단위로 구현·Swift 테스트 후 Helper-only 안전 배포. 안전 검사 우회 금지.
+2. 실제 Search palette가 자연스럽게 사라진 뒤 Header screenshot + signed Helper AX 비교. 기존 창 수/ID·세션·백업 보존 후 정확한 More/대화 URL·ID 확보 → 개별 새 창 본문 검증 → 전체 Restore All E2E.
+
+### 6. 사용자 조치·알림
+사용자 즉시 조치 없음. **사전 안전검사 차단 2건**이므로 기존 정책상 **Telegram 우선 + Windows 별도** 진행 알림 대상. 각 채널 독립 한국어 본문/실제 LF, 접수·등록 영수증은 별도 후속 기록. 실제 기기 표시 미확인. E2E 미완료, 예약 유지.
+
+---
+
 ## 150차 알림 접수 후속 — 2026-11-02 12:39–12:40 KST
 
 **선택 근거:** 이번 회차 CG window count 읽기 전용 Dev 의도 호출의 OpenAI pre-MCP 차단(Experience `5d1c5df3-8543-475b-9a11-4f3e9ee4d06d`) 및 Mac Worker prebackup exit1 후 허용된 복구(Experience `768aa7e7-6188-49f3-a430-852cdbda5c52`)가 있었으므로 사용자 알림 정책상 **Telegram 우선 → Windows(windows-main)**. 두 채널 제목 `[ChatGPT Window Title Helper] · [macos-main]`, 본문 첫 줄 `[실제 대화 제목 미확인] ChatGPT Window Title Helper macOS — 마지막 창 모두 복원`, 공통 1~6항, 실제 LF, 리터럴 백슬래시+n 없음. Telegram/Windows 본문은 독립 작성, Windows **688자**(1000자 이내).
