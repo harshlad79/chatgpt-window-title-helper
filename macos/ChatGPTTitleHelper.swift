@@ -552,6 +552,9 @@ private func boundedHeaderMoreCensus(
       rightPress: Int, rightEnabled: Int, rightOtherActions: Int,
       rightParentSame: Bool, rightSharedGroup: Bool,
       rightTitleSharedGroup: Bool, exactTitleButtons: Int,
+      exactTopTitleStaticTexts: Int, exactTopTitleTextFields: Int,
+      exactTitleWebAreas: Int, rightTitleStaticSharedGroup: Bool,
+      rightTitleTextFieldSharedGroup: Bool,
       rightOrder: String, visited: Int, limited: Bool) {
     let start = ProcessInfo.processInfo.systemUptime
     let rootTop = axPoint(root)?.y
@@ -599,6 +602,9 @@ private func boundedHeaderMoreCensus(
     var rightDetails: [(x: Double, detail: String)] = []
     var rightElements: [AXUIElement] = []
     var exactTitleButtons: [AXUIElement] = []
+    var exactTopTitleStaticTexts: [AXUIElement] = []
+    var exactTopTitleTextFields: [AXUIElement] = []
+    var exactTitleWebAreas = 0
     let accepted: Set<String> = [
         "more", "more options", "더 보기", "더보기", "추가 옵션"
     ]
@@ -609,6 +615,36 @@ private func boundedHeaderMoreCensus(
         guard seen.insert(String(CFHash(element))).inserted else { continue }
         _ = AXUIElementSetMessagingTimeout(element, 0.12)
         let role = axString(element, kAXRoleAttribute)
+        // Exact-title equality only; never log AXValue, text, title, or element IDs.
+        // Restrict static text/field matching to the window's upper quarter,
+        // so a conversation body or sidebar match cannot be mistaken for Header.
+        if !conversationTitle.isEmpty {
+            if role == "AXWebArea" &&
+               axString(element, kAXTitleAttribute)
+                   .trimmingCharacters(in: .whitespacesAndNewlines) == conversationTitle {
+                exactTitleWebAreas += 1
+            } else if role == "AXStaticText" || role == "AXTextField" {
+                if let top = rootTop, let height = rootHeight, height > 0,
+                   let point = axPoint(element), point.y >= top - 10,
+                   point.y <= top + height * 0.25 {
+                    let match = [
+                        kAXTitleAttribute as String,
+                        kAXValueAttribute as String,
+                        kAXDescriptionAttribute as String
+                    ].contains {
+                        axString(element, $0)
+                            .trimmingCharacters(in: .whitespacesAndNewlines) == conversationTitle
+                    }
+                    if match {
+                        if role == "AXStaticText" && exactTopTitleStaticTexts.count < 12 {
+                            exactTopTitleStaticTexts.append(element)
+                        } else if role == "AXTextField" && exactTopTitleTextFields.count < 12 {
+                            exactTopTitleTextFields.append(element)
+                        }
+                    }
+                }
+            }
+        }
         if role == "AXToolbar" { toolbars += 1 }
         if role == "AXButton" || role == "AXMenuButton" ||
            role == "AXPopUpButton" {
@@ -824,6 +860,16 @@ private func boundedHeaderMoreCensus(
                 candidates.contains { a in titleGroups.contains { CFEqual(a, $0) } }
             }
         }
+    func sharesRightGroup(_ title: AXUIElement) -> Bool {
+        let titleGroups = groups(title)
+        return rightGroups.count == 2 && rightGroups.allSatisfy { candidates in
+            candidates.contains { a in titleGroups.contains { CFEqual(a, $0) } }
+        }
+    }
+    let rightTitleStaticSharedGroup =
+        exactTopTitleStaticTexts.contains(where: sharesRightGroup)
+    let rightTitleTextFieldSharedGroup =
+        exactTopTitleTextFields.contains(where: sharesRightGroup)
     return (matched, enabledCount, pressable, topBand,
             toolbarAncestor, buttons, toolbars,
             positionKnown, topButtons, titlePresent,
@@ -839,6 +885,9 @@ private func boundedHeaderMoreCensus(
             rightPress, rightEnabled, rightOtherActions,
             rightParentSame, rightSharedGroup, rightTitleSharedGroup,
             exactTitleButtons.count,
+            exactTopTitleStaticTexts.count, exactTopTitleTextFields.count,
+            exactTitleWebAreas, rightTitleStaticSharedGroup,
+            rightTitleTextFieldSharedGroup,
             rightDetails.sorted { $0.x < $1.x }.enumerated().map {
                 "\($0.offset + 1):\($0.element.detail)"
             }.joined(separator: "|"),
@@ -3648,6 +3697,11 @@ final class OverlayController:
                             "rightSharedGroup=\(more.rightSharedGroup) " +
                             "rightTitleSharedGroup=\(more.rightTitleSharedGroup) " +
                             "exactTitleButtons=\(more.exactTitleButtons) " +
+                            "exactTopTitleStaticTexts=\(more.exactTopTitleStaticTexts) " +
+                            "exactTopTitleTextFields=\(more.exactTopTitleTextFields) " +
+                            "exactTitleWebAreas=\(more.exactTitleWebAreas) " +
+                            "rightTitleStaticSharedGroup=\(more.rightTitleStaticSharedGroup) " +
+                            "rightTitleTextFieldSharedGroup=\(more.rightTitleTextFieldSharedGroup) " +
                             "rightOrder=\(more.rightOrder) " +
                             "visited=\(more.visited) limited=\(more.limited)")
                     }
