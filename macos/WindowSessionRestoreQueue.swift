@@ -1,0 +1,223 @@
+import Foundation
+
+// Deterministic, sequential, user-triggered restore queue.
+// A cancel request stops *after* the in-flight native window action.
+final class WindowSessionRestoreQueue {
+    struct Progress {
+        let finished: Int
+        let total: Int
+        let failed: Int
+        let activeTitle: String?
+        let running: Bool
+        let cancelled: Bool
+    }
+    private var planned: [String] = []
+    private var finished = 0
+    private var failed = 0
+    private var running = false
+    private var cancelRequested = false
+    private var generation = 0
+    private var restoreAction: ((String, @escaping (Bool, String) -> Void) -> Void)?
+    var onProgress: ((Progress) -> Void)?
+    var onComplete: ((Progress) -> Void)?
+    var onResult: ((String, Bool, String) -> Void)?
+
+    var isRunning: Bool { running }
+
+    @discardableResult
+    func start(titles: [String], alreadyOpen: [String],
+               action: @escaping (String, @escaping (Bool, String) -> Void) -> Void) -> Bool {
+        guard !running else { return false }
+        let open = Set(alreadyOpen)
+        var seen = Set<String>()
+        planned = Array(titles.filter {
+            !open.contains($0) && !$0.isEmpty && seen.insert($0).inserted
+        }.prefix(100))
+        guard !planned.isEmpty else { return false }
+        finished = 0
+        failed = 0
+        running = true
+        cancelRequested = false
+        generation &+= 1
+        restoreAction = action
+        advance(generation)
+        return true
+    }
+
+    func cancel() {
+        guard running else { return }
+        cancelRequested = true
+        publish(activeTitle: nil)
+    }
+
+    private func state(activeTitle: String?) -> Progress {
+        Progress(finished: finished, total: planned.count,
+                 failed: failed, activeTitle: activeTitle,
+                 running: running, cancelled: cancelRequested)
+    }
+
+    private func publish(activeTitle: String?) {
+        onProgress?(state(activeTitle: activeTitle))
+    }
+
+    private func advance(_ token: Int) {
+        guard token == generation, running else { return }
+        if cancelRequested || finished >= planned.count {
+            running = false
+            restoreAction = nil
+            let end = state(activeTitle: nil)
+            onProgress?(end)
+            onComplete?(end)
+            return
+        }
+        let title = planned[finished]
+        publish(activeTitle: title)
+        restoreAction?(title) { [weak self] success, reason in
+            guard let self, self.running, token == self.generation else { return }
+            self.onResult?(title, success, reason)
+            self.finished += 1
+            if !success { self.failed += 1 }
+            // Always yield: no back-to-back UI menu actions in a single callback.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.advance(token)
+            }
+        }
+    }
+}
+
+
+// An isolated blank-window probe must use the current complete AX census,
+// not an old fixed eight-window fixture. Both snapshots contain opaque
+// per-window identity and minimized state, never conversation text.
+struct IsolatedWindowSnapshotPolicy {
+    static func accepts(expected: [String: Bool], targetID: String,
+                        actual: [String: Bool]) -> Bool {
+        expected.count >= 2 && expected.count <= 12 &&
+            expected[targetID] == false && actual == expected
+    }
+}
+
+// A one-shot read-only AX probe may select the sole generic window only when
+// all other native windows are explicitly non-generic and every minimized
+// state is known. This is a *candidate*, not durable conversation identity.
+struct IsolatedGenericCandidatePolicy {
+    static func select(minimizedByID: [String: Bool],
+                       genericIDs: Set<String>,
+                       nonGenericIDs: Set<String>) -> String? {
+        let all = Set(minimizedByID.keys)
+        guard (2...12).contains(all.count),
+              genericIDs.count == 1,
+              genericIDs.isDisjoint(with: nonGenericIDs),
+              genericIDs.union(nonGenericIDs) == all,
+              nonGenericIDs.count == all.count - 1,
+              let candidate = genericIDs.first,
+              minimizedByID[candidate] == false else { return nil }
+        return candidate
+    }
+}
+
+// A Search AXPress is permitted only for the uniquely identified generic
+// window that is ALREADY the ChatGPT AX focused window. The owner window is
+// never raised or navigated to satisfy this preflight.
+struct UniqueGenericSearchPressPolicy {
+    static func eligible(minimizedByID: [String: Bool],
+                         genericIDs: Set<String>,
+                         nonGenericIDs: Set<String>,
+                         focusedID: String?,
+                         searchButtons: Int, inputs: Int, dialogs: Int,
+                         limited: Bool) -> Bool {
+        guard let candidate = IsolatedGenericCandidatePolicy.select(
+            minimizedByID: minimizedByID,
+            genericIDs: genericIDs,
+            nonGenericIDs: nonGenericIDs
+        ) else { return false }
+        return focusedID == candidate && searchButtons == 1 &&
+            inputs == 0 && dialogs == 0 && !limited
+    }
+}
+
+// Read-only Search palette inspection: no action, text entry or URL exposure.
+// A single existing input must belong to the only generic native window.
+struct UniqueGenericSearchInputShapePolicy {
+    static func eligible(minimizedByID: [String: Bool],
+                         genericIDs: Set<String>,
+                         nonGenericIDs: Set<String>,
+                         searchInputs: Int, searchButtons: Int,
+                         limited: Bool) -> Bool {
+        IsolatedGenericCandidatePolicy.select(
+            minimizedByID: minimizedByID,
+            genericIDs: genericIDs,
+            nonGenericIDs: nonGenericIDs
+        ) != nil && searchInputs == 1 && searchButtons <= 1 && !limited
+    }
+}
+
+// An opt-in synthetic Search query may be written only to an already empty
+// input in the sole known generic window. A delayed cleanup must never
+// overwrite a query that another actor has changed in the meantime.
+struct ReversibleGenericSearchQueryPolicy {
+    static let probe = "zzqv_noresults_20261101_generic_probe"
+    static func canStart(value: String?, settable: Bool,
+                         minimizedByID: [String: Bool],
+                         genericIDs: Set<String>,
+                         nonGenericIDs: Set<String>,
+                         searchInputs: Int, searchButtons: Int,
+                         limited: Bool) -> Bool {
+        value == "" && settable &&
+            UniqueGenericSearchInputShapePolicy.eligible(
+                minimizedByID: minimizedByID,
+                genericIDs: genericIDs,
+                nonGenericIDs: nonGenericIDs,
+                searchInputs: searchInputs,
+                searchButtons: searchButtons,
+                limited: limited)
+    }
+    static func canRestore(targetID: String, actualID: String,
+                           before: [String: Bool], after: [String: Bool],
+                           currentValue: String?, expectedQuery: String = probe) -> Bool {
+        targetID == actualID && before == after &&
+            currentValue == expectedQuery
+    }
+}
+
+// A real-title Search probe may use only one currently open named conversation.
+// This never establishes a durable conversation ID or opens a search result.
+struct NamedConversationSearchQueryPolicy {
+    static func candidate(_ titles: [String]) -> String? {
+        guard titles.count == 1 else { return nil }
+        let trimmed = titles[0].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 && trimmed != "ChatGPT" else { return nil }
+        return String(trimmed.prefix(72))
+    }
+}
+
+// Title-only evidence cannot distinguish two open conversations sharing a title.
+// Refuse restore preflight rather than silently skip an unknown native window.
+struct WindowRestorePreflightPolicy {
+    static func hasAmbiguousOpenTitles(_ titles: [String]) -> Bool {
+        Set(titles).count != titles.count
+    }
+}
+
+// The ChatGPT renderer updates the native AXWindow caption asynchronously.
+// A one-shot check at 1.4 seconds incorrectly classified restored conversations
+// as failures even though their titles appeared 5-10 seconds later.
+enum WindowRestoreVerificationDecision: Equatable {
+    case pending
+    case success
+    case failure
+}
+
+struct WindowRestoreVerificationPolicy {
+    static let timeoutSeconds: TimeInterval = 16.0
+    static let pollSeconds: TimeInterval = 0.7
+
+    static func decide(elapsed: TimeInterval, expectedCount: Int,
+                       actualCount: Int, newWindowTitleMatched: Bool,
+                       originalsRetained: Bool) -> WindowRestoreVerificationDecision {
+        if actualCount == expectedCount && newWindowTitleMatched && originalsRetained {
+            return .success
+        }
+        return elapsed >= timeoutSeconds ? .failure : .pending
+    }
+}
