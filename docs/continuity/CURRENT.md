@@ -1,3 +1,14 @@
+## 148차 알림 접수 후속 — 2026-11-02 10:31 KST
+
+**선택 근거:** 148차 read-only Mac 빌드 상태 폴링에서 새로운 OpenAI pre-MCP 안전검사 차단(Experience `28a5d07f-8786-412d-9e9b-0bb2ca8ad302`)이 발생했으므로 사용자 알림 정책에 따라 **Telegram 우선 → Windows(windows-main)**. 두 채널 제목은 `[ChatGPT Window Title Helper] · [macos-main]`, 본문 첫 줄 실제 대화 제목 미확인 및 임시 제목, 한국어 공통 1~6항, 실제 LF, 리터럴 백슬래시+n 없음. Telegram **1737자**, Windows **629자**로 **각각 독립 작성**. Windows 1000자 이내.
+
+- **Telegram:** Dev Control-only `thecompany_call_tool(operation=enqueue_notification)` request `ac80f66b-f5fb-4a10-b5e0-d8abe4243350`, notification `11979d25-81cb-4966-9c85-251326fba99f`, outer/nested completed, state queued, elapsed4ms. 후속 `get_notification` request `e24019cc-37a5-4c78-a44c-779f878f84a0`, outer/nested completed, state **registered**, attempt1, accepted=true, target exit0, message_id241, elapsed5ms. Experience `345c75d6-3fd3-44de-88c0-577c7e1efebf`, `51a94fc9-dd90-4fca-bbe3-3607bd4ff77b` 각각 저장·list 재조회 found=true.
+- **Windows(windows-main):** Dev Control-only `enqueue_notification` request `6fcc2d5e-25cb-45de-ba7a-b4b7d8d86bf1`, notification `b415364f-d24d-4aeb-a326-beee1633b541`, outer/nested completed, state queued, elapsed3ms. 후속 `get_notification` request `25c4f292-6875-4c50-b51f-0a528e1a530f`, outer/nested completed, state **registered**, attempt1, Windows NodeAgent `pythonw.exe(pid=11848)` → `python:subprocess/run_command` → `powershell.exe(pid=25284)`, exit0/HTTP200, elapsed1ms. Experience `416f57bc-a29a-4c4f-b575-02e0f603a1c6`, `f20b1918-e178-40e0-b7a8-ed340af0f677` 각각 저장·list 재조회 found=true.
+- **실제 Control 경로:** `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.enqueue_notification/get_notification` (operation별로 마지막 경로 분기). Worker 없음(Control-only), Windows 목적지 내부 NodeAgent 실행 영수증은 위 참조. 두 채널 **큐 접수·목적지 등록 성공**, 알림 실패/재시도 0. **기기 화면 표시·사용자 열람은 미확인**.
+- **최종 영향:** GitHub 문서 기록만 추가. ChatGPT/Helper/창/세션 추가 변경 없음. Mac `test-148.exit` 최종 결과는 pre-MCP 차단으로 아직 미확인. 빌드/설치/E2E 완료로 오인 금지. 예약 유지, 사용자 조치 없음.
+
+---
+
 ## 148차 — 2026-11-02 10:26–10:31 KST (상단 제목 AX 역할 진단 추가, 격리 빌드 중 안전검사 차단)
 
 ### 1. 제목·일시 / 2. 전체 상태
