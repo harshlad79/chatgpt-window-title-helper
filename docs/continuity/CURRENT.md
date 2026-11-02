@@ -1,3 +1,13 @@
+# 2026-11-02 사용자 결정 — macOS 네이티브 ChatGPT 창 복원 개발 중단 (현재 최우선 상태)
+
+- 사용자 승인: MacMini2의 ChatGPT 네이티브 앱 사용 및 '마지막 창 모두 복원' 자율개발 중단. 향후 ChatGPT 작업용 Controller/Worker는 **Ego Lite의 chatgpt.com 웹 대화 TaskSpace**로 일원화한다.
+- 기존 매시간 예약 `macOS 창 복원 자율개발` (ID `6ad8d8ff97ac8191b351582129a28330`)은 **비활성화 성공** (Automations update 확인). 151차까지 개발·E2E 전체 성공 미완료이며 이 문서의 151차 이하 '다음 회차' 지시는 **중단 이전 기록**으로 해석한다. 자발적으로 재개하거나 앱을 재실행하지 말 것.
+- 사용자 승인하에 MacMini2의 기존 ChatGPT.app PID 10411 종료, ChatGPTTitleOverlay Helper PID 90080 종료 확인. 앱/코드 삭제 안 함. 기존 창 이력 JSON 447바이트는 해시 일치하는 모드 0600 로컬 백업 후 원본 불변 확인. 원래 ChatGPT 앱 종료 요청(AppleScript exit0) 후에도 살아 있어 PID 확인 후 SIGTERM 종료함. 증거: TheCompany Dev request `4f3958df-abc3-4520-80fb-305ed96d678c` / Experience `ee30d55b-0426-4683-8b4c-24ec569868d0`.
+- 새 예약 `Ego Lite 세션·바인딩 자동복구` (ID `6ae81ca04a5c819186ec43f0408d5433`)은 **활성화 성공**, 매시간. 권위 저장소는 `harshlad79/chatgpt-chat-agent`. 목표: 전송 후 /c/ URL 기록→ TaskSpace keep:true → 소실 시 새 TaskSpace URL 복원 → 원래 Supervisor Goal의 work/decision 단계 바인딩 인증 기반 재연결 → Worker/Controller 다회전 E2E. 기존 Supervisor, Website Cloner/타 목표, Mac 설치 Ego Lite는 보존하고 불확실 전송 재시도·별도 서비스 생성 금지.
+- 본 `chatgpt-window-title-helper` feature 브랜치 및 Draft PR #3은 **역사적 기록·재개 가능성을 위해 유지, 병합 금지**. Windows 관련 소스 및 NativeTitleSync 변경 없음. 이번 회차는 **코드 수정/테스트/전체 복원 E2E 미실시**이며 중단 결정 기록만 추가한다.
+
+---
+
 ## 151차 알림 접수 후속 — 2026-11-02 13:25–13:27 KST
 
 **채널 선택:** 이번 회차 OpenAI 사전 안전검사 차단 2건(CG 읽기 전용 Dev execute / GitHub 코드 update_file)이 있어 기존 정책상 **Telegram 우선 → Windows(windows-main)** 별도 본문. 두 채널 제목 `[ChatGPT Window Title Helper] · [macos-main]`, 첫 줄 실제 대화 제목 미확인·임시 제목. 실제 LF, 리터럴 백슬래시+n 없음. Telegram 상세 한국어 1~6항, Windows 독립 **705자**(<1000).
