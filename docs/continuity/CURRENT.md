@@ -1,3 +1,13 @@
+## 147차 Windows 알림 접수 후속 — 2026-11-02 09:33 KST
+
+**채널 선택:** 142차 진단 Helper 재배포·실기기 AXParent 확인이 정상 성공하고 이번 회차 신규 안전/권한/Worker 차단·사용자 개입 요구가 없어 **Windows(windows-main)만**, Telegram **미발송**. Windows 독립 한국어 body 698자(<1000), 실제 LF, 리터럴 백슬래시+n 없음. 제목 `[ChatGPT Window Title Helper] · [macos-main]`, 본문 첫 줄 실제 대화 제목 미확인 및 임시 제목. 공통 1~6항 순서 유지.
+
+- Dev Control-only `thecompany_call_tool(operation=enqueue_notification)`: request `018740f1-0799-497c-8579-1b62324563f7`, notification `31b45d63-bd95-4c73-916c-15946f229cfd`, outer/nested completed/queued, `mcp_elapsed_ms=4`, Control-only `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.enqueue_notification`. Experience `d746f62b-109b-484f-9140-e73cb586ad77` 저장·list 재조회 found=true.
+- Dev Control-only `thecompany_call_tool(operation=get_notification)`: request `5bf13d39-6f22-4ca4-b8d9-85aa80504cc2`, outer/nested completed/registered, `mcp_elapsed_ms=1`, `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.get_notification`. Windows NodeAgent `pythonw.exe(pid=11848)` → `python:subprocess/run_command` → `powershell.exe(pid=44324)`, attempt1 exit0/HTTP200, `WINDOWS_NOTIFICATION_REGISTERED`. Experience `d160e3c0-c56f-454c-8b93-145b3c62620b` 저장·list 재조회 found=true.
+- **최종:** Windows 큐 접수·목적지 등록 성공, 알림 실패·재시도 0. 실제 OS 화면 표시·사용자 열람 **미확인**. Telegram 미발송은 정책 준수. E2E 미완료, 예약 유지, 사용자 조치 없음. GitHub 문서만 후속 커밋; Mac 설치·원본 ChatGPT/창/세션 추가 변경 없음.
+
+---
+
 ## 147차 — 2026-11-02 09:24–09:33 KST (142차 진단 Helper 실제 서명 배포 및 AXParent 실측)
 
 ### 1. 제목·일시 / 2. 전체 상태
