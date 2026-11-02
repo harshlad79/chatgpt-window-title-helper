@@ -737,6 +737,21 @@ private func boundedHeaderMoreCensus(
                             (yFraction < 0.2 ? "next10" : "last5")
                         let labelKind = labels[0].isEmpty ? "noTitle" : "title"
                         let descriptionKind = labels[1].isEmpty ? "noDesc" : "desc"
+                        // Whitelist-only semantic classes; never log a raw button title.
+                        // Do not infer that the rightmost enabled button is Header More.
+                        let titleClass: String = {
+                            switch labels[0] {
+                            case "chat", "채팅": return "chatTab"
+                            case "work", "작업": return "workTab"
+                            case "share", "share conversation", "공유", "공유하기":
+                                return "share"
+                            case "more", "more options", "더 보기", "더보기", "⋯", "…", "...":
+                                return "more"
+                            case "search", "검색": return "search"
+                            case "close", "닫기": return "close"
+                            default: return labels[0].isEmpty ? "empty" : "other"
+                            }
+                        }()
                         // Read-only, bounded parent/sibling census. Only counts and
                         // exact-title equality; never persist any title or element hash.
                         let parentContext: String = {
@@ -773,7 +788,7 @@ private func boundedHeaderMoreCensus(
                                 "titlePeer=\(peerTitleMatch),chain=\(roles.joined(separator: ">"))"
                         }()
                         let detail = "x=\(xBand),y=\(yBand),enabled=\(isEnabled)," +
-                            "\(labelKind),\(descriptionKind)," +
+                            "\(labelKind),\(descriptionKind),titleClass=\(titleClass)," +
                             "showMenu=\(hasShowMenu),press=\(hasPress),\(parentContext)"
                         rightDetails.append((x: Double(point.x), detail: detail))
                         rightElements.append(element)
