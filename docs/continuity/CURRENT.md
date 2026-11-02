@@ -1,3 +1,28 @@
+## 148차 — 2026-11-02 10:26–10:31 KST (상단 제목 AX 역할 진단 추가, 격리 빌드 중 안전검사 차단)
+
+### 1. 제목·일시 / 2. 전체 상태
+**ChatGPT Window Title Helper macOS — 마지막 창 모두 복원.** 전체 E2E **미완료**. GitHub 소스 진단 패치 **커밋 완료**, Mac 격리 회귀 **기존 411 assertions PASS**, optimized ARM64 빌드 **최종 결과 미확인**. 설치 Helper·ChatGPT 앱·기존 창·세션 **변경 없음**. 사용자 개입 없음.
+
+### 3. 수행·증거
+- **권위 GitHub:** `harshlad79/chatgpt-window-title-helper`, branch `feat/macos-adaptive-title-helper`, 시작 HEAD `cea3b6723a21ba2cf03adaa874609199f5be5ed3`, 새 **코드 커밋 `d85f52d5a2376ac552fba1c473e0a9541921536e`**. PR #3 **Open/Draft → master**, 미병합. 필수 `docs/continuity/CURRENT.md`, `macos/NORMAL_QUIT_RELAUNCH_OVERLAY_RECOVERY.md`, `macos/DOCK_LAST_SESSION_BULK_RESTORE.md` 원문 조회. 알림 Rulebook `harshlad79/thecompany-core:feat/org-rulebook-experience-loop/docs/workstreams/shared-scheduled-notification-report-v1.md` 조회.
+- **코드 변경 범위:** `macos/ChatGPTTitleHelper.swift`의 기존 opt-in `TITLEHELPER_SAFE_HEADER_MORE_CENSUS=1` 진단만 확장. AXStaticText·AXTextField에서 **창 상단 25%**의 대화 제목 정확 일치(AXTitle/AXValue/AXDescription)를 세고, AXWebArea.Title 정확 일치 수 및 오른쪽 두 버튼과의 AXGroup 공유 여부를 집계. 로그는 **숫자/Boolean만**; 원시 제목·본문·URL·AX hash 출력 없음. **AXPress/창 조작 없음**. 기존 버튼 매칭·복원 로직 불변. Windows 소스/NativeTitleSync 수정 없음.
+- **Mac 사전 보존:** 10:27:55 KST Dev read-only ChatGPT PID **10411**, Helper PID **70421**, session JSON mode **0600**, size447, SHA256 **f4fe834b324534ca80e6139ab43a52bccc3bf968babd998c9f19e9580726d104**(147차와 동일). 10:28 event log `refresh-success knownWindows=1 nativeEnabled=true` 2초 간격 지속. **knownWindows=1은 CG 창 2개 모두의 완전 식별 증거가 아님**. 실제 read-only desktop screenshot 1400×787: Chrome/ego lite 전면, native ChatGPT Header는 뒤에 가려지고 Search palette가 열려 있음. Chrome 웹 `/c/` URL은 native 대화 ID 증거 아님. 스크린샷 미공개. 앱/창/포커스 조작 없음.
+- **격리 테스트:** 142차 clean worktree `346d8c0`의 canonical origin 확인 후 Mac에 별도 detached worktree `titlehelper-148-title-roles-d85f52d5` 생성, HEAD **d85f52d**, tracked clean. `./macos/tests/run.sh` 비동기 시작 PID **40449**. 성공적으로 완료한 기존 회귀: NativeTitleSync byte identity PASS, scheduler14 + history59 + native115 + async177 + menu46 = **411 assertions PASS**. `LIVE_AX_MENU_URL=NOT_TESTED`. 마지막 정상 poll에서 Swift optimized arm64 `swift-driver` PID40733 / frontend PID40735 **컴파일 중**이고 `test-148.exit` **미생성**. 이후 최종 성공/실패·binary 여부 **미확인**. 새 AX 역할 진단 자체의 실기기 결과 **미검증**. 테스트 재실행/설치 없음.
+- **사전 안전검사 차단 (별도 시도):** **2026-11-02T01:30:20Z 무렵** 마지막 read-only 테스트 결과 폴링 의도 `thecompany_call_tool(operation=execute,node_id=macos-main,backend=python:subprocess,worker_tool=run_command,program=/bin/bash,args=[-lc,test-148.exit/로그 tail/binary stat],timeout_seconds=16)`가 **OpenAI pre-MCP**에서 차단됨. 원문: `Script error: This tool call was blocked by OpenAI's safety checks. Please double check what you are sending.` 해당 요청은 **Control/Worker 미전달, 테스트 폴링 미수행**. `request_id/mcp_path/mcp_elapsed_ms/exit_code` **미발급**. **Dev 자체 거절이나 Mac Worker 실패 아님**. durable Experience **`28a5d07f-8786-412d-9e9b-0bb2ca8ad302`** `type=tool_boundary`, outer/nested completed/captured, list 재조회 found=true. 안전검사 내부 원인 미확인; 허용되지 않은 경로 변경/우회·맹목적 재실행 없음.
+- **도구 호출·실행 경로:** GitHub connector `fetch_file`(필수 3문서/코드/테스트/Rulebook), `get_pr_info`(#3/#4), `search_branches`(6개+cursor 종료), `compare_commits`(master 대비), `update_file`(소스). GitHub mcp_path/request_id/PID/exit_code **미제공**. Dev `thecompany_call_tool(operation=execute)` 모두 `node_id=macos-main,backend=python:subprocess,worker_tool=run_command,program=/bin/bash,args=[-lc,...]` (Control 경유), 실제 `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.execute -> macos-main/thecompany-node-agent:python(pid=5070) -> python:subprocess/run_command -> bash(pid=각 호출)`. Read-only baseline `9104b0de` bash38603/452ms exit0, log `57e6662e` bash38737/141ms exit0, worktree preflight `604b8d18` bash40060/331ms exit0, worktree creation `1122338d` bash40210/3623ms exit0, test launch `6291c2aa` bash40444/831ms exit0(**launcher만**), poll `d743c522` bash40710/303ms exit0, poll `314623e0` bash41638/287ms exit0. 모든 outer/nested completed, Worker exit0. 관련 Experience 각각 `6d7da3db`, `9160fcee`, `84e400d2`, `5c4570b4`, `8006ced3`, `185b64d5`, `c3f8055d`; 모두 중앙 저장·list 재조회 확인. Read-only screenshot `thecompany_capture_screen`은 별도 request_id/mcp_path 미제공, Experience `9f1af667` 확인.
+- **원격 브랜치 확인:** `search_branches` 6개, cursor `Ng` 후속 0개/종료. `feat/macos-adaptive-title-helper` master 대비 ahead544/behind1, 활성 미병합 기능 브랜치 **1개**(PR #3). `feat/approved-app-icon-20261016` ahead1/behind1은 **PR #4 merged** squash 잔여. `feat/title-change-event-probe` ahead0/behind2, `fix/chatgpt-2026-title-ui` ahead0/behind7; `dev`는 장기 기반. 원격 6개 전수 확인.
+
+### 4. 최종 상태·기존 영향
+코드 커밋 **d85f52d5**, 기존 테스트 411 PASS, **최적화 빌드 미확인**. 설치 Helper PID70421/원본 ChatGPT PID10411 및 세션 불변(마지막 직접 확인 시각 기준). 새 코드 **미배포**; 복원·창 조작·Dock 클릭·TCC 변경 0. Draft PR #3 미병합. 롤백 불필요(소스만 변경, Mac 격리 작업 디렉터리 생성). **E2E 미완료**.
+
+### 5. 미완료·다음
+먼저 **기존 비동기 `test-148.exit` 결과와 실제 빌드 산출물을 중복 실행 없이 대조**. 완료·성공 확인 뒤 설치 전 현재 창 수/AX·CG ID/세션 SHA/Helper PID/롤백 보존 → 허용된 Helper-only 서명 배포 → opt-in 로그의 상단 AXStaticText/AXTextField 및 공통 조상 실측. Header More를 정확히 식별하기 전 클릭 금지. 대화 고유 URL/ID 및 개별 native 창 복원/전체 E2E는 후속 검증.
+
+### 6. 사용자 조치·알림
+사용자 조치 현재 없음. **이번 회차 pre-MCP 안전검사 차단**을 중요 이상으로 분류하여 Telegram 우선 및 Windows 별도 진행 알림 대상. 각 채널 별도 한국어 본문·실제 LF, 접수/등록과 실제 표시 구분. 알림 영수증은 후속 CURRENT 항목에서 기록. 예약 유지.
+
+---
+
 ## 147차 Windows 알림 접수 후속 — 2026-11-02 09:33 KST
 
 **채널 선택:** 142차 진단 Helper 재배포·실기기 AXParent 확인이 정상 성공하고 이번 회차 신규 안전/권한/Worker 차단·사용자 개입 요구가 없어 **Windows(windows-main)만**, Telegram **미발송**. Windows 독립 한국어 body 698자(<1000), 실제 LF, 리터럴 백슬래시+n 없음. 제목 `[ChatGPT Window Title Helper] · [macos-main]`, 본문 첫 줄 실제 대화 제목 미확인 및 임시 제목. 공통 1~6항 순서 유지.
