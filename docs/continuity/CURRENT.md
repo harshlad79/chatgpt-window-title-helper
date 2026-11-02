@@ -1,3 +1,34 @@
+## 147차 — 2026-11-02 09:24–09:33 KST (142차 진단 Helper 실제 서명 배포 및 AXParent 실측)
+
+### 1. 제목·일시 / 2. 전체 상태
+**ChatGPT Window Title Helper macOS — 마지막 창 모두 복원.** 147차. **142차 테스트 완료 소스의 Helper-only 재서명·설치·재시작 및 실제 AXParent 진단 성공. 전체 마지막 창 모두 복원 E2E는 미완료.** 기존 ChatGPT PID/창·세션 불변. 사용자 수동 개입 없음.
+
+### 3. 이번 회차 수행·근거
+- **GitHub 권위:** canonical `harshlad79/chatgpt-window-title-helper`, branch `feat/macos-adaptive-title-helper`, 시작 HEAD `8c6be22b27111722898d6714a255a1b5e0cc256a`, PR #3 **Open/Draft → master**, 미병합. `docs/continuity/CURRENT.md`, `macos/NORMAL_QUIT_RELAUNCH_OVERLAY_RECOVERY.md`, `macos/DOCK_LAST_SESSION_BULK_RESTORE.md` 실제 원문 조회. 공통 알림 Rulebook `harshlad79/thecompany-core:feat/org-rulebook-experience-loop/docs/workstreams/shared-scheduled-notification-report-v1.md` 조회. `346d8c05...8c6be22b` 비교에서 **코드 변경 0**, 이후 문서 3개만 변경. 따라서 142차 격리 worktree `346d8c05ca040ddb333b07831ae0ebe3e2dc7117`이 현재 GitHub 코드와 동일. 이번 회차 새 Swift/Windows/NativeTitleSync 코드 변경 없음.
+- **브랜치 전수:** GitHub `search_branches(query="",page_size=100)` 6개 + cursor `Ng` 후속 0개/종료. `master` 대비 `feat/macos-adaptive-title-helper` ahead542/behind1, 실제 활성 미병합 기능 브랜치 **1개**(PR #3); `feat/approved-app-icon-20261016` ahead1/behind1은 PR #4 merged squash 잔여, 신규 미병합 PR 없는 작업 아님; `feat/title-change-event-probe` ahead0/behind2, `fix/chatgpt-2026-title-ui` ahead0/behind7, `dev`는 장기 기반. 원격 6개 전수 확인.
+- **Mac 사전 보존:** ChatGPT PID10411, 기존 Helper PID77666, CG on-screen layer0 IDs **16252/15360**, session JSON mode0600/SHA256 `f4fe834b324534ca80e6139ab43a52bccc3bf968babd998c9f19e9580726d104`. 기존 Helper `refresh-success knownWindows=1 nativeEnabled=true`. Dev companion 화면은 Ego Lite/시스템 설정/Chrome 전면, **native ChatGPT Header 가려져 있음**. Chrome 주소창의 웹 대화 `chatgpt.com/c/...`는 **해당 native 창의 URL/ID 증거가 아님**. 사용자 화면/창 조작 없음.
+- **허용된 Helper-only 배포:** 142차 격리 `test-142.exit=0`, 소스 SHA 일치 확인. 기존 Helper만 SIGTERM 후 canonical `macos/package-title-helper.sh`로 **NativeTitleSync byte identity PASS, scheduler14/history59/native115/async177/menu46 = 411 assertions PASS, LIVE_AX_MENU_URL=NOT_TESTED, ARM64 optimized BUILT**, TheCompany 서명/검증·백업·설치 PASS. `TITLEHELPER_SAFE_HEADER_MORE_CENSUS=1`로 Helper 재시작. 백그라운드 배포 state `COMPLETE`, 새 Helper PID **70421**, ChatGPT PID **10411** 유지, CG 창 IDs **16252/15360** 유지, session SHA/mode 불변, codesign PASS, tracked diff 0, 기존 앱 롤백 백업 **실존 확인**. 새 배포는 기존 141차 OpenAI 사전검사 차단의 실행을 허위 성공 처리한 것이 아니라 **이번 회차 같은 승인 Dev 경로의 별도 실제 실행 성공**. 이번 회차 사전 차단/Dev 거절/Worker 실패 **0건**. 컴파일러의 기존 macOS deprecated activation 경고는 있으나 build PASS.
+- **핵심 새 실기기 AX 증거:** 설치 Helper 로그 `2026-11-02T00:30:54Z`의 `ax-header-more`: `topRight=2`, `rightShowMenu=2`, `rightPress=2`, `rightEnabled=1`, **`rightParentSame=true`**, **`rightSharedGroup=true`**, `rightTitleSharedGroup=false`, **`exactTitleButtons=0`**, `matched=0`, `visited=125`, `limited=false`. 즉 두 우측 버튼은 **같은 실제 AXParent**와 AXGroup 조상을 공유하지만, 대화 제목과의 Header 공통 조상은 입증하지 못함(제목 AXButton 자체 0). **More 정확 식별 0; 클릭 0.** 같은 시각 `ax-visible-identity`는 WebArea URL 1개 **app scheme**, HTTP chatgpt.com/c 대화 URL 0, share/copyLink 후보 0. URL/ID 복원 불가 판단은 현 샘플에만 한정. AX 제목 읽기는 일시적 true/false로 변동하나 Helper 주기 refresh 정상.
+- **다음 조사 가설(미검증):** 제목은 `AXButton`이 아닌 `AXStaticText`/WebArea Title 또는 다른 AX 역할일 수 있음. **클릭 없는 bounded AX 역할별 exact-title 동등성/공통조상 진단**을 추가한 뒤 실제 signed Helper에서 검증. Header 정확 식별 후 Share/Open-on-chatgpt.com 메뉴의 고유 URL/ID 가능성 조사. URL/ID와 native 새 창 본문 일치 검증 전에는 복원 성공 선언 금지.
+
+**도구 호출·실행 경로 (민감 경로/내용 비공개):**
+1. GitHub connector `fetch_file`(필수 3문서/142 코드·패키징·원장·Rulebook), `get_pr_info`(#3/#4), `compare_commits`, `search_branches` 2페이지, `update_file`(본 원장). GitHub는 Control/Worker 비경유, `mcp_path`·PID·request_id/exit_code **미제공**. 코드 변경 없음.
+2. Dev `thecompany_call_tool(operation=execute)` → `node_id=macos-main,backend=python:subprocess,worker_tool=run_command`, `program=/bin/bash,args=[-lc,사전 pgrep/stat/shasum/로그/CG/격리 Git 조회],timeout_seconds=14~22`. 읽기 전용 request `536022c5` PID63704/411ms, `f675b422` PID65036/2653ms, `ed14cebd` PID65887/6358ms, `3315e7b7` PID66076/462ms; 모두 outer/nested completed, Worker exit0.
+3. Dev 같은 `execute` → `/bin/bash -lc` (Helper-only SIGTERM → 기존 패키징/서명/백업/설치 → Helper 재시작, 실패 시 Helper 복구 및 설치 롤백; timeout_seconds=20) request **`d2b76684-2d43-4f13-b8ab-61e0bc0c9153`**, outer/nested completed, Worker exit0/549ms, launcher bash PID67050, background PID67095. **런처 성공 ≠ 배포 성공**으로 구분하고 상태 파일/로그 확인. 상태 폴링 request `49d4d8bf` PID67255/288ms RUNNING, `6f6764c7` PID68174/16528ms RUNNING, `9f35fb05` PID68403/18517ms RUNNING, `6fce0be3` PID69303/18601ms RUNNING, `949ee60c` PID69567/18521ms RUNNING, `ac179438` PID70522/18564ms **COMPLETE**, 각 Worker exit0. 원래 ChatGPT PID10411 생존. `fdf50f3f` PID70797/1772ms, `abf79a7a` PID71582/281ms, `4884f925` PID71825/669ms read-only 후검증 Worker exit0.
+4. **실제 Dev 경로(각 호출 공통, PID만 다름):** `mcp_path=control-n150/thecompany-chatgpt-mcp:python(pid=850940) -> control.execute -> macos-main/thecompany-node-agent:python(pid=5070) -> python:subprocess/run_command -> bash(pid=각 요청)`. `mcp_trace` Control PID850940, NodeAgent PID5070, 실행 bash PID는 위 영수증. Control-only Experience `thecompany_record_experience` + `thecompany_list_experience` 재조회; 성공 기록 `ab106237`, `3b16efbc`, `85ebebbd`, `3718e3e7`, `1b178057`, `741275bc`, `625bd226`, `4fbce4f3`, `9706a928`, `8cce10ff`, `49706c70`, `e1fe10ef`, `159068ba`, `90324644`, `a0cbfc86`; 각각 outer/nested completed/captured, list 재조회 found=true. Dev 메타데이터 `describe_control_operation(execute)` 조회, Worker 없음. 화면 `thecompany_capture_screen` 1400×787, 별도 mcp_path/request_id 미제공; 이미지 원문 GitHub 저장 없음.
+5. **실패/복구:** 이번 회차 OpenAI 사전 안전검사 차단 0, Dev 거절 0, Worker exit1 0, 백그라운드 테스트 exit1 0, 서명/설치 실패 0. 141차 사전 차단은 별도 원본 Experience `4cbdeb7f`로 보존; 그때 Control/Worker 미실행. 이번에는 승인된 동일 Dev MCP 경로에서 새 시도가 정상 통과, 안전 검사 우회 없음.
+
+### 4. 최종 상태·기존 영향
+설치 Helper **142차 코드로 업데이트**(PID70421), 원본 ChatGPT 앱 PID10411 및 열린 2개 CG 창 불변, 세션 0600/SHA 불변, 서명 PASS, 롤백 백업 존재. Windows 소스/기존 NativeTitleSync 수정 0, Draft PR #3 미병합. **고유 대화 URL/ID·개별 native 새 창·전체 Restore All E2E 미검증.** 새 GitHub 커밋은 이 CURRENT 문서 기록만, 소스/검증 커밋 `346d8c05`와 구분.
+
+### 5. 미완료·다음
+`AXStaticText` 등 제목 역할의 정확 일치 후보와 두 우측 버튼의 공통 조상 구조를 **읽기 전용·원문 비출력**으로 좁혀 Header More를 식별. 실제 메뉴/고유 URL·ID 확인 후 개별 새 native 창의 본문/원본 보존 검증. Restore All E2E 완료 전 예약 유지.
+
+### 6. 사용자 조치·알림
+사용자 조치 없음. 새 차단·중요 장애 없이 142차 진단 배포 성공이므로 **Windows(windows-main)만** 독립 한국어 1000자 이내 진행 알림 대상, Telegram **미발송**. 큐 접수/목적지 등록 영수증은 후속 CURRENT 기록에서 분리. 기기 실제 표시 미확인.
+
+---
+
 ## 146차 알림 접수 후속 — 2026-11-02 08:23 KST
 
 **대상 선택:** 145차 Telegram 사전 차단(미발송)과 현재 미해결 Probe/Helper TCC 판정 불일치를 중요 이상으로 분류해 **Telegram 우선 → Windows**. 각 채널 독립 한국어 본문, 실제 LF(U+000A), 제목 `[ChatGPT Window Title Helper] · [macos-main]`, 첫 줄 실제 대화 제목 미확인 및 임시 제목. Telegram 1908자, Windows 753자(<1000), 리터럴 백슬래시+n 없음. 정상 영수증은 발송 본문에서 생략.
